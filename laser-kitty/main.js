@@ -3,6 +3,7 @@
 import * as THREE from './vendor/three.module.min.js';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
+const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
 const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 0x6f7480, 0x53c8d8, 0x4dd0e1, 0xff7ab8];
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
@@ -240,12 +241,14 @@ function buildCat(k) {
   body.scale.set(1.05, 0.92, 1.5);
   body.position.y = 0.02;
   g.add(body);
+  view.body = body;
   const chest = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), white);
   chest.position.set(0, -0.03, 0.13);
   g.add(chest);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.088, 12, 10), fur);
   head.position.set(0, 0.11, 0.2);
   g.add(head);
+  view.head = head;
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), white);
   muzzle.position.set(0, 0.085, 0.265);
   g.add(muzzle);
@@ -655,6 +658,7 @@ function frame(now) {
   const data = new Float32Array(lk.memory.buffer, ptr, count * FLOATS_PER_BODY);
   const catState = lk.lk_cat_state(sim);
   let catPos = null;
+  let hudAct = -1;
   let catOrdinal = 0;
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS_PER_BODY;
@@ -666,8 +670,15 @@ function frame(now) {
         catViews.set(i, view);
       }
       const x = data[o + 5], y = data[o + 6], z = data[o + 7];
-      const st = data[o + 12] | 0; // per-cat brain state rides the flag slot
-      if (!catPos) catPos = [x, y, z]; // cat 0: HUD + debug LOS line
+      const f = data[o + 12] | 0; // per-cat: state in the low nibble, ambient act above
+      const st = f & 15;
+      const act = f >> 4;
+      if (!catPos) {
+        catPos = [x, y, z]; // cat 0: HUD + debug LOS line
+        hudAct = st === 0 ? act : -1;
+      }
+      // ambient poses: idle cats live their act; bored cats sulk in a sit
+      const pose = st === 6 ? 0 : st === 0 && act !== 3 ? act : -1;
       if (view.prev) {
         const vx = x - view.prev[0], vz = z - view.prev[2];
         const sp = Math.hypot(vx, vz) * 60;
@@ -686,6 +697,14 @@ function frame(now) {
             leg.rotation.x = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7;
           } else if (st === 9) {
             leg.rotation.x = 0.25; // haunches planted
+          } else if (pose === 0) {
+            leg.rotation.x = li < 2 ? 0 : 1.3; // sit: haunches folded
+          } else if (pose === 1) {
+            leg.rotation.x = li === 0 ? -0.9 : li < 2 ? 0 : 1.3; // groom: one paw up
+          } else if (pose === 2) {
+            leg.rotation.x = 1.5; // loaf: everything tucked
+          } else if (pose === 4) {
+            leg.rotation.x = li < 2 ? -1.1 : 0; // stretch: front legs long
           } else {
             leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
           }
@@ -701,9 +720,14 @@ function frame(now) {
             -0.16 * t
           );
         }
+        // groom head-bob; loaf hunkers the body down
+        view.head.position.y = pose === 1 ? 0.1 + Math.sin(now * 0.025) * 0.02 : 0.11;
+        view.head.position.z = pose === 1 ? 0.17 : 0.2;
+        view.body.position.y = pose === 2 ? -0.03 : 0.02;
       }
       view.prev = [x, y, z];
       view.group.position.set(x, y, z);
+      view.group.rotation.x = pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : 0;
       view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
       // debug: tint each cat by its own state so attention reads at a glance
       const tint = debugLook ? STATE_TINT[st] ?? 0xffffff : view.coat;
@@ -783,9 +807,11 @@ function frame(now) {
   }
 
   scoreEl.textContent = lk.lk_score(sim);
-  stateEl.textContent = debugLook
-    ? `${STATE_NAMES[catState] ?? '?'} · vis ${(L[9] ?? 0).toFixed(2)}`
-    : STATE_NAMES[catState] ?? '?';
+  const stName =
+    catState === 0 && hudAct >= 0
+      ? `IDLE·${AMB_NAMES[hudAct] ?? '?'}`
+      : STATE_NAMES[catState] ?? '?';
+  stateEl.textContent = debugLook ? `${stName} · vis ${(L[9] ?? 0).toFixed(2)}` : stName;
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
   renderer.render(scene, camera);
