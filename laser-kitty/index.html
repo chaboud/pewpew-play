@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>laser-kitty grey-box</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14121a; touch-action: none; overscroll-behavior: none; }
+  #scene { position: fixed; inset: 0; }
+  #hud { position: fixed; top: env(safe-area-inset-top, 8px); left: 0; right: 0; text-align: center;
+         font: 700 22px system-ui, sans-serif; color: #ffe86b; pointer-events: none; text-shadow: 0 2px 6px #000; }
+  #state { font-size: 13px; color: #9ad; font-weight: 500; letter-spacing: 0.12em; }
+  #meter { width: 120px; height: 5px; margin: 4px auto 0; background: #333; border-radius: 3px; overflow: hidden; }
+  #meter > div { height: 100%; width: 0%; background: #6ecb63; }
+  #pad { position: fixed; left: 0; right: 0; bottom: 0; height: 33vh;
+         background: linear-gradient(to top, rgba(255,60,60,0.10), rgba(255,60,60,0.02));
+         border-top: 1px solid rgba(255,90,90,0.35); }
+  #thumb { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 2px solid #ff5a5a;
+           background: rgba(255,90,90,0.25); transform: translate(-50%,-50%); left: 50%; top: 50%; pointer-events: none; }
+  #pops { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+  .pop { position: absolute; font: 800 20px system-ui, sans-serif; color: #7dff8a; text-shadow: 0 2px 4px #000;
+         animation: rise 0.9s ease-out forwards; }
+  @keyframes rise { to { transform: translateY(-60px); opacity: 0; } }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="hud">
+  <div id="score">0</div>
+  <div id="state">LOADING</div>
+  <div id="meter"><div id="meterfill"></div></div>
+</div>
+<div id="pad"><div id="thumb"></div></div>
+<div id="pops"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
