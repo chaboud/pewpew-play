@@ -88,49 +88,73 @@ const beam = new THREE.Line(
 );
 scene.add(beam);
 
-// --- camera: aspect-adaptive, auto-framing, with look-drag orbit -----------
-// Vertical FOV derives from a fixed *horizontal* FOV so tall phone screens
-// widen vertically instead of cropping the room away.
-const H_FOV = 78 * (Math.PI / 180);
-let camYaw = 0; // user look: horizontal orbit
-let camPitch = 0.55; // user look: vertical (rad above horizontal)
-let camDist = 4.6;
-const focus = new THREE.Vector3(0, 0.4, 0.3); // EMA'd point of interest
+// --- camera: fixed diorama vantage (founder, playtest 3) -------------------
+// You stand OUTSIDE the room, slightly above, looking in — a diorama of
+// targets. The eye never translates (a whisper of idle bob only). Look
+// direction is explicit: grab-the-world arcball, no follow, no auto.
+const H_FOV = 62 * (Math.PI / 180);
+const EYE = new THREE.Vector3(0, 2.0, -5.6);
+let lookYaw = 0;
+let lookPitch = -0.26; // slightly down into the room
+const YAW_LIM = 0.9;
+const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
+function applyLook(bob = 0) {
+  camera.position.set(EYE.x, EYE.y + bob, EYE.z);
+  const f = new THREE.Vector3(
+    Math.sin(lookYaw) * Math.cos(lookPitch),
+    Math.sin(lookPitch),
+    Math.cos(lookYaw) * Math.cos(lookPitch)
+  );
+  camera.lookAt(camera.position.clone().add(f));
+}
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const aspect = innerWidth / innerHeight;
   camera.aspect = aspect;
   const vfov = 2 * Math.atan(Math.tan(H_FOV / 2) / Math.min(aspect, 1.2));
   camera.fov = Math.min(105, (vfov * 180) / Math.PI);
-  camDist = 4.2 * Math.max(1, Math.min(1.6, 0.8 / aspect));
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 resize();
+applyLook();
 
-// Look control: window-level pointer tracking (element-level listeners
-// proved unreliable on mobile — playtest 2). Any drag that STARTS above
-// the pad is a look gesture, per-pointer-id so it coexists with the pad
-// thumb. Horizontal = orbit, vertical = pitch.
+// Grab-the-world look: on drag start, remember the ray you grabbed; each
+// move, rotate the view so that world direction stays under the finger
+// (natural scrolling — correct by construction, no sign tuning). Yaw and
+// pitch clamped so the room never leaves the frame; roll always zero.
+const lookRay = new THREE.Raycaster();
 let lookId = null;
-let lookLast = null;
+let grabDir = null;
+function pixelDir(x, y) {
+  lookRay.setFromCamera(
+    new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1),
+    camera
+  );
+  return lookRay.ray.direction.clone();
+}
 addEventListener('pointerdown', (e) => {
-  if (e.clientY >= pad.getBoundingClientRect().top) return; // pad's finger
+  if (e.clientY >= pad.getBoundingClientRect().top) return; // laser finger
   if (lookId !== null) return;
   lookId = e.pointerId;
-  lookLast = [e.clientX, e.clientY];
+  grabDir = pixelDir(e.clientX, e.clientY);
 });
 addEventListener('pointermove', (e) => {
-  if (e.pointerId !== lookId || !lookLast) return;
-  camYaw -= (e.clientX - lookLast[0]) * 0.008;
-  camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - lookLast[1]) * 0.005));
-  lookLast = [e.clientX, e.clientY];
+  if (e.pointerId !== lookId || !grabDir) return;
+  const d1 = pixelDir(e.clientX, e.clientY);
+  const q = new THREE.Quaternion().setFromUnitVectors(d1, grabDir);
+  const f = new THREE.Vector3();
+  camera.getWorldDirection(f);
+  f.applyQuaternion(q);
+  lookPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.asin(Math.max(-0.99, Math.min(0.99, f.y)))));
+  lookYaw = Math.max(-YAW_LIM, Math.min(YAW_LIM, Math.atan2(f.x, f.z)));
+  applyLook();
 });
 for (const ev of ['pointerup', 'pointercancel']) {
   addEventListener(ev, (e) => {
     if (e.pointerId === lookId) {
       lookId = null;
-      lookLast = null;
+      grabDir = null;
     }
   });
 }
@@ -263,23 +287,8 @@ function frame(now) {
 
   updateDotFromAim();
 
-  // auto-framing: gentle — blend the action point halfway to room center
-  // so the camera drifts with play but never chases it (playtest 2: the
-  // camera must not fight the look control)
-  if (catPos) {
-    const ax = dotActive ? catPos[0] * 0.55 + dotX * 0.45 : catPos[0];
-    const az = dotActive ? catPos[2] * 0.55 + dotZ * 0.45 : catPos[2];
-    focus.x += (Math.max(-1.6, Math.min(1.6, ax * 0.5)) - focus.x) * 0.04;
-    focus.z += (Math.max(-1.6, Math.min(1.6, az * 0.5)) - focus.z) * 0.04;
-    focus.y += (Math.min(1.0, catPos[1] * 0.4 + 0.35) - focus.y) * 0.04;
-  }
-  const horiz = Math.cos(camPitch) * camDist;
-  camera.position.set(
-    focus.x + Math.sin(camYaw) * horiz,
-    focus.y + Math.sin(camPitch) * camDist,
-    focus.z - Math.cos(camYaw) * horiz
-  );
-  camera.lookAt(focus);
+  // fixed diorama eye; a whisper of bob for naturalness, never a follow
+  applyLook(Math.sin(now * 0.0006) * 0.012);
 
   dot.position.set(dotX, 0.03, dotZ);
   dot.visible = beam.visible = dotActive;
@@ -300,5 +309,5 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-stateEl.textContent = 'PAD = LASER · DRAG SCENE = LOOK';
+stateEl.textContent = 'PAD = LASER · DRAG ROOM = LOOK';
 requestAnimationFrame(frame);
