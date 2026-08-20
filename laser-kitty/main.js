@@ -2,7 +2,7 @@
 // thin-frontend discipline — no game logic lives here).
 import * as THREE from './vendor/three.module.min.js';
 
-const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!'];
+const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH'];
 const ROOM = 2.8; // dot travel half-extent (slightly inside the walls)
 const FLOATS_PER_BODY = 13;
 
@@ -75,12 +75,18 @@ let catGroup = null;
 let catFacing = 0;
 let catPrev = null;
 
-// laser dot + beam (R-19: the beam is the aiming feedback)
+// laser dot + spill (wiki/game/laser.md): a bright core plus an oriented
+// spill disc on the hit surface — size/opacity come from the core's optics
 const dot = new THREE.Mesh(
-  new THREE.SphereGeometry(0.045, 10, 8),
-  new THREE.MeshBasicMaterial({ color: 0xff2b2b })
+  new THREE.SphereGeometry(0.028, 10, 8),
+  new THREE.MeshBasicMaterial({ color: 0xff3b30 })
 );
 scene.add(dot);
+const spill = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 20),
+  new THREE.MeshBasicMaterial({ color: 0xff5545, transparent: true, opacity: 0.35, depthWrite: false })
+);
+scene.add(spill);
 const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const beam = new THREE.Line(
   beamGeo,
@@ -167,10 +173,35 @@ for (const ev of ['pointerup', 'pointercancel']) {
 // amplification is real ray geometry: grazing angles sweep far.
 const pad = document.getElementById('pad');
 const thumbEl = document.getElementById('thumb');
-let dotX = 0, dotZ = -1.5, dotActive = false;
+let dotActive = false;
 let aimScreen = null; // [sx, sy] pixel the beam aims through
 const raycaster = new THREE.Raycaster();
-const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// Belt-buckle emitter, avatar-frame relative (wiki/game/laser.md):
+// centered below the eye — handedness-neutral. The laser ray goes from the
+// belt through the aim point on the focus plane (mid-room depth).
+const BELT_LOCAL = new THREE.Vector3(0, -0.75, 0.15);
+const FOCUS_D = 5.5;
+const laserRay = { ox: 0, oy: 0, oz: 0, dx: 0, dy: 0, dz: 1 };
+function beltWorld() {
+  return camera.position.clone().add(BELT_LOCAL.clone().applyQuaternion(camera.quaternion));
+}
+function updateLaserRay() {
+  if (!aimScreen) return;
+  const ndc = new THREE.Vector2(
+    (aimScreen[0] / innerWidth) * 2 - 1,
+    -(aimScreen[1] / innerHeight) * 2 + 1
+  );
+  raycaster.setFromCamera(ndc, camera);
+  const fwd = new THREE.Vector3();
+  camera.getWorldDirection(fwd);
+  // point where the eye-ray crosses the focus plane (perpendicular to view)
+  const t = FOCUS_D / Math.max(0.2, raycaster.ray.direction.dot(fwd));
+  const p = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(t));
+  const belt = beltWorld();
+  const d = p.sub(belt).normalize();
+  laserRay.ox = belt.x; laserRay.oy = belt.y; laserRay.oz = belt.z;
+  laserRay.dx = d.x; laserRay.dy = d.y; laserRay.dz = d.z;
+}
 function padPoint(e) {
   const r = pad.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
@@ -183,24 +214,6 @@ function padPoint(e) {
   aimScreen = [sx, sy];
   thumbEl.style.left = `${fx * r.width}px`;
   thumbEl.style.top = `${fy * r.height}px`;
-}
-function updateDotFromAim() {
-  if (!aimScreen) return;
-  const ndc = new THREE.Vector2(
-    (aimScreen[0] / innerWidth) * 2 - 1,
-    -(aimScreen[1] / innerHeight) * 2 + 1
-  );
-  raycaster.setFromCamera(ndc, camera);
-  const hit = new THREE.Vector3();
-  if (raycaster.ray.intersectPlane(floorPlane, hit)) {
-    dotX = Math.max(-ROOM, Math.min(ROOM, hit.x));
-    dotZ = Math.max(-ROOM, Math.min(ROOM, hit.z));
-  } else {
-    // aiming above the horizon: push the dot to the room's far edge
-    const d = raycaster.ray.direction;
-    dotX = Math.max(-ROOM, Math.min(ROOM, camera.position.x + d.x * 8));
-    dotZ = Math.max(-ROOM, Math.min(ROOM, camera.position.z + d.z * 8));
-  }
 }
 for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointerup', false], ['pointercancel', false]]) {
   pad.addEventListener(ev, (e) => {
@@ -232,8 +245,9 @@ const DT = 1000 / 60;
 function frame(now) {
   acc = Math.min(acc + (now - last), 100);
   last = now;
+  updateLaserRay();
   while (acc >= DT) {
-    lk.lk_step(sim, dotX, dotZ, dotActive ? 1 : 0);
+    lk.lk_step(sim, laserRay.ox, laserRay.oy, laserRay.oz, laserRay.dx, laserRay.dy, laserRay.dz, dotActive ? 1 : 0);
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
@@ -285,21 +299,22 @@ function frame(now) {
     if (data[o] === 2) m.material.color.setHex(data[o + 12] ? 0xe8595f : CLASS_COLOR[2]);
   }
 
-  updateDotFromAim();
-
   // fixed diorama eye; a whisper of bob for naturalness, never a follow
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
-  dot.position.set(dotX, 0.03, dotZ);
-  dot.visible = beam.visible = dotActive;
-  if (dotActive && aimScreen) {
-    // beam rises from your hand: anchor just above the thumb, near-plane
-    const hn = new THREE.Vector2((aimScreen[0] / innerWidth) * 2 - 1, -0.75);
-    raycaster.setFromCamera(hn, camera);
-    const hand = camera.position
-      .clone()
-      .add(raycaster.ray.direction.clone().multiplyScalar(1.0));
-    beamGeo.setFromPoints([hand, dot.position]);
+  // dot + spill exactly where the core says the ray landed
+  const L = new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10);
+  const lit = dotActive && L[0] > 0.5;
+  dot.visible = spill.visible = beam.visible = lit;
+  if (lit) {
+    const n = new THREE.Vector3(L[4], L[5], L[6]);
+    dot.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.012);
+    spill.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.006);
+    spill.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+    spill.scale.setScalar(L[7]);
+    spill.material.opacity = 0.15 + 0.35 * L[8];
+    dot.material.color.setHSL(0.995, 1.0, 0.35 + 0.25 * L[8]);
+    beamGeo.setFromPoints([beltWorld(), dot.position]);
   }
 
   scoreEl.textContent = lk.lk_score(sim);
