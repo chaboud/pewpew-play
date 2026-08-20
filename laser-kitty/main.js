@@ -3,51 +3,92 @@
 import * as THREE from './vendor/three.module.min.js';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH'];
-const ROOM = 2.8; // dot travel half-extent (slightly inside the walls)
+const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 0x6f7480, 0x53c8d8, 0x4dd0e1];
 const FLOATS_PER_BODY = 13;
+const SEED = 42;
 
 const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
-const sim = lk.lk_new(42, 0);
+let sim = lk.lk_new(SEED, 0);
 
 // --- three scene -----------------------------------------------------------
 const canvas = document.getElementById('scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x14121a);
+scene.background = new THREE.Color(0x191724);
+scene.fog = new THREE.Fog(0x191724, 9, 16);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
-scene.add(new THREE.HemisphereLight(0xbccadf, 0x2a2431, 1.1));
-const sun = new THREE.DirectionalLight(0xfff2dd, 1.6);
-sun.position.set(-2, 5, -3);
+scene.add(new THREE.HemisphereLight(0xcdd6ea, 0x33293a, 0.9));
+const sun = new THREE.DirectionalLight(0xffe9c9, 1.7);
+sun.position.set(-2.5, 5.5, -2.0);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -4;
+sun.shadow.camera.right = 4;
+sun.shadow.camera.top = 4;
+sun.shadow.camera.bottom = -4;
+sun.shadow.camera.far = 14;
+sun.shadow.bias = -0.002;
 scene.add(sun);
 
-const CLASS_COLOR = [0x2c2837, 0xa08a6a, 0x53c8d8, 0xff9d45];
-const meshes = [];
-function meshFor(shape, a, b, c, cls) {
+// deterministic per-body color variety within each class palette
+function bodyColor(i, cls, dims, py) {
+  const h = ((i * 2654435761) >>> 0) / 4294967296;
+  if (cls === 3) return new THREE.Color(0xff9d45);
+  if (cls === 0) {
+    // small elevated statics are paintings — give them gallery colors
+    if (Math.max(...dims) < 0.6 && py > 0.9) return new THREE.Color().setHSL(h, 0.55, 0.55);
+    return new THREE.Color(0x37333f);
+  }
+  if (cls === 1) return new THREE.Color().setHSL(0.07 + h * 0.06, 0.35, 0.38 + h * 0.1);
+  return new THREE.Color().setHSL((0.45 + h * 0.5) % 1, 0.6, 0.55);
+}
+
+let meshes = [];
+let debugLook = false;
+function meshFor(i, shape, a, b, c, cls, py) {
   let geo;
-  if (shape === 1) geo = new THREE.SphereGeometry(a, 12, 10);
-  else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 3, 8);
+  if (shape === 1) geo = new THREE.SphereGeometry(a, 14, 12);
+  else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
-  const mat = new THREE.MeshLambertMaterial({ color: CLASS_COLOR[cls] });
+  const mat = new THREE.MeshPhongMaterial({
+    color: bodyColor(i, cls, [a, b, c], py),
+    shininess: 24,
+  });
   const m = new THREE.Mesh(geo, mat);
+  m.castShadow = cls !== 0;
+  m.receiveShadow = true;
   scene.add(m);
   return m;
 }
 
+// rug: render-side decor only
+const rug = new THREE.Mesh(
+  new THREE.CircleGeometry(1.15, 28),
+  new THREE.MeshPhongMaterial({ color: 0x5a3040, shininess: 2 })
+);
+rug.rotation.x = -Math.PI / 2;
+rug.position.set(0, 0.004, 0.2);
+rug.receiveShadow = true;
+scene.add(rug);
+
 // --- the cat: render-side body (physics stays a capsule) -------------------
-// Horizontal body + head + ears + gaited legs + lashing tail. Facing comes
-// from velocity; gait phase from speed. Pure cosmetics per the seam rules.
 const catParts = {};
+let catGroup = null;
+let catFacing = 0;
+let catPrev = null;
 function buildCat() {
   const g = new THREE.Group();
-  const fur = new THREE.MeshLambertMaterial({ color: 0xff9d45 });
-  const dark = new THREE.MeshLambertMaterial({ color: 0xd97f2e });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.24, 3, 8), fur);
-  body.rotation.x = Math.PI / 2; // lie along z (facing +z locally)
+  const fur = new THREE.MeshPhongMaterial({ color: 0xff9d45, shininess: 8 });
+  const dark = new THREE.MeshPhongMaterial({ color: 0xd97f2e, shininess: 8 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.24, 4, 10), fur);
+  body.rotation.x = Math.PI / 2;
   body.position.y = 0.02;
   g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), fur);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), fur);
   head.position.set(0, 0.1, 0.2);
   g.add(head);
   for (const sx of [-1, 1]) {
@@ -68,15 +109,18 @@ function buildCat() {
   tail.rotation.x = -0.5;
   g.add(tail);
   catParts.tail = tail;
+  catParts.mats = [fur, dark];
+  g.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    }
+  });
   scene.add(g);
   return g;
 }
-let catGroup = null;
-let catFacing = 0;
-let catPrev = null;
 
-// laser dot + spill (wiki/game/laser.md): a bright core plus an oriented
-// spill disc on the hit surface — size/opacity come from the core's optics
+// --- laser visuals: core dot, oriented spill, glow sprite, beam ------------
 const dot = new THREE.Mesh(
   new THREE.SphereGeometry(0.028, 10, 8),
   new THREE.MeshBasicMaterial({ color: 0xff3b30 })
@@ -87,21 +131,42 @@ const spill = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ color: 0xff5545, transparent: true, opacity: 0.35, depthWrite: false })
 );
 scene.add(spill);
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowCanvas.height = 64;
+{
+  const g2 = glowCanvas.getContext('2d');
+  const grad = g2.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grad.addColorStop(0, 'rgba(255,80,64,0.9)');
+  grad.addColorStop(1, 'rgba(255,80,64,0)');
+  g2.fillStyle = grad;
+  g2.fillRect(0, 0, 64, 64);
+}
+const glow = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(glowCanvas),
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+);
+glow.scale.setScalar(0.4);
+scene.add(glow);
 const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const beam = new THREE.Line(
   beamGeo,
-  new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.55 })
+  new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.5 })
 );
 scene.add(beam);
+// debug: line-of-sight from cat eye to dot (green = seen, red = blocked)
+const losGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const losLine = new THREE.Line(losGeo, new THREE.LineBasicMaterial({ color: 0x44ff66 }));
+losLine.visible = false;
+scene.add(losLine);
 
-// --- camera: fixed diorama vantage (founder, playtest 3) -------------------
-// You stand OUTSIDE the room, slightly above, looking in — a diorama of
-// targets. The eye never translates (a whisper of idle bob only). Look
-// direction is explicit: grab-the-world arcball, no follow, no auto.
+// --- camera: fixed diorama vantage, grab-the-world arcball look ------------
 const H_FOV = 62 * (Math.PI / 180);
 const EYE = new THREE.Vector3(0, 2.0, -5.6);
 let lookYaw = 0;
-let lookPitch = -0.26; // slightly down into the room
+let lookPitch = -0.26;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
 function applyLook(bob = 0) {
@@ -125,10 +190,6 @@ addEventListener('resize', resize);
 resize();
 applyLook();
 
-// Grab-the-world look: on drag start, remember the ray you grabbed; each
-// move, rotate the view so that world direction stays under the finger
-// (natural scrolling — correct by construction, no sign tuning). Yaw and
-// pitch clamped so the room never leaves the frame; roll always zero.
 const lookRay = new THREE.Raycaster();
 let lookId = null;
 let grabDir = null;
@@ -140,7 +201,8 @@ function pixelDir(x, y) {
   return lookRay.ray.direction.clone();
 }
 addEventListener('pointerdown', (e) => {
-  if (e.clientY >= pad.getBoundingClientRect().top) return; // laser finger
+  if (e.target.closest && e.target.closest('button')) return;
+  if (e.clientY >= pad.getBoundingClientRect().top) return;
   if (lookId !== null) return;
   lookId = e.pointerId;
   grabDir = pixelDir(e.clientX, e.clientY);
@@ -165,20 +227,12 @@ for (const ev of ['pointerup', 'pointercancel']) {
   });
 }
 
-// --- thumb pad → dot: the pointer fiction (founder 2026-08-20) -------------
-// Your thumb is the hand holding the laser; the dot lands in the scene
-// directly ABOVE your thumb on screen. Thumb position maps to a screen
-// aim-point above the pad; a ray through that pixel hits the floor; that's
-// the dot. Screen-space aiming is inherently camera-relative, and the
-// amplification is real ray geometry: grazing angles sweep far.
+// --- aiming: belt-buckle emitter, focus-plane parallax ---------------------
 const pad = document.getElementById('pad');
 const thumbEl = document.getElementById('thumb');
 let dotActive = false;
-let aimScreen = null; // [sx, sy] pixel the beam aims through
+let aimScreen = null;
 const raycaster = new THREE.Raycaster();
-// Belt-buckle emitter, avatar-frame relative (wiki/game/laser.md):
-// centered below the eye — handedness-neutral. The laser ray goes from the
-// belt through the aim point on the focus plane (mid-room depth).
 const BELT_LOCAL = new THREE.Vector3(0, -0.75, 0.15);
 const FOCUS_D = 5.5;
 const laserRay = { ox: 0, oy: 0, oz: 0, dx: 0, dy: 0, dz: 1 };
@@ -194,7 +248,6 @@ function updateLaserRay() {
   raycaster.setFromCamera(ndc, camera);
   const fwd = new THREE.Vector3();
   camera.getWorldDirection(fwd);
-  // point where the eye-ray crosses the focus plane (perpendicular to view)
   const t = FOCUS_D / Math.max(0.2, raycaster.ray.direction.dot(fwd));
   const p = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(t));
   const belt = beltWorld();
@@ -207,10 +260,8 @@ function padPoint(e) {
   const t = e.touches ? e.touches[0] : e;
   const fx = Math.max(0, Math.min(1, (t.clientX - r.left) / r.width));
   const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
-  // aim-point: same x as the thumb; y sweeps the scene area above the pad
-  // (pad bottom = close in front of you, pad top = deep in the room)
   const sx = r.left + fx * r.width;
-  const sy = innerHeight * (0.08 + fy * 0.52); // 8%..60% of screen height
+  const sy = innerHeight * (0.08 + fy * 0.52);
   aimScreen = [sx, sy];
   thumbEl.style.left = `${fx * r.width}px`;
   thumbEl.style.top = `${fy * r.height}px`;
@@ -223,7 +274,7 @@ for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointeru
   }, { passive: false });
 }
 
-// --- HUD -------------------------------------------------------------------
+// --- HUD + buttons ---------------------------------------------------------
 const scoreEl = document.getElementById('score');
 const stateEl = document.getElementById('state');
 const meterEl = document.getElementById('meterfill');
@@ -237,6 +288,31 @@ function popScore(text) {
   popsEl.appendChild(div);
   setTimeout(() => div.remove(), 900);
 }
+
+function applyLookMode() {
+  for (const m of meshes) {
+    if (!m) continue;
+    m.material.wireframe = debugLook;
+  }
+  losLine.visible = false;
+  document.getElementById('dbg').classList.toggle('on', debugLook);
+}
+document.getElementById('reset').addEventListener('click', () => {
+  lk.lk_free(sim);
+  sim = lk.lk_new(SEED, 0);
+  for (const m of meshes) if (m) scene.remove(m);
+  meshes = [];
+  if (catGroup) {
+    scene.remove(catGroup);
+    catGroup = null;
+    catPrev = null;
+    catFacing = 0;
+  }
+});
+document.getElementById('dbg').addEventListener('click', () => {
+  debugLook = !debugLook;
+  applyLookMode();
+});
 
 // --- fixed-tick loop -------------------------------------------------------
 let last = performance.now();
@@ -290,35 +366,51 @@ function frame(now) {
       catPrev = [x, y, z];
       catGroup.position.set(x, y, z);
       catGroup.rotation.y = catFacing + (catState === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
+      // debug: tint the cat by state so attention reads at a glance
+      const tint = debugLook ? STATE_TINT[catState] ?? 0xffffff : 0xff9d45;
+      catParts.mats[0].color.setHex(tint);
       continue;
     }
-    if (!meshes[i]) meshes[i] = meshFor(data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o]);
+    if (!meshes[i]) {
+      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6]);
+      meshes[i].material.wireframe = debugLook;
+    }
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
-    if (data[o] === 2) m.material.color.setHex(data[o + 12] ? 0xe8595f : CLASS_COLOR[2]);
+    if (data[o] === 2 && data[o + 12]) m.material.emissive?.setHex(0x551111);
   }
 
-  // fixed diorama eye; a whisper of bob for naturalness, never a follow
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
-  // dot + spill exactly where the core says the ray landed
   const L = new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10);
   const lit = dotActive && L[0] > 0.5;
-  dot.visible = spill.visible = beam.visible = lit;
+  dot.visible = spill.visible = beam.visible = glow.visible = lit;
   if (lit) {
     const n = new THREE.Vector3(L[4], L[5], L[6]);
     dot.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.012);
+    glow.position.copy(dot.position).addScaledVector(n, 0.05);
+    glow.material.opacity = 0.35 + 0.5 * L[8];
     spill.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.006);
     spill.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     spill.scale.setScalar(L[7]);
     spill.material.opacity = 0.15 + 0.35 * L[8];
-    dot.material.color.setHSL(0.995, 1.0, 0.35 + 0.25 * L[8]);
     beamGeo.setFromPoints([beltWorld(), dot.position]);
+  }
+  // debug LOS line: cat eye -> dot, green when the cat can see it
+  losLine.visible = debugLook && lit && !!catPos;
+  if (losLine.visible) {
+    losGeo.setFromPoints([
+      new THREE.Vector3(catPos[0], catPos[1] + 0.16, catPos[2]),
+      dot.position,
+    ]);
+    losLine.material.color.setHex(L[9] > 0.05 ? 0x44ff66 : 0xff4455);
   }
 
   scoreEl.textContent = lk.lk_score(sim);
-  stateEl.textContent = STATE_NAMES[catState] ?? '?';
+  stateEl.textContent = debugLook
+    ? `${STATE_NAMES[catState] ?? '?'} · vis ${(L[9] ?? 0).toFixed(2)}`
+    : STATE_NAMES[catState] ?? '?';
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
   renderer.render(scene, camera);

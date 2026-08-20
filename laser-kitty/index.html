@@ -22,10 +22,18 @@
   .pop { position: absolute; font: 800 20px system-ui, sans-serif; color: #7dff8a; text-shadow: 0 2px 4px #000;
          animation: rise 0.9s ease-out forwards; }
   @keyframes rise { to { transform: translateY(-60px); opacity: 0; } }
+  .ctl { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 4px); z-index: 5;
+         width: 44px; height: 44px; border-radius: 10px; border: 1px solid #3a3644;
+         background: rgba(30,27,38,0.8); color: #cfd4e6; font: 700 17px system-ui, sans-serif; }
+  #reset { left: 10px; }
+  #dbg { right: 10px; font-size: 12px; letter-spacing: 0.06em; }
+  #dbg.on { border-color: #53c8d8; color: #53c8d8; }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
+<button id="reset" class="ctl" aria-label="Reset room">&#8634;</button>
+<button id="dbg" class="ctl" aria-label="Debug look">DBG</button>
 <div id="hud">
   <div id="score">0</div>
   <div id="state">LOADING</div>
