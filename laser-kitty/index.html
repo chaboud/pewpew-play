@@ -29,6 +29,18 @@
   #toss { left: 62px; font-size: 20px; }
   #dbg { right: 10px; font-size: 12px; letter-spacing: 0.06em; }
   #dbg.on { border-color: #53c8d8; color: #53c8d8; }
+  #gear { right: 62px; font-size: 19px; }
+  #panel { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 54px); right: 10px; z-index: 6;
+           width: 230px; padding: 12px 14px; border-radius: 12px; border: 1px solid #3a3644;
+           background: rgba(24,21,32,0.94); color: #cfd4e6; font: 500 12px system-ui, sans-serif;
+           display: none; }
+  #panel.open { display: block; }
+  #panel h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.14em; color: #9ad; }
+  #panel label { display: block; margin: 8px 0 2px; }
+  #panel .row { display: flex; align-items: center; gap: 8px; }
+  #panel input[type=range] { flex: 1; accent-color: #ff5a5a; }
+  #panel .val { width: 44px; text-align: right; color: #ffe86b; font-variant-numeric: tabular-nums; }
+  #panel .note { margin-top: 8px; color: #8a8798; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -36,6 +48,22 @@
 <button id="reset" class="ctl" aria-label="Reset room">&#8634;</button>
 <button id="toss" class="ctl" aria-label="Toss the cat back in">&#128008;</button>
 <button id="dbg" class="ctl" aria-label="Debug look">DBG</button>
+<button id="gear" class="ctl" aria-label="Settings">&#9881;</button>
+<div id="panel">
+  <h3>SETTINGS</h3>
+  <label>Cats</label>
+  <div class="row"><input type="range" id="s-cats" min="1" max="4" step="1"><span class="val" id="v-cats"></span></div>
+  <label>Cat weight</label>
+  <div class="row"><input type="range" id="s-weight" min="0.5" max="2" step="0.05"><span class="val" id="v-weight"></span></div>
+  <label>Cat strength</label>
+  <div class="row"><input type="range" id="s-strength" min="0.5" max="2" step="0.05"><span class="val" id="v-strength"></span></div>
+  <label>Gravity</label>
+  <div class="row"><input type="range" id="s-gravity" min="0.3" max="1.5" step="0.05"><span class="val" id="v-gravity"></span></div>
+  <label>Render quality</label>
+  <div class="row"><input type="range" id="s-quality" min="0.75" max="2" step="0.25"><span class="val" id="v-quality"></span></div>
+  <label class="row" style="margin-top:10px"><input type="checkbox" id="s-shadows"> Shadows</label>
+  <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live</div>
+</div>
 <div id="hud">
   <div id="score">0</div>
   <div id="state">LOADING</div>

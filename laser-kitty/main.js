@@ -9,13 +9,24 @@ const SEED = 42;
 
 const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
-let sim = lk.lk_new(SEED, 0);
+
+// settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, quality: 2, shadows: true };
+let cfg = { ...DEFAULTS };
+try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
+function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
+function newSim() {
+  const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight);
+  lk.lk_tune(s, cfg.strength, cfg.gravity);
+  return s;
+}
+let sim = newSim();
 
 // --- three scene -----------------------------------------------------------
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.quality));
+renderer.shadowMap.enabled = cfg.shadows;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x272138);
@@ -34,6 +45,7 @@ sun.shadow.camera.top = 4;
 sun.shadow.camera.bottom = -4;
 sun.shadow.camera.far = 14;
 sun.shadow.bias = -0.002;
+sun.castShadow = cfg.shadows;
 scene.add(sun);
 const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
 lampGlow.position.set(2.2, 1.35, -1.6); // the floor lamp is "on"
@@ -214,15 +226,15 @@ const decor = new THREE.Group();
 }
 scene.add(decor);
 
-// --- the cat: render-side body (physics stays a capsule) -------------------
-const catParts = {};
-let catGroup = null;
-let catFacing = 0;
-let catPrev = null;
-function buildCat() {
+// --- the cats: render-side bodies (physics stays capsules) -----------------
+const catViews = new Map(); // body index -> {group, legs, tailSegs, mats, prev, facing}
+const CAT_COATS = [0xff9d45, 0x8a8f9e, 0xf5f0e6, 0x3d3a45]; // orange, grey, cream, black
+const CAT_DARKS = [0xd97f2e, 0x6b7080, 0xd8cfc0, 0x2a2830];
+function buildCat(k) {
+  const view = { legs: [], tailSegs: [], prev: null, facing: 0, coat: CAT_COATS[k % 4] };
   const g = new THREE.Group();
-  const fur = toonMat(0xff9d45);
-  const dark = toonMat(0xd97f2e);
+  const fur = toonMat(view.coat);
+  const dark = toonMat(CAT_DARKS[k % 4]);
   const white = toonMat(0xfff4e6);
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), fur);
   body.scale.set(1.05, 0.92, 1.5);
@@ -246,7 +258,6 @@ function buildCat() {
     ear.rotation.z = -0.25 * sx;
     g.add(ear);
   }
-  catParts.legs = [];
   for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.14, 0.035), dark);
     leg.position.set(0.065 * sx, -0.12, 0.11 * sz);
@@ -255,19 +266,17 @@ function buildCat() {
     paw.position.y = -0.07;
     leg.add(paw);
     g.add(leg);
-    catParts.legs.push(leg);
+    view.legs.push(leg);
   }
   const tail = new THREE.Group();
-  catParts.tailSegs = [];
-  for (let k = 0; k < 4; k++) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.026 - k * 0.003, 8, 6), k === 3 ? dark : fur);
+  for (let s = 0; s < 4; s++) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.026 - s * 0.003, 8, 6), s === 3 ? dark : fur);
     tail.add(seg);
-    catParts.tailSegs.push(seg);
+    view.tailSegs.push(seg);
   }
   tail.position.set(0, 0.08, -0.17);
   g.add(tail);
-  catParts.tail = tail;
-  catParts.mats = [fur, dark];
+  view.mats = [fur, dark];
   g.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -275,7 +284,8 @@ function buildCat() {
     }
   });
   scene.add(g);
-  return g;
+  view.group = g;
+  return view;
 }
 
 // --- laser visuals: core dot, oriented spill, glow sprite, beam ------------
@@ -462,7 +472,7 @@ function pixelDir(x, y) {
   return lookRay.ray.direction.clone();
 }
 addEventListener('pointerdown', (e) => {
-  if (e.target.closest && e.target.closest('button')) return;
+  if (e.target.closest && e.target.closest('button, #panel')) return;
   if (e.clientY >= pad.getBoundingClientRect().top) return;
   if (lookId !== null) return;
   lookId = e.pointerId;
@@ -558,17 +568,16 @@ function applyLookMode() {
   losLine.visible = false;
   document.getElementById('dbg').classList.toggle('on', debugLook);
 }
-document.getElementById('reset').addEventListener('click', () => {
+function rebuildSim() {
   lk.lk_free(sim);
-  sim = lk.lk_new(SEED, 0);
+  sim = newSim();
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
-  if (catGroup) {
-    scene.remove(catGroup);
-    catGroup = null;
-    catPrev = null;
-    catFacing = 0;
-  }
+  for (const v of catViews.values()) scene.remove(v.group);
+  catViews.clear();
+}
+document.getElementById('reset').addEventListener('click', () => {
+  rebuildSim();
   // reset the view too — a stranded look with no way home was a playtest trap
   lookYaw = HOME_YAW;
   lookPitch = HOME_PITCH;
@@ -580,6 +589,41 @@ document.getElementById('dbg').addEventListener('click', () => {
 });
 document.getElementById('toss').addEventListener('click', () => {
   lk.lk_cat_toss(sim); // edge-fall rescue: lob the cat back in over the front
+});
+
+// --- settings panel --------------------------------------------------------
+const panel = document.getElementById('panel');
+document.getElementById('gear').addEventListener('click', () => panel.classList.toggle('open'));
+function bindSlider(id, key, fmt, onChange) {
+  const el = document.getElementById('s-' + id);
+  const val = document.getElementById('v-' + id);
+  el.value = cfg[key];
+  val.textContent = fmt(cfg[key]);
+  el.addEventListener('input', () => {
+    cfg[key] = parseFloat(el.value);
+    val.textContent = fmt(cfg[key]);
+    saveCfg();
+    if (onChange) onChange(cfg[key]);
+  });
+}
+const retune = () => lk.lk_tune(sim, cfg.strength, cfg.gravity);
+bindSlider('cats', 'cats', (v) => `${v}`, () => rebuildSim());
+bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
+bindSlider('strength', 'strength', (v) => `${v.toFixed(2)}x`, retune);
+bindSlider('gravity', 'gravity', (v) => `${v.toFixed(2)}x`, retune);
+bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) =>
+  renderer.setPixelRatio(Math.min(devicePixelRatio, v))
+);
+const shadowsEl = document.getElementById('s-shadows');
+shadowsEl.checked = cfg.shadows;
+shadowsEl.addEventListener('change', () => {
+  cfg.shadows = shadowsEl.checked;
+  saveCfg();
+  renderer.shadowMap.enabled = cfg.shadows;
+  sun.castShadow = cfg.shadows;
+  scene.traverse((o) => {
+    if (o.isMesh) o.material.needsUpdate = true;
+  });
 });
 
 // --- fixed-tick loop -------------------------------------------------------
@@ -611,29 +655,36 @@ function frame(now) {
   const data = new Float32Array(lk.memory.buffer, ptr, count * FLOATS_PER_BODY);
   const catState = lk.lk_cat_state(sim);
   let catPos = null;
+  let catOrdinal = 0;
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS_PER_BODY;
     if (data[o] === 3) {
-      if (!catGroup) catGroup = buildCat();
+      const k = catOrdinal++;
+      let view = catViews.get(i);
+      if (!view) {
+        view = buildCat(k);
+        catViews.set(i, view);
+      }
       const x = data[o + 5], y = data[o + 6], z = data[o + 7];
-      catPos = [x, y, z];
-      if (catPrev) {
-        const vx = x - catPrev[0], vz = z - catPrev[2];
+      const st = data[o + 12] | 0; // per-cat brain state rides the flag slot
+      if (!catPos) catPos = [x, y, z]; // cat 0: HUD + debug LOS line
+      if (view.prev) {
+        const vx = x - view.prev[0], vz = z - view.prev[2];
         const sp = Math.hypot(vx, vz) * 60;
         if (sp > 0.25) {
           const target = Math.atan2(vx, vz);
-          let d = target - catFacing;
+          let d = target - view.facing;
           while (d > Math.PI) d -= 2 * Math.PI;
           while (d < -Math.PI) d += 2 * Math.PI;
-          catFacing += d * 0.2;
+          view.facing += d * 0.2;
         }
         const swing = Math.min(0.7, sp * 0.22);
-        for (let li = 0; li < catParts.legs.length; li++) {
-          const leg = catParts.legs[li];
-          if (catState === 9 && li < 2) {
+        for (let li = 0; li < view.legs.length; li++) {
+          const leg = view.legs[li];
+          if (st === 9 && li < 2) {
             // swat flurry: front paws machine-gun forward, raised
             leg.rotation.x = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7;
-          } else if (catState === 9) {
+          } else if (st === 9) {
             leg.rotation.x = 0.25; // haunches planted
           } else {
             leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
@@ -641,24 +692,22 @@ function frame(now) {
         }
         // tail: idle sway, hard lash during windup and swat
         const lash =
-          catState === 3 || catState === 9
-            ? Math.sin(now * 0.05) * 0.9
-            : Math.sin(now * 0.004) * 0.3;
-        for (let k = 0; k < catParts.tailSegs.length; k++) {
-          const t = (k + 1) / catParts.tailSegs.length;
-          catParts.tailSegs[k].position.set(
+          st === 3 || st === 9 ? Math.sin(now * 0.05) * 0.9 : Math.sin(now * 0.004) * 0.3;
+        for (let s = 0; s < view.tailSegs.length; s++) {
+          const t = (s + 1) / view.tailSegs.length;
+          view.tailSegs[s].position.set(
             Math.sin(lash * t) * 0.14 * t,
             0.1 * t * t + 0.02,
             -0.16 * t
           );
         }
       }
-      catPrev = [x, y, z];
-      catGroup.position.set(x, y, z);
-      catGroup.rotation.y = catFacing + (catState === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
-      // debug: tint the cat by state so attention reads at a glance
-      const tint = debugLook ? STATE_TINT[catState] ?? 0xffffff : 0xff9d45;
-      catParts.mats[0].color.setHex(tint);
+      view.prev = [x, y, z];
+      view.group.position.set(x, y, z);
+      view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
+      // debug: tint each cat by its own state so attention reads at a glance
+      const tint = debugLook ? STATE_TINT[st] ?? 0xffffff : view.coat;
+      view.mats[0].color.setHex(tint);
       continue;
     }
     if (!meshes[i]) {
