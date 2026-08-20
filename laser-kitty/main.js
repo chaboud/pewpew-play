@@ -17,8 +17,6 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14121a);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
-camera.position.set(0, 3.4, -4.8);
-camera.lookAt(0, 0.55, 0.6);
 scene.add(new THREE.HemisphereLight(0xbccadf, 0x2a2431, 1.1));
 const sun = new THREE.DirectionalLight(0xfff2dd, 1.6);
 sun.position.set(-2, 5, -3);
@@ -37,6 +35,46 @@ function meshFor(shape, a, b, c, cls) {
   return m;
 }
 
+// --- the cat: render-side body (physics stays a capsule) -------------------
+// Horizontal body + head + ears + gaited legs + lashing tail. Facing comes
+// from velocity; gait phase from speed. Pure cosmetics per the seam rules.
+const catParts = {};
+function buildCat() {
+  const g = new THREE.Group();
+  const fur = new THREE.MeshLambertMaterial({ color: 0xff9d45 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0xd97f2e });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.24, 3, 8), fur);
+  body.rotation.x = Math.PI / 2; // lie along z (facing +z locally)
+  body.position.y = 0.02;
+  g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), fur);
+  head.position.set(0, 0.1, 0.2);
+  g.add(head);
+  for (const sx of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 4), dark);
+    ear.position.set(0.05 * sx, 0.19, 0.19);
+    g.add(ear);
+  }
+  catParts.legs = [];
+  for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.14, 0.035), dark);
+    leg.position.set(0.065 * sx, -0.12, 0.11 * sz);
+    leg.userData.phase = sz > 0 ? (sx > 0 ? 0 : Math.PI) : (sx > 0 ? Math.PI : 0);
+    g.add(leg);
+    catParts.legs.push(leg);
+  }
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.028, 0.24), dark);
+  tail.position.set(0, 0.1, -0.26);
+  tail.rotation.x = -0.5;
+  g.add(tail);
+  catParts.tail = tail;
+  scene.add(g);
+  return g;
+}
+let catGroup = null;
+let catFacing = 0;
+let catPrev = null;
+
 // laser dot + beam (R-19: the beam is the aiming feedback)
 const dot = new THREE.Mesh(
   new THREE.SphereGeometry(0.045, 10, 8),
@@ -50,13 +88,41 @@ const beam = new THREE.Line(
 );
 scene.add(beam);
 
+// --- camera: aspect-adaptive, auto-framing, with look-drag orbit -----------
+// Vertical FOV derives from a fixed *horizontal* FOV so tall phone screens
+// widen vertically instead of cropping the room away.
+const H_FOV = 66 * (Math.PI / 180);
+let camYaw = 0; // user look, drag above the pad
+let camHeight = 2.9;
+let camDist = 4.6;
+const focus = new THREE.Vector3(0, 0.5, 0.5); // EMA'd point of interest
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
+  const aspect = innerWidth / innerHeight;
+  camera.aspect = aspect;
+  const vfov = 2 * Math.atan(Math.tan(H_FOV / 2) / Math.min(aspect, 1.2));
+  camera.fov = Math.min(100, (vfov * 180) / Math.PI);
+  camDist = 4.2 * Math.max(1, Math.min(1.5, 0.75 / aspect));
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 resize();
+
+let looking = false;
+let lookLast = null;
+canvas.addEventListener('pointerdown', (e) => {
+  looking = true;
+  lookLast = [e.clientX, e.clientY];
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!looking) return;
+  camYaw -= (e.clientX - lookLast[0]) * 0.006;
+  camHeight = Math.max(0.8, Math.min(5.0, camHeight + (e.clientY - lookLast[1]) * 0.012));
+  lookLast = [e.clientX, e.clientY];
+});
+for (const ev of ['pointerup', 'pointercancel']) {
+  canvas.addEventListener(ev, () => (looking = false));
+}
 
 // --- thumb pad → dot (amplified absolute mapping, like a real pointer) -----
 const pad = document.getElementById('pad');
@@ -67,8 +133,13 @@ function padPoint(e) {
   const t = e.touches ? e.touches[0] : e;
   const nx = ((t.clientX - r.left) / r.width) * 2 - 1;
   const ny = ((t.clientY - r.top) / r.height) * 2 - 1;
-  dotX = -Math.max(-1, Math.min(1, nx)) * ROOM; // mirrored: camera faces +z
-  dotZ = -Math.max(-1, Math.min(1, ny)) * ROOM;
+  // pad direction rotates with the camera so "up on the pad" is always
+  // "away from me" on screen
+  const px = Math.max(-1, Math.min(1, nx)) * ROOM;
+  const pz = -Math.max(-1, Math.min(1, ny)) * ROOM;
+  const cos = Math.cos(camYaw), sin = Math.sin(camYaw);
+  dotX = Math.max(-ROOM, Math.min(ROOM, -(px * cos) + pz * sin));
+  dotZ = Math.max(-ROOM, Math.min(ROOM, px * sin + pz * cos));
   thumbEl.style.left = `${Math.max(0, Math.min(r.width, t.clientX - r.left))}px`;
   thumbEl.style.top = `${Math.max(0, Math.min(r.height, t.clientY - r.top))}px`;
 }
@@ -118,29 +189,69 @@ function frame(now) {
   const count = lk.lk_body_count(sim);
   const ptr = lk.lk_render_data(sim);
   const data = new Float32Array(lk.memory.buffer, ptr, count * FLOATS_PER_BODY);
+  const catState = lk.lk_cat_state(sim);
+  let catPos = null;
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS_PER_BODY;
+    if (data[o] === 3) {
+      if (!catGroup) catGroup = buildCat();
+      const x = data[o + 5], y = data[o + 6], z = data[o + 7];
+      catPos = [x, y, z];
+      if (catPrev) {
+        const vx = x - catPrev[0], vz = z - catPrev[2];
+        const sp = Math.hypot(vx, vz) * 60;
+        if (sp > 0.25) {
+          const target = Math.atan2(vx, vz);
+          let d = target - catFacing;
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          catFacing += d * 0.2;
+        }
+        const swing = Math.min(0.7, sp * 0.22);
+        for (const leg of catParts.legs) {
+          leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
+        }
+        catParts.tail.rotation.y =
+          catState === 3 ? Math.sin(now * 0.05) * 0.9 : Math.sin(now * 0.004) * 0.25;
+      }
+      catPrev = [x, y, z];
+      catGroup.position.set(x, y, z);
+      catGroup.rotation.y = catFacing + (catState === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
+      continue;
+    }
     if (!meshes[i]) meshes[i] = meshFor(data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o]);
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
     if (data[o] === 2) m.material.color.setHex(data[o + 12] ? 0xe8595f : CLASS_COLOR[2]);
-    if (data[o] === 3 && lk.lk_cat_state(sim) === 3) {
-      m.rotation.y = Math.sin(now * 0.045) * 0.22; // the butt-wiggle, render-side
-    }
   }
+
+  // auto-framing: ease the focus toward the action (cat, biased toward dot)
+  if (catPos) {
+    const fx = dotActive ? catPos[0] * 0.55 + dotX * 0.45 : catPos[0];
+    const fz = dotActive ? catPos[2] * 0.55 + dotZ * 0.45 : catPos[2];
+    focus.x += (Math.max(-2.2, Math.min(2.2, fx)) - focus.x) * 0.06;
+    focus.z += (Math.max(-2.2, Math.min(2.2, fz)) - focus.z) * 0.06;
+    focus.y += (Math.min(1.2, catPos[1] * 0.5 + 0.35) - focus.y) * 0.06;
+  }
+  camera.position.set(
+    focus.x + Math.sin(camYaw) * camDist,
+    camHeight,
+    focus.z - Math.cos(camYaw) * camDist
+  );
+  camera.lookAt(focus);
 
   dot.position.set(dotX, 0.03, dotZ);
   dot.visible = beam.visible = dotActive;
-  const from = new THREE.Vector3(0.4, 0.15, -3.4); // "your hand", bottom of view
+  const from = camera.position.clone().add(new THREE.Vector3(0.3, -0.8, 0));
   beamGeo.setFromPoints([from, dot.position]);
 
   scoreEl.textContent = lk.lk_score(sim);
-  stateEl.textContent = STATE_NAMES[lk.lk_cat_state(sim)] ?? '?';
+  stateEl.textContent = STATE_NAMES[catState] ?? '?';
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-stateEl.textContent = 'DRAG THE PAD';
+stateEl.textContent = 'PAD: LURE · ABOVE: LOOK';
 requestAnimationFrame(frame);
