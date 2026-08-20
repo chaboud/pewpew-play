@@ -18,11 +18,13 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x191724);
-scene.fog = new THREE.Fog(0x191724, 9, 16);
+scene.background = new THREE.Color(0x272138);
+// fog kept far outside the room: camera sits ~5.6m out, far wall ~9m — the
+// first pass started fog at 9 and drowned the back half on phone OLEDs.
+scene.fog = new THREE.Fog(0x272138, 13, 26);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
-scene.add(new THREE.HemisphereLight(0xcdd6ea, 0x33293a, 0.9));
-const sun = new THREE.DirectionalLight(0xffe9c9, 1.7);
+scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.25));
+const sun = new THREE.DirectionalLight(0xffe3b8, 1.9);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -33,18 +35,72 @@ sun.shadow.camera.bottom = -4;
 sun.shadow.camera.far = 14;
 sun.shadow.bias = -0.002;
 scene.add(sun);
+const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
+lampGlow.position.set(2.2, 1.35, -1.6); // the floor lamp is "on"
+scene.add(lampGlow);
+
+// --- toon look: shared band ramp + material factory ------------------------
+const ramp = new THREE.DataTexture(new Uint8Array([96, 160, 222, 255]), 4, 1, THREE.RedFormat);
+ramp.minFilter = ramp.magFilter = THREE.NearestFilter;
+ramp.needsUpdate = true;
+function toonMat(color, opts = {}) {
+  return new THREE.MeshToonMaterial({ color, gradientMap: ramp, ...opts });
+}
+
+function makeCanvas(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  draw(c.getContext('2d'));
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+// wood plank floor
+const floorTex = makeCanvas(512, 512, (g) => {
+  g.fillStyle = '#8a6a4d';
+  g.fillRect(0, 0, 512, 512);
+  for (let r = 0; r < 8; r++) {
+    for (let cix = 0; cix < 4; cix++) {
+      const off = (r % 2) * 64;
+      const shade = 0.88 + ((r * 7 + cix * 13) % 5) * 0.05;
+      g.fillStyle = `rgb(${Math.round(138 * shade)},${Math.round(106 * shade)},${Math.round(77 * shade)})`;
+      g.fillRect(cix * 128 + off - 64, r * 64 + 2, 124, 60);
+    }
+  }
+});
+floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+floorTex.repeat.set(3, 3);
+// small deterministic canvas "paintings" keyed by body index
+function artTex(i) {
+  let s = (i * 2654435761) >>> 0;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  return makeCanvas(128, 96, (g) => {
+    g.fillStyle = `hsl(${Math.round(rnd() * 360)},45%,72%)`;
+    g.fillRect(0, 0, 128, 96);
+    for (let k = 0; k < 6; k++) {
+      g.fillStyle = `hsl(${Math.round(rnd() * 360)},60%,${45 + Math.round(rnd() * 25)}%)`;
+      if (rnd() < 0.5) {
+        g.beginPath();
+        g.arc(rnd() * 128, rnd() * 96, 8 + rnd() * 22, 0, 7);
+        g.fill();
+      } else {
+        g.fillRect(rnd() * 100, rnd() * 70, 12 + rnd() * 40, 8 + rnd() * 30);
+      }
+    }
+    g.strokeStyle = '#3a2c20';
+    g.lineWidth = 8;
+    g.strokeRect(0, 0, 128, 96);
+  });
+}
 
 // deterministic per-body color variety within each class palette
 function bodyColor(i, cls, dims, py) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   if (cls === 3) return new THREE.Color(0xff9d45);
-  if (cls === 0) {
-    // small elevated statics are paintings — give them gallery colors
-    if (Math.max(...dims) < 0.6 && py > 0.9) return new THREE.Color().setHSL(h, 0.55, 0.55);
-    return new THREE.Color(0x37333f);
-  }
-  if (cls === 1) return new THREE.Color().setHSL(0.07 + h * 0.06, 0.35, 0.38 + h * 0.1);
-  return new THREE.Color().setHSL((0.45 + h * 0.5) % 1, 0.6, 0.55);
+  if (cls === 0) return new THREE.Color(0x6b5f85);
+  if (cls === 1) return new THREE.Color().setHSL(0.06 + h * 0.07, 0.42, 0.42 + h * 0.14);
+  return new THREE.Color().setHSL((0.42 + h * 0.55) % 1, 0.62, 0.58);
 }
 
 let meshes = [];
@@ -54,10 +110,17 @@ function meshFor(i, shape, a, b, c, cls, py) {
   if (shape === 1) geo = new THREE.SphereGeometry(a, 14, 12);
   else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
-  const mat = new THREE.MeshPhongMaterial({
-    color: bodyColor(i, cls, [a, b, c], py),
-    shininess: 24,
-  });
+  let mat;
+  const painting = cls === 0 && (a < 0.025 || c < 0.025) && Math.max(a, b, c) < 0.6 && py > 0.9;
+  if (cls === 0 && a > 2 && b < 0.2) {
+    mat = toonMat(0xffffff, { map: floorTex }); // the floor slab
+  } else if (painting) {
+    mat = toonMat(0xffffff, { map: artTex(i) });
+  } else if (cls === 2 && a < 0.06 && b > 0.2) {
+    mat = toonMat(0x1c2430, { emissive: 0x0f2f3a }); // the TV screen
+  } else {
+    mat = toonMat(bodyColor(i, cls, [a, b, c], py));
+  }
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = cls !== 0;
   m.receiveShadow = true;
@@ -65,15 +128,49 @@ function meshFor(i, shape, a, b, c, cls, py) {
   return m;
 }
 
-// rug: render-side decor only
-const rug = new THREE.Mesh(
-  new THREE.CircleGeometry(1.15, 28),
-  new THREE.MeshPhongMaterial({ color: 0x5a3040, shininess: 2 })
-);
-rug.rotation.x = -Math.PI / 2;
-rug.position.set(0, 0.004, 0.2);
-rug.receiveShadow = true;
-scene.add(rug);
+// --- render-side room dressing (no collision, pure decor) ------------------
+const decor = new THREE.Group();
+{
+  const trimMat = toonMat(0x4a3a55);
+  for (const [x, z, w, d, ry] of [
+    [0, 2.975, 6.1, 0.05, 0],
+    [2.975, 0, 0.05, 5.95, 0],
+    [-2.975, 0, 0.05, 5.95, 0],
+  ]) {
+    const bb = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, d), trimMat);
+    bb.position.set(x, 0.07, z);
+    decor.add(bb);
+  }
+  // front edge of the diorama floor slab: make the cut look intentional
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.06, 0.05), trimMat);
+  lip.position.set(0, 0.03, -2.995);
+  decor.add(lip);
+  // window high on the left wall, over the sun's shoulder
+  const win = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.95, 1.25), toonMat(0x3a2c20));
+  win.add(frame);
+  const pane = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.8),
+    new THREE.MeshBasicMaterial({ color: 0xffe7c2 })
+  );
+  pane.rotation.y = Math.PI / 2;
+  pane.position.x = 0.035;
+  win.add(pane);
+  for (const mz of [-0.19, 0.19]) {
+    const mull = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.85, 0.05), toonMat(0x3a2c20));
+    mull.position.set(0.01, 0, mz);
+    win.add(mull);
+  }
+  win.position.set(-3.02, 2.05, 0.6);
+  decor.add(win);
+  // rug under the seating area
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), toonMat(0x7a4258));
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(0, 0.006, 0.2);
+  rug.receiveShadow = true;
+  decor.add(rug);
+}
+scene.add(decor);
 
 // --- the cat: render-side body (physics stays a capsule) -------------------
 const catParts = {};
@@ -82,18 +179,29 @@ let catFacing = 0;
 let catPrev = null;
 function buildCat() {
   const g = new THREE.Group();
-  const fur = new THREE.MeshPhongMaterial({ color: 0xff9d45, shininess: 8 });
-  const dark = new THREE.MeshPhongMaterial({ color: 0xd97f2e, shininess: 8 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.24, 4, 10), fur);
-  body.rotation.x = Math.PI / 2;
+  const fur = toonMat(0xff9d45);
+  const dark = toonMat(0xd97f2e);
+  const white = toonMat(0xfff4e6);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), fur);
+  body.scale.set(1.05, 0.92, 1.5);
   body.position.y = 0.02;
   g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), fur);
-  head.position.set(0, 0.1, 0.2);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), white);
+  chest.position.set(0, -0.03, 0.13);
+  g.add(chest);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.088, 12, 10), fur);
+  head.position.set(0, 0.11, 0.2);
   g.add(head);
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), white);
+  muzzle.position.set(0, 0.085, 0.265);
+  g.add(muzzle);
   for (const sx of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 4), dark);
-    ear.position.set(0.05 * sx, 0.19, 0.19);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), toonMat(0x27221c));
+    eye.position.set(0.04 * sx, 0.14, 0.272);
+    g.add(eye);
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.075, 4), dark);
+    ear.position.set(0.053 * sx, 0.2, 0.185);
+    ear.rotation.z = -0.25 * sx;
     g.add(ear);
   }
   catParts.legs = [];
@@ -101,12 +209,20 @@ function buildCat() {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.14, 0.035), dark);
     leg.position.set(0.065 * sx, -0.12, 0.11 * sz);
     leg.userData.phase = sz > 0 ? (sx > 0 ? 0 : Math.PI) : (sx > 0 ? Math.PI : 0);
+    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.024, 8, 6), white);
+    paw.position.y = -0.07;
+    leg.add(paw);
     g.add(leg);
     catParts.legs.push(leg);
   }
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.028, 0.24), dark);
-  tail.position.set(0, 0.1, -0.26);
-  tail.rotation.x = -0.5;
+  const tail = new THREE.Group();
+  catParts.tailSegs = [];
+  for (let k = 0; k < 4; k++) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.026 - k * 0.003, 8, 6), k === 3 ? dark : fur);
+    tail.add(seg);
+    catParts.tailSegs.push(seg);
+  }
+  tail.position.set(0, 0.08, -0.17);
   g.add(tail);
   catParts.tail = tail;
   catParts.mats = [fur, dark];
@@ -150,23 +266,88 @@ const glow = new THREE.Sprite(
 );
 glow.scale.setScalar(0.4);
 scene.add(glow);
-const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-const beam = new THREE.Line(
-  beamGeo,
-  new THREE.LineBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.5 })
+// the beam: a thin additive cylinder from the belt emitter to the dot
+const beam = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.006, 0.006, 1, 6, 1, true),
+  new THREE.MeshBasicMaterial({
+    color: 0xff4444,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
 );
 scene.add(beam);
+function placeBeam(from, to) {
+  const d = to.clone().sub(from);
+  const len = d.length();
+  beam.position.copy(from).addScaledVector(d, 0.5);
+  beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  beam.scale.set(1, len, 1);
+}
 // debug: line-of-sight from cat eye to dot (green = seen, red = blocked)
 const losGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const losLine = new THREE.Line(losGeo, new THREE.LineBasicMaterial({ color: 0x44ff66 }));
 losLine.visible = false;
 scene.add(losLine);
 
+// --- dust puffs on topples -------------------------------------------------
+const puffTex = new THREE.CanvasTexture(
+  (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(16, 16, 2, 16, 16, 15);
+    grad.addColorStop(0, 'rgba(255,240,220,0.85)');
+    grad.addColorStop(1, 'rgba(255,240,220,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 32);
+    return c;
+  })()
+);
+const puffs = [];
+for (let i = 0; i < 28; i++) {
+  const s = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false })
+  );
+  s.visible = false;
+  scene.add(s);
+  puffs.push({ s, vel: new THREE.Vector3(), life: 0 });
+}
+let puffCursor = 0;
+function burstPuffs(pos) {
+  for (let k = 0; k < 6; k++) {
+    const p = puffs[puffCursor];
+    puffCursor = (puffCursor + 1) % puffs.length;
+    p.s.position.copy(pos);
+    p.s.visible = true;
+    p.s.scale.setScalar(0.12 + Math.random() * 0.1);
+    const a = Math.random() * Math.PI * 2;
+    p.vel.set(Math.cos(a) * 0.7, 0.8 + Math.random() * 0.6, Math.sin(a) * 0.7);
+    p.life = 0.5;
+  }
+}
+function tickPuffs(dt) {
+  for (const p of puffs) {
+    if (!p.s.visible) continue;
+    p.life -= dt;
+    if (p.life <= 0) {
+      p.s.visible = false;
+      continue;
+    }
+    p.s.position.addScaledVector(p.vel, dt);
+    p.vel.y -= 2.2 * dt;
+    p.s.material.opacity = p.life * 1.6;
+    p.s.scale.multiplyScalar(1 + dt * 1.5);
+  }
+}
+
 // --- camera: fixed diorama vantage, grab-the-world arcball look ------------
 const H_FOV = 62 * (Math.PI / 180);
 const EYE = new THREE.Vector3(0, 2.0, -5.6);
-let lookYaw = 0;
-let lookPitch = -0.26;
+const HOME_YAW = 0, HOME_PITCH = -0.26;
+let lookYaw = HOME_YAW;
+let lookPitch = HOME_PITCH;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
 function applyLook(bob = 0) {
@@ -308,6 +489,10 @@ document.getElementById('reset').addEventListener('click', () => {
     catPrev = null;
     catFacing = 0;
   }
+  // reset the view too — a stranded look with no way home was a playtest trap
+  lookYaw = HOME_YAW;
+  lookPitch = HOME_PITCH;
+  applyLook();
 });
 document.getElementById('dbg').addEventListener('click', () => {
   debugLook = !debugLook;
@@ -319,7 +504,8 @@ let last = performance.now();
 let acc = 0;
 const DT = 1000 / 60;
 function frame(now) {
-  acc = Math.min(acc + (now - last), 100);
+  const frameDt = Math.min(now - last, 100);
+  acc = Math.min(acc + frameDt, 100);
   last = now;
   updateLaserRay();
   while (acc >= DT) {
@@ -330,6 +516,8 @@ function frame(now) {
       if (code >>> 24 === 3) {
         const chain = (code >> 20) & 0xf;
         popScore(`+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
+        const prop = (code >>> 12) & 0xff;
+        if (meshes[prop]) burstPuffs(meshes[prop].position);
       }
     }
     acc -= DT;
@@ -360,8 +548,16 @@ function frame(now) {
         for (const leg of catParts.legs) {
           leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
         }
-        catParts.tail.rotation.y =
-          catState === 3 ? Math.sin(now * 0.05) * 0.9 : Math.sin(now * 0.004) * 0.25;
+        // tail: idle sway, hard lash during windup
+        const lash = catState === 3 ? Math.sin(now * 0.05) * 0.9 : Math.sin(now * 0.004) * 0.3;
+        for (let k = 0; k < catParts.tailSegs.length; k++) {
+          const t = (k + 1) / catParts.tailSegs.length;
+          catParts.tailSegs[k].position.set(
+            Math.sin(lash * t) * 0.14 * t,
+            0.1 * t * t + 0.02,
+            -0.16 * t
+          );
+        }
       }
       catPrev = [x, y, z];
       catGroup.position.set(x, y, z);
@@ -381,6 +577,7 @@ function frame(now) {
     if (data[o] === 2 && data[o + 12]) m.material.emissive?.setHex(0x551111);
   }
 
+  tickPuffs(frameDt / 1000);
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
   const L = new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10);
@@ -395,7 +592,7 @@ function frame(now) {
     spill.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     spill.scale.setScalar(L[7]);
     spill.material.opacity = 0.15 + 0.35 * L[8];
-    beamGeo.setFromPoints([beltWorld(), dot.position]);
+    placeBeam(beltWorld(), dot.position);
   }
   // debug LOS line: cat eye -> dot, green when the cat can see it
   losLine.visible = debugLook && lit && !!catPos;
