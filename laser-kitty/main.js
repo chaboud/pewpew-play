@@ -443,6 +443,10 @@ let lookYaw = HOME_YAW;
 let lookPitch = HOME_PITCH;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
+// bounded pinch zoom: narrows the FOV (the vantage never translates —
+// diorama doctrine holds)
+const ZOOM_MIN = 1, ZOOM_MAX = 2.4;
+let zoom = 1;
 function applyLook(bob = 0) {
   camera.position.set(EYE.x, EYE.y + bob, EYE.z);
   const f = new THREE.Vector3(
@@ -456,17 +460,32 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const aspect = innerWidth / innerHeight;
   camera.aspect = aspect;
-  const vfov = 2 * Math.atan(Math.tan(H_FOV / 2) / Math.min(aspect, 1.2));
+  const hfov = 2 * Math.atan(Math.tan(H_FOV / 2) / zoom);
+  const vfov = 2 * Math.atan(Math.tan(hfov / 2) / Math.min(aspect, 1.2));
   camera.fov = Math.min(105, (vfov * 180) / Math.PI);
   camera.updateProjectionMatrix();
 }
+function setZoom(z) {
+  zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  resize();
+}
 addEventListener('resize', resize);
+addEventListener(
+  'wheel',
+  (e) => {
+    if (e.clientY >= pad.getBoundingClientRect().top) return;
+    setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    e.preventDefault();
+  },
+  { passive: false }
+);
 resize();
 applyLook();
 
 const lookRay = new THREE.Raycaster();
-let lookId = null;
+const lookPts = new Map(); // pointerId -> [x, y] for look-area pointers
 let grabDir = null;
+let pinchDist = 0;
 function pixelDir(x, y) {
   lookRay.setFromCamera(
     new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1),
@@ -474,15 +493,32 @@ function pixelDir(x, y) {
   );
   return lookRay.ray.direction.clone();
 }
+function pinchSpan() {
+  const [a, b] = [...lookPts.values()];
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
 addEventListener('pointerdown', (e) => {
   if (e.target.closest && e.target.closest('button, #panel')) return;
   if (e.clientY >= pad.getBoundingClientRect().top) return;
-  if (lookId !== null) return;
-  lookId = e.pointerId;
-  grabDir = pixelDir(e.clientX, e.clientY);
+  if (lookPts.size >= 2) return;
+  lookPts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (lookPts.size === 1) {
+    grabDir = pixelDir(e.clientX, e.clientY);
+  } else {
+    grabDir = null; // second finger: the gesture becomes a pinch
+    pinchDist = pinchSpan();
+  }
 });
 addEventListener('pointermove', (e) => {
-  if (e.pointerId !== lookId || !grabDir) return;
+  if (!lookPts.has(e.pointerId)) return;
+  lookPts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (lookPts.size === 2) {
+    const span = pinchSpan();
+    if (pinchDist > 20) setZoom(zoom * (span / pinchDist));
+    pinchDist = span;
+    return;
+  }
+  if (!grabDir) return;
   const d1 = pixelDir(e.clientX, e.clientY);
   const q = new THREE.Quaternion().setFromUnitVectors(d1, grabDir);
   const f = new THREE.Vector3();
@@ -494,9 +530,12 @@ addEventListener('pointermove', (e) => {
 });
 for (const ev of ['pointerup', 'pointercancel']) {
   addEventListener(ev, (e) => {
-    if (e.pointerId === lookId) {
-      lookId = null;
-      grabDir = null;
+    if (!lookPts.delete(e.pointerId)) return;
+    grabDir = null;
+    if (lookPts.size === 1) {
+      // pinch ended with one finger down: hand it back to the arcball
+      const [p] = [...lookPts.values()];
+      grabDir = pixelDir(p[0], p[1]);
     }
   });
 }
@@ -584,6 +623,7 @@ document.getElementById('reset').addEventListener('click', () => {
   // reset the view too — a stranded look with no way home was a playtest trap
   lookYaw = HOME_YAW;
   lookPitch = HOME_PITCH;
+  setZoom(1);
   applyLook();
 });
 document.getElementById('dbg').addEventListener('click', () => {
@@ -643,11 +683,20 @@ function frame(now) {
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
-      if (code >>> 24 === 3) {
+      const ev = code >>> 24;
+      if (ev === 3 || ev === 4) {
         const chain = (code >> 20) & 0xf;
-        popScore(`+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
+        const label = ev === 4 ? 'CRASH ' : '';
+        popScore(`${label}+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
         const prop = (code >>> 12) & 0xff;
-        if (meshes[prop]) burstPuffs(meshes[prop].position);
+        if (meshes[prop]) {
+          burstPuffs(meshes[prop].position);
+          if (ev === 4) burstPuffs(meshes[prop].position); // double burst for a break
+        }
+      } else if (ev === 5) {
+        const piece = (code >>> 12) & 0xff;
+        popScore('scratch!');
+        if (meshes[piece]) burstPuffs(meshes[piece].position);
       }
     }
     acc -= DT;
@@ -677,18 +726,23 @@ function frame(now) {
         catPos = [x, y, z]; // cat 0: HUD + debug LOS line
         hudAct = st === 0 ? act : -1;
       }
-      // ambient poses: idle cats live their act; bored cats sulk in a sit
+      // ambient poses: idle cats live their act; bored cats sulk in a sit;
+      // stalking cats with the creep hint drop into the hunt-walk crouch
       const pose = st === 6 ? 0 : st === 0 && act !== 3 ? act : -1;
+      const crouch = st === 2 && act === 1;
       if (view.prev) {
         const vx = x - view.prev[0], vz = z - view.prev[2];
         const sp = Math.hypot(vx, vz) * 60;
+        let leanTarget = 0;
         if (sp > 0.25) {
           const target = Math.atan2(vx, vz);
           let d = target - view.facing;
           while (d > Math.PI) d -= 2 * Math.PI;
           while (d < -Math.PI) d += 2 * Math.PI;
           view.facing += d * 0.2;
+          leanTarget = Math.max(-0.32, Math.min(0.32, d * 2.2)); // bank into turns
         }
+        view.lean = (view.lean ?? 0) + (leanTarget - (view.lean ?? 0)) * 0.15;
         const swing = Math.min(0.7, sp * 0.22);
         for (let li = 0; li < view.legs.length; li++) {
           const leg = view.legs[li];
@@ -697,6 +751,9 @@ function frame(now) {
             leg.rotation.x = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7;
           } else if (st === 9) {
             leg.rotation.x = 0.25; // haunches planted
+          } else if (crouch) {
+            // hunt-walk: bent legs, slow deliberate steps
+            leg.rotation.x = 0.35 + Math.sin(now * 0.008 + leg.userData.phase) * 0.25;
           } else if (pose === 0) {
             leg.rotation.x = li < 2 ? 0 : 1.3; // sit: haunches folded
           } else if (pose === 1) {
@@ -720,18 +777,26 @@ function frame(now) {
             -0.16 * t
           );
         }
-        // groom head-bob; loaf hunkers the body down
-        view.head.position.y = pose === 1 ? 0.1 + Math.sin(now * 0.025) * 0.02 : 0.11;
-        view.head.position.z = pose === 1 ? 0.17 : 0.2;
-        view.body.position.y = pose === 2 ? -0.03 : 0.02;
+        // groom head-bob; loaf hunkers down; hunt-walk slinks low
+        view.head.position.y = pose === 1 ? 0.1 + Math.sin(now * 0.025) * 0.02 : crouch ? 0.06 : 0.11;
+        view.head.position.z = pose === 1 ? 0.17 : crouch ? 0.24 : 0.2;
+        view.body.position.y = pose === 2 || crouch ? -0.02 : 0.02;
       }
       view.prev = [x, y, z];
       view.group.position.set(x, y, z);
-      view.group.rotation.x = pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : 0;
-      view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.22 : 0);
+      view.group.rotation.x =
+        pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : crouch ? 0.07 : st === 3 ? 0.14 : 0;
+      // windup: butt up, wiggling — the pounce telegraph
+      view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.24 : 0);
+      view.group.rotation.z = view.lean ?? 0;
       // debug: tint each cat by its own state so attention reads at a glance
       const tint = debugLook ? STATE_TINT[st] ?? 0xffffff : view.coat;
       view.mats[0].color.setHex(tint);
+      continue;
+    }
+    if (data[o] === 4) {
+      // tombstone: the body shattered — hide its mesh, shards have their own
+      if (meshes[i]) meshes[i].visible = false;
       continue;
     }
     if (!meshes[i]) {
@@ -742,6 +807,14 @@ function frame(now) {
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
     if (data[o] === 2 && data[o + 12]) m.material.emissive?.setHex(0x551111);
+    if (data[o] === 1) {
+      // scratch wear: each stage mats and darkens the fabric a little
+      const wear = data[o + 12] | 0;
+      if ((m.userData.wear | 0) !== wear) {
+        for (let w = m.userData.wear | 0; w < wear; w++) m.material.color.multiplyScalar(0.8);
+        m.userData.wear = wear;
+      }
+    }
   }
 
   tickPuffs(frameDt / 1000);
@@ -819,3 +892,28 @@ function frame(now) {
 }
 stateEl.textContent = 'PAD = LASER · DRAG ROOM = LOOK';
 requestAnimationFrame(frame);
+
+// test hook (PewPew pattern): lets an automated driver aim at world points
+window.__lk = {
+  aimPad(wx, wy, wz) {
+    const v = new THREE.Vector3(wx, wy, wz).project(camera);
+    const sx = ((v.x + 1) / 2) * innerWidth;
+    const sy = ((-v.y + 1) / 2) * innerHeight;
+    const r = pad.getBoundingClientRect();
+    const fx = Math.max(0, Math.min(1, (sx - r.left) / r.width));
+    const fy = Math.max(0, Math.min(1, (sy / innerHeight - 0.08) / 0.52));
+    return [r.left + fx * r.width, r.top + fy * r.height];
+  },
+  score: () => lk.lk_score(sim),
+  laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
+  cat: () => {
+    const count = lk.lk_body_count(sim);
+    const ptr = lk.lk_render_data(sim);
+    const d = new Float32Array(lk.memory.buffer, ptr, count * FLOATS_PER_BODY);
+    for (let i = 0; i < count; i++) {
+      const o = i * FLOATS_PER_BODY;
+      if (d[o] === 3) return [d[o + 5], d[o + 6], d[o + 7], d[o + 12]];
+    }
+    return null;
+  },
+};
