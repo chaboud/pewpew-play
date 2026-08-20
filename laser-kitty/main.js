@@ -91,57 +91,92 @@ scene.add(beam);
 // --- camera: aspect-adaptive, auto-framing, with look-drag orbit -----------
 // Vertical FOV derives from a fixed *horizontal* FOV so tall phone screens
 // widen vertically instead of cropping the room away.
-const H_FOV = 66 * (Math.PI / 180);
-let camYaw = 0; // user look, drag above the pad
-let camHeight = 2.9;
+const H_FOV = 78 * (Math.PI / 180);
+let camYaw = 0; // user look: horizontal orbit
+let camPitch = 0.55; // user look: vertical (rad above horizontal)
 let camDist = 4.6;
-const focus = new THREE.Vector3(0, 0.5, 0.5); // EMA'd point of interest
+const focus = new THREE.Vector3(0, 0.4, 0.3); // EMA'd point of interest
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const aspect = innerWidth / innerHeight;
   camera.aspect = aspect;
   const vfov = 2 * Math.atan(Math.tan(H_FOV / 2) / Math.min(aspect, 1.2));
-  camera.fov = Math.min(100, (vfov * 180) / Math.PI);
-  camDist = 4.2 * Math.max(1, Math.min(1.5, 0.75 / aspect));
+  camera.fov = Math.min(105, (vfov * 180) / Math.PI);
+  camDist = 4.2 * Math.max(1, Math.min(1.6, 0.8 / aspect));
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 resize();
 
-let looking = false;
+// Look control: window-level pointer tracking (element-level listeners
+// proved unreliable on mobile — playtest 2). Any drag that STARTS above
+// the pad is a look gesture, per-pointer-id so it coexists with the pad
+// thumb. Horizontal = orbit, vertical = pitch.
+let lookId = null;
 let lookLast = null;
-canvas.addEventListener('pointerdown', (e) => {
-  looking = true;
+addEventListener('pointerdown', (e) => {
+  if (e.clientY >= pad.getBoundingClientRect().top) return; // pad's finger
+  if (lookId !== null) return;
+  lookId = e.pointerId;
   lookLast = [e.clientX, e.clientY];
 });
-canvas.addEventListener('pointermove', (e) => {
-  if (!looking) return;
-  camYaw -= (e.clientX - lookLast[0]) * 0.006;
-  camHeight = Math.max(0.8, Math.min(5.0, camHeight + (e.clientY - lookLast[1]) * 0.012));
+addEventListener('pointermove', (e) => {
+  if (e.pointerId !== lookId || !lookLast) return;
+  camYaw -= (e.clientX - lookLast[0]) * 0.008;
+  camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - lookLast[1]) * 0.005));
   lookLast = [e.clientX, e.clientY];
 });
 for (const ev of ['pointerup', 'pointercancel']) {
-  canvas.addEventListener(ev, () => (looking = false));
+  addEventListener(ev, (e) => {
+    if (e.pointerId === lookId) {
+      lookId = null;
+      lookLast = null;
+    }
+  });
 }
 
-// --- thumb pad → dot (amplified absolute mapping, like a real pointer) -----
+// --- thumb pad → dot: the pointer fiction (founder 2026-08-20) -------------
+// Your thumb is the hand holding the laser; the dot lands in the scene
+// directly ABOVE your thumb on screen. Thumb position maps to a screen
+// aim-point above the pad; a ray through that pixel hits the floor; that's
+// the dot. Screen-space aiming is inherently camera-relative, and the
+// amplification is real ray geometry: grazing angles sweep far.
 const pad = document.getElementById('pad');
 const thumbEl = document.getElementById('thumb');
 let dotX = 0, dotZ = -1.5, dotActive = false;
+let aimScreen = null; // [sx, sy] pixel the beam aims through
+const raycaster = new THREE.Raycaster();
+const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 function padPoint(e) {
   const r = pad.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
-  const nx = ((t.clientX - r.left) / r.width) * 2 - 1;
-  const ny = ((t.clientY - r.top) / r.height) * 2 - 1;
-  // pad direction rotates with the camera so "up on the pad" is always
-  // "away from me" on screen
-  const px = Math.max(-1, Math.min(1, nx)) * ROOM;
-  const pz = -Math.max(-1, Math.min(1, ny)) * ROOM;
-  const cos = Math.cos(camYaw), sin = Math.sin(camYaw);
-  dotX = Math.max(-ROOM, Math.min(ROOM, -(px * cos) + pz * sin));
-  dotZ = Math.max(-ROOM, Math.min(ROOM, px * sin + pz * cos));
-  thumbEl.style.left = `${Math.max(0, Math.min(r.width, t.clientX - r.left))}px`;
-  thumbEl.style.top = `${Math.max(0, Math.min(r.height, t.clientY - r.top))}px`;
+  const fx = Math.max(0, Math.min(1, (t.clientX - r.left) / r.width));
+  const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
+  // aim-point: same x as the thumb; y sweeps the scene area above the pad
+  // (pad bottom = close in front of you, pad top = deep in the room)
+  const sx = r.left + fx * r.width;
+  const sy = innerHeight * (0.08 + fy * 0.52); // 8%..60% of screen height
+  aimScreen = [sx, sy];
+  thumbEl.style.left = `${fx * r.width}px`;
+  thumbEl.style.top = `${fy * r.height}px`;
+}
+function updateDotFromAim() {
+  if (!aimScreen) return;
+  const ndc = new THREE.Vector2(
+    (aimScreen[0] / innerWidth) * 2 - 1,
+    -(aimScreen[1] / innerHeight) * 2 + 1
+  );
+  raycaster.setFromCamera(ndc, camera);
+  const hit = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(floorPlane, hit)) {
+    dotX = Math.max(-ROOM, Math.min(ROOM, hit.x));
+    dotZ = Math.max(-ROOM, Math.min(ROOM, hit.z));
+  } else {
+    // aiming above the horizon: push the dot to the room's far edge
+    const d = raycaster.ray.direction;
+    dotX = Math.max(-ROOM, Math.min(ROOM, camera.position.x + d.x * 8));
+    dotZ = Math.max(-ROOM, Math.min(ROOM, camera.position.z + d.z * 8));
+  }
 }
 for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointerup', false], ['pointercancel', false]]) {
   pad.addEventListener(ev, (e) => {
@@ -226,25 +261,37 @@ function frame(now) {
     if (data[o] === 2) m.material.color.setHex(data[o + 12] ? 0xe8595f : CLASS_COLOR[2]);
   }
 
-  // auto-framing: ease the focus toward the action (cat, biased toward dot)
+  updateDotFromAim();
+
+  // auto-framing: gentle — blend the action point halfway to room center
+  // so the camera drifts with play but never chases it (playtest 2: the
+  // camera must not fight the look control)
   if (catPos) {
-    const fx = dotActive ? catPos[0] * 0.55 + dotX * 0.45 : catPos[0];
-    const fz = dotActive ? catPos[2] * 0.55 + dotZ * 0.45 : catPos[2];
-    focus.x += (Math.max(-2.2, Math.min(2.2, fx)) - focus.x) * 0.06;
-    focus.z += (Math.max(-2.2, Math.min(2.2, fz)) - focus.z) * 0.06;
-    focus.y += (Math.min(1.2, catPos[1] * 0.5 + 0.35) - focus.y) * 0.06;
+    const ax = dotActive ? catPos[0] * 0.55 + dotX * 0.45 : catPos[0];
+    const az = dotActive ? catPos[2] * 0.55 + dotZ * 0.45 : catPos[2];
+    focus.x += (Math.max(-1.6, Math.min(1.6, ax * 0.5)) - focus.x) * 0.04;
+    focus.z += (Math.max(-1.6, Math.min(1.6, az * 0.5)) - focus.z) * 0.04;
+    focus.y += (Math.min(1.0, catPos[1] * 0.4 + 0.35) - focus.y) * 0.04;
   }
+  const horiz = Math.cos(camPitch) * camDist;
   camera.position.set(
-    focus.x + Math.sin(camYaw) * camDist,
-    camHeight,
-    focus.z - Math.cos(camYaw) * camDist
+    focus.x + Math.sin(camYaw) * horiz,
+    focus.y + Math.sin(camPitch) * camDist,
+    focus.z - Math.cos(camYaw) * horiz
   );
   camera.lookAt(focus);
 
   dot.position.set(dotX, 0.03, dotZ);
   dot.visible = beam.visible = dotActive;
-  const from = camera.position.clone().add(new THREE.Vector3(0.3, -0.8, 0));
-  beamGeo.setFromPoints([from, dot.position]);
+  if (dotActive && aimScreen) {
+    // beam rises from your hand: anchor just above the thumb, near-plane
+    const hn = new THREE.Vector2((aimScreen[0] / innerWidth) * 2 - 1, -0.75);
+    raycaster.setFromCamera(hn, camera);
+    const hand = camera.position
+      .clone()
+      .add(raycaster.ray.direction.clone().multiplyScalar(1.0));
+    beamGeo.setFromPoints([hand, dot.position]);
+  }
 
   scoreEl.textContent = lk.lk_score(sim);
   stateEl.textContent = STATE_NAMES[catState] ?? '?';
@@ -253,5 +300,5 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-stateEl.textContent = 'PAD: LURE · ABOVE: LOOK';
+stateEl.textContent = 'PAD = LASER · DRAG SCENE = LOOK';
 requestAnimationFrame(frame);
