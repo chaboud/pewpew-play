@@ -2,9 +2,9 @@
 // thin-frontend discipline — no game logic lives here).
 import * as THREE from './vendor/three.module.min.js';
 
-const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH'];
-const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 0x6f7480, 0x53c8d8, 0x4dd0e1];
-const FLOATS_PER_BODY = 13;
+const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
+const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 0x6f7480, 0x53c8d8, 0x4dd0e1, 0xff7ab8];
+const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
 const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
@@ -16,7 +16,7 @@ const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x272138);
 // fog kept far outside the room: camera sits ~5.6m out, far wall ~9m — the
@@ -27,7 +27,7 @@ scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.25));
 const sun = new THREE.DirectionalLight(0xffe3b8, 1.9);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -4;
 sun.shadow.camera.right = 4;
 sun.shadow.camera.top = 4;
@@ -71,6 +71,34 @@ const floorTex = makeCanvas(512, 512, (g) => {
 });
 floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
 floorTex.repeat.set(3, 3);
+// neutral-toned detail maps: material color tints them (map * color)
+const woodTex = makeCanvas(256, 256, (g) => {
+  g.fillStyle = '#cfcfcf';
+  g.fillRect(0, 0, 256, 256);
+  for (let k = 0; k < 40; k++) {
+    const y = (k * 61) % 256;
+    g.strokeStyle = `rgba(90,80,70,${0.06 + (k % 3) * 0.05})`;
+    g.lineWidth = 1 + (k % 3);
+    g.beginPath();
+    g.moveTo(0, y);
+    g.bezierCurveTo(80, y + 6, 170, y - 6, 256, y + 3);
+    g.stroke();
+  }
+});
+woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping;
+const fabricTex = makeCanvas(128, 128, (g) => {
+  g.fillStyle = '#d6d6d6';
+  g.fillRect(0, 0, 128, 128);
+  for (let y = 0; y < 128; y += 3) {
+    for (let x = 0; x < 128; x += 3) {
+      const v = ((x * 7 + y * 13) % 17) / 17;
+      g.fillStyle = `rgba(60,60,60,${0.05 + v * 0.1})`;
+      g.fillRect(x + ((y / 3) % 2), y, 2, 2);
+    }
+  }
+});
+fabricTex.wrapS = fabricTex.wrapT = THREE.RepeatWrapping;
+fabricTex.repeat.set(2, 2);
 // small deterministic canvas "paintings" keyed by body index
 function artTex(i) {
   let s = (i * 2654435761) >>> 0;
@@ -105,21 +133,35 @@ function bodyColor(i, cls, dims, py) {
 
 let meshes = [];
 let debugLook = false;
-function meshFor(i, shape, a, b, c, cls, py) {
+// Materials derive from the sim's optics: gloss (the value the laser's
+// spill/glint math uses) picks the family — shiny phong, matte fabric, or
+// toon wood/plastic. One source of truth for how surfaces behave.
+function meshFor(i, shape, a, b, c, cls, py, gloss) {
   let geo;
   if (shape === 1) geo = new THREE.SphereGeometry(a, 14, 12);
   else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
   let mat;
+  const color = bodyColor(i, cls, [a, b, c], py);
   const painting = cls === 0 && (a < 0.025 || c < 0.025) && Math.max(a, b, c) < 0.6 && py > 0.9;
   if (cls === 0 && a > 2 && b < 0.2) {
     mat = toonMat(0xffffff, { map: floorTex }); // the floor slab
   } else if (painting) {
     mat = toonMat(0xffffff, { map: artTex(i) });
   } else if (cls === 2 && a < 0.06 && b > 0.2) {
-    mat = toonMat(0x1c2430, { emissive: 0x0f2f3a }); // the TV screen
+    mat = new THREE.MeshPhongMaterial({
+      color: 0x1c2430, emissive: 0x0f2f3a, shininess: 120, specular: 0xaaccdd,
+    }); // the TV screen
+  } else if (cls !== 0 && gloss >= 0.5) {
+    mat = new THREE.MeshPhongMaterial({
+      color, shininess: 20 + gloss * 100, specular: 0xbbccdd,
+    });
+  } else if (cls !== 0 && gloss <= 0.1) {
+    mat = toonMat(color, { map: fabricTex });
+  } else if (cls === 1) {
+    mat = toonMat(color, { map: woodTex });
   } else {
-    mat = toonMat(bodyColor(i, cls, [a, b, c], py));
+    mat = toonMat(color);
   }
   const m = new THREE.Mesh(geo, mat);
   m.castShadow = cls !== 0;
@@ -285,6 +327,44 @@ function placeBeam(from, to) {
   beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
   beam.scale.set(1, len, 1);
 }
+// coherent-light life: speckle sparkles inside the spill + a star glint on
+// glossy surfaces (surface gloss recovered from the sim's spill radius).
+const sparkles = [];
+for (let i = 0; i < 6; i++) {
+  const s = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: glow.material.map, blending: THREE.AdditiveBlending, depthWrite: false,
+    })
+  );
+  s.visible = false;
+  scene.add(s);
+  sparkles.push(s);
+}
+const glintTex = new THREE.CanvasTexture(
+  (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.translate(32, 32);
+    const ray = g.createLinearGradient(0, -30, 0, 30);
+    ray.addColorStop(0, 'rgba(255,120,100,0)');
+    ray.addColorStop(0.5, 'rgba(255,200,180,0.95)');
+    ray.addColorStop(1, 'rgba(255,120,100,0)');
+    g.fillStyle = ray;
+    for (let k = 0; k < 2; k++) {
+      g.fillRect(-1.6, -30, 3.2, 60);
+      g.rotate(Math.PI / 2);
+    }
+    return c;
+  })()
+);
+const glint = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: glintTex, blending: THREE.AdditiveBlending, depthWrite: false,
+  })
+);
+glint.visible = false;
+scene.add(glint);
 // debug: line-of-sight from cat eye to dot (green = seen, red = blocked)
 const losGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
 const losLine = new THREE.Line(losGeo, new THREE.LineBasicMaterial({ color: 0x44ff66 }));
@@ -498,6 +578,9 @@ document.getElementById('dbg').addEventListener('click', () => {
   debugLook = !debugLook;
   applyLookMode();
 });
+document.getElementById('toss').addEventListener('click', () => {
+  lk.lk_cat_toss(sim); // edge-fall rescue: lob the cat back in over the front
+});
 
 // --- fixed-tick loop -------------------------------------------------------
 let last = performance.now();
@@ -545,11 +628,22 @@ function frame(now) {
           catFacing += d * 0.2;
         }
         const swing = Math.min(0.7, sp * 0.22);
-        for (const leg of catParts.legs) {
-          leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
+        for (let li = 0; li < catParts.legs.length; li++) {
+          const leg = catParts.legs[li];
+          if (catState === 9 && li < 2) {
+            // swat flurry: front paws machine-gun forward, raised
+            leg.rotation.x = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7;
+          } else if (catState === 9) {
+            leg.rotation.x = 0.25; // haunches planted
+          } else {
+            leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
+          }
         }
-        // tail: idle sway, hard lash during windup
-        const lash = catState === 3 ? Math.sin(now * 0.05) * 0.9 : Math.sin(now * 0.004) * 0.3;
+        // tail: idle sway, hard lash during windup and swat
+        const lash =
+          catState === 3 || catState === 9
+            ? Math.sin(now * 0.05) * 0.9
+            : Math.sin(now * 0.004) * 0.3;
         for (let k = 0; k < catParts.tailSegs.length; k++) {
           const t = (k + 1) / catParts.tailSegs.length;
           catParts.tailSegs[k].position.set(
@@ -568,7 +662,7 @@ function frame(now) {
       continue;
     }
     if (!meshes[i]) {
-      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6]);
+      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13]);
       meshes[i].material.wireframe = debugLook;
     }
     const m = meshes[i];
@@ -586,13 +680,48 @@ function frame(now) {
   if (lit) {
     const n = new THREE.Vector3(L[4], L[5], L[6]);
     dot.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.012);
+    // coherent shimmer: speckle-style flicker on the glow + jittering
+    // sparkles inside the spill; a star glint blooms on glossy surfaces
+    const flicker = 0.82 + Math.random() * 0.36;
+    dot.scale.setScalar(0.94 + Math.random() * 0.12);
     glow.position.copy(dot.position).addScaledVector(n, 0.05);
-    glow.material.opacity = 0.35 + 0.5 * L[8];
+    glow.material.opacity = (0.35 + 0.5 * L[8]) * flicker;
     spill.position.set(L[1], L[2], L[3]).addScaledVector(n, 0.006);
     spill.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
     spill.scale.setScalar(L[7]);
-    spill.material.opacity = 0.15 + 0.35 * L[8];
+    spill.material.opacity = (0.15 + 0.35 * L[8]) * (0.9 + 0.2 * flicker);
+    const helper = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    const t1 = new THREE.Vector3().crossVectors(n, helper).normalize();
+    const t2 = new THREE.Vector3().crossVectors(n, t1);
+    for (const s of sparkles) {
+      if (Math.random() < 0.55) {
+        const r = Math.random() * L[7] * 0.9;
+        const a = Math.random() * Math.PI * 2;
+        s.position
+          .copy(dot.position)
+          .addScaledVector(t1, Math.cos(a) * r)
+          .addScaledVector(t2, Math.sin(a) * r)
+          .addScaledVector(n, 0.02);
+        s.scale.setScalar(0.02 + Math.random() * 0.045);
+        s.material.opacity = 0.4 + Math.random() * 0.6;
+        s.visible = true;
+      } else {
+        s.visible = false;
+      }
+    }
+    // surface gloss back out of the sim's spill law: spill = 0.05 + (1-g)*0.15
+    const surfGloss = Math.min(1, Math.max(0, 1 - (L[7] - 0.05) / 0.15));
+    glint.visible = surfGloss > 0.55;
+    if (glint.visible) {
+      glint.position.copy(dot.position).addScaledVector(n, 0.03);
+      glint.scale.setScalar((0.09 + 0.22 * surfGloss) * (0.8 + 0.4 * Math.random()));
+      glint.material.rotation = now * 0.0012;
+      glint.material.opacity = 0.6 + 0.4 * L[8];
+    }
     placeBeam(beltWorld(), dot.position);
+  } else {
+    glint.visible = false;
+    for (const s of sparkles) s.visible = false;
   }
   // debug LOS line: cat eye -> dot, green when the cat can see it
   losLine.visible = debugLook && lit && !!catPos;
