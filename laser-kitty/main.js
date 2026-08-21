@@ -85,6 +85,33 @@ const floorTex = makeCanvas(512, 512, (g) => {
 });
 floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
 floorTex.repeat.set(3, 3);
+// bare concrete for the garage: mottle, hairline cracks, expansion joints
+const concreteTex = makeCanvas(512, 512, (g) => {
+  g.fillStyle = '#9a968f';
+  g.fillRect(0, 0, 512, 512);
+  let s = 12345;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let k = 0; k < 900; k++) {
+    g.fillStyle = `rgba(${110 + Math.floor(rnd() * 40)},${106 + Math.floor(rnd() * 38)},${100 + Math.floor(rnd() * 36)},0.25)`;
+    g.fillRect(rnd() * 512, rnd() * 512, 2 + rnd() * 9, 2 + rnd() * 9);
+  }
+  g.strokeStyle = 'rgba(70,66,62,0.55)';
+  g.lineWidth = 3;
+  for (const q of [170, 340]) {
+    g.beginPath(); g.moveTo(q, 0); g.lineTo(q, 512); g.stroke();
+    g.beginPath(); g.moveTo(0, q); g.lineTo(512, q); g.stroke();
+  }
+  g.strokeStyle = 'rgba(80,76,70,0.35)';
+  g.lineWidth = 1;
+  for (let k = 0; k < 7; k++) {
+    g.beginPath();
+    let x = rnd() * 512, y = rnd() * 512;
+    g.moveTo(x, y);
+    for (let j = 0; j < 5; j++) { x += (rnd() - 0.5) * 90; y += (rnd() - 0.5) * 90; g.lineTo(x, y); }
+    g.stroke();
+  }
+});
+concreteTex.wrapS = concreteTex.wrapT = THREE.RepeatWrapping;
 // neutral-toned detail maps: material color tints them (map * color)
 const woodTex = makeCanvas(256, 256, (g) => {
   g.fillStyle = '#cfcfcf';
@@ -392,6 +419,90 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     m = new THREE.Group();
     const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.032), crystalMat());
     m.add(gem);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.72) < 0.005 && Math.abs(b - 0.2) < 0.005) {
+    // car body: cherry paint, chrome bumpers, lights, grille
+    m = new THREE.Group();
+    const paint = new THREE.MeshPhongMaterial({ color: 0xb03028, shininess: 120, specular: 0xffd8cc });
+    const chrome = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 140, specular: 0xffffff });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), paint);
+    m.add(body);
+    for (const bz of [c, -c]) {
+      const bump = new THREE.Mesh(new THREE.BoxGeometry(a * 1.9, 0.05, 0.03), chrome);
+      bump.position.set(0, -b + 0.06, bz + 0.012 * Math.sign(bz));
+      m.add(bump);
+    }
+    for (const sx of [-0.45, 0.45]) {
+      const head = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), new THREE.MeshBasicMaterial({ color: 0xffeebb }));
+      head.position.set(sx, 0.02, c + 0.002);
+      m.add(head);
+      const tail = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.04), new THREE.MeshBasicMaterial({ color: 0xc22b22 }));
+      tail.rotation.y = Math.PI;
+      tail.position.set(sx, 0.02, -c - 0.002);
+      m.add(tail);
+    }
+    const grille = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.07), toonMat(0x3a3630));
+    grille.position.set(0, 0.0, c + 0.001);
+    m.add(grille);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.55) < 0.005 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.45) < 0.005) {
+    // car cabin: painted roof, wrap-around glass
+    m = new THREE.Group();
+    const paint = new THREE.MeshPhongMaterial({ color: 0xb03028, shininess: 120, specular: 0xffd8cc });
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), paint);
+    m.add(cab);
+    const glassMat = new THREE.MeshPhongMaterial({ color: 0x2b3644, shininess: 150, specular: 0xaaccee });
+    for (const [w, h, x, z, ry] of [
+      [a * 1.7, b * 1.5, 0, c + 0.002, 0], [a * 1.7, b * 1.5, 0, -c - 0.002, Math.PI],
+      [c * 1.7, b * 1.5, a + 0.002, 0, Math.PI / 2], [c * 1.7, b * 1.5, -a - 0.002, 0, -Math.PI / 2],
+    ]) {
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat);
+      gl.position.set(x, 0.01, z);
+      gl.rotation.y = ry;
+      m.add(gl);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.06) < 0.004 && Math.abs(b - 0.16) < 0.004 && Math.abs(c - 0.16) < 0.004) {
+    // car wheel: rubber cylinder + hubcap, axis along x
+    m = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(b, b, a * 2, 18), toonMat(0x2b2926));
+    tire.rotation.z = Math.PI / 2;
+    m.add(tire);
+    for (const hx of [a + 0.002, -a - 0.002]) {
+      const cap = new THREE.Mesh(
+        new THREE.CircleGeometry(b * 0.55, 12),
+        new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 120, specular: 0xffffff })
+      );
+      cap.rotation.y = hx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      cap.position.x = hx;
+      m.add(cap);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.11) < 0.004 && Math.abs(b - 0.045) < 0.004) {
+    // toolbox: red steel chest with a latch
+    m = new THREE.Group();
+    const red = new THREE.MeshPhongMaterial({ color: 0xa8322a, shininess: 60, specular: 0xddc0b8 });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), red));
+    const latch = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.006), toonMat(0xc8ccd4));
+    latch.position.set(0, 0, -c - 0.004);
+    m.add(latch);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.07) < 0.003 && Math.abs(c - 0.05) < 0.003) {
+    // paint can: steel cylinder, colored lid, a drip down the side
+    m = new THREE.Group();
+    const canCol = new THREE.Color().setHSL(h, 0.6, 0.5);
+    const tin = new THREE.Mesh(
+      new THREE.CylinderGeometry(a, a, b * 2, 14),
+      new THREE.MeshPhongMaterial({ color: 0x9aa0a8, shininess: 70, specular: 0xdde4ee })
+    );
+    m.add(tin);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.86, a * 0.86, 0.008, 14), toonMat(canCol));
+    lid.position.y = b + 0.003;
+    m.add(lid);
+    const drip = new THREE.Mesh(new THREE.PlaneGeometry(0.02, 0.05), toonMat(canCol));
+    drip.position.set(0.014, b - 0.032, a + 0.002);
+    m.add(drip);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.19) < 0.004 && Math.abs(b - 0.055) < 0.004) {
+    // spare tire: fat torus with a hub hole
+    m = new THREE.Group();
+    const t = new THREE.Mesh(new THREE.TorusGeometry(a * 0.62, b * 0.95, 10, 20), toonMat(0x2b2926));
+    t.rotation.x = Math.PI / 2;
+    m.add(t);
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
@@ -436,7 +547,8 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     cls === 2 && shape === 0 && gloss < 0.4 && b >= 0.06 && b <= 0.12 &&
     Math.min(a, c) <= 0.035 && Math.max(a, c) <= 0.07;
   if (cls === 0 && a > 2 && b < 0.2) {
-    mat = toonMat(0xffffff, { map: floorTex }); // the floor slab
+    // the floor slab: wood everywhere, bare concrete in the garage
+    mat = toonMat(0xffffff, { map: (cfg.room | 0) === 5 ? concreteTex : floorTex });
   } else if (painting) {
     mat = toonMat(0xffffff, { map: artTex(i) });
   } else if (book) {
@@ -530,6 +642,52 @@ function buildDecor(hx, hz, kind) {
     mat.position.set(-1.35, 0.006, 0.55);
     mat.receiveShadow = true;
     decor.add(mat);
+  }
+  if (kind === 5) {
+    // roll-up garage door filling the far wall: panels, seams, handle
+    const door = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.2), toonMat(0xb8b4ac));
+    slab.rotation.y = Math.PI;
+    door.add(slab);
+    for (let k = 0; k < 4; k++) {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.03, 0.01), toonMat(0x8a867e));
+      seam.position.set(0, -0.83 + k * 0.55, -0.012);
+      door.add(seam);
+    }
+    for (const wx of [-1.2, -0.4, 0.4, 1.2]) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.22), new THREE.MeshBasicMaterial({ color: 0x394050 }));
+      win.rotation.y = Math.PI;
+      win.position.set(wx, 0.72, -0.014);
+      door.add(win);
+    }
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.03), toonMat(0x6b6760));
+    handle.position.set(0, -0.9, -0.02);
+    door.add(handle);
+    door.position.set(0.6, 1.12, hz - 0.005);
+    decor.add(door);
+    // old oil stain where the car drips
+    const oil = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 20),
+      new THREE.MeshBasicMaterial({ color: 0x2c2a28, transparent: true, opacity: 0.35 })
+    );
+    oil.rotation.x = -Math.PI / 2;
+    oil.scale.y = 0.7;
+    oil.position.set(1.5, 0.005, 0.55);
+    decor.add(oil);
+    // pegboard over the workbench with painted-on tools
+    const peg = new THREE.Group();
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), toonMat(0x8a6f4d));
+    board.rotation.y = Math.PI;
+    peg.add(board);
+    const toolMat = new THREE.MeshBasicMaterial({ color: 0x4a4640 });
+    for (const [tx, w, h] of [[-0.55, 0.05, 0.4], [-0.32, 0.1, 0.28], [-0.05, 0.05, 0.45], [0.24, 0.14, 0.2], [0.52, 0.06, 0.34]]) {
+      const t = new THREE.Mesh(new THREE.PlaneGeometry(w, h), toolMat);
+      t.rotation.y = Math.PI;
+      t.position.set(tx, -0.05, -0.01);
+      peg.add(t);
+    }
+    peg.position.set(-2.6, 1.35, hz - 0.005);
+    decor.add(peg);
   }
   scene.add(decor);
 }
@@ -940,6 +1098,7 @@ function layoutRoom() {
   sun.shadow.camera.bottom = -b;
   sun.shadow.camera.updateProjectionMatrix();
   floorTex.repeat.set(Math.max(2, Math.round(roomHX)), Math.max(2, Math.round(roomHZ)));
+  concreteTex.repeat.set(Math.max(1, Math.round(roomHX * 0.6)), Math.max(1, Math.round(roomHZ * 0.6)));
   buildDecor(roomHX, roomHZ, cfg.room | 0);
   applyLook();
 }
