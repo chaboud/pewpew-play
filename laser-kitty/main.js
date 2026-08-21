@@ -1087,8 +1087,12 @@ function beltWorld() {
 function layoutRoom() {
   roomHX = lk.lk_room_hx(sim);
   roomHZ = lk.lk_room_hz(sim);
-  EYE.z = -(roomHZ + 2.6);
-  FOCUS_D = roomHZ + 2.5;
+  // multi-level structures (home, apartments) are tall: step back and up
+  // so the dollhouse face reads whole instead of edge-on plate slices
+  const tall = (cfg.room | 0) >= 6;
+  EYE.z = -(roomHZ + (tall ? 4.6 : 2.6));
+  EYE.y = tall ? 2.6 : 2.0;
+  FOCUS_D = roomHZ + (tall ? 4.5 : 2.5);
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
