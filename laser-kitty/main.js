@@ -12,13 +12,13 @@ const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, quality: 2, shadows: true };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 1, quality: 2, shadows: true };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
 function newSim() {
   const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight);
-  lk.lk_tune(s, cfg.strength, cfg.gravity);
+  lk.lk_tune(s, cfg.strength, cfg.gravity, cfg.destruct);
   return s;
 }
 let sim = newSim();
@@ -652,11 +652,12 @@ function bindSlider(id, key, fmt, onChange) {
     if (onChange) onChange(cfg[key]);
   });
 }
-const retune = () => lk.lk_tune(sim, cfg.strength, cfg.gravity);
+const retune = () => lk.lk_tune(sim, cfg.strength, cfg.gravity, cfg.destruct);
 bindSlider('cats', 'cats', (v) => `${v}`, () => rebuildSim());
 bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
 bindSlider('strength', 'strength', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('gravity', 'gravity', (v) => `${v.toFixed(2)}x`, retune);
+bindSlider('destruct', 'destruct', (v) => (v === 0 ? 'OFF' : `${v.toFixed(1)}x`), retune);
 bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) =>
   renderer.setPixelRatio(Math.min(devicePixelRatio, v))
 );
