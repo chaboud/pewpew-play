@@ -113,6 +113,67 @@ const fabricTex = makeCanvas(128, 128, (g) => {
 });
 fabricTex.wrapS = fabricTex.wrapT = THREE.RepeatWrapping;
 fabricTex.repeat.set(2, 2);
+// crystal optics: a STATIC procedural cubemap with refraction mapping —
+// live CubeCamera refraction would cost six extra scene renders a frame,
+// which phones don't have; a tiny baked "room impression" (warm floor,
+// dim walls, one bright window streak) bent through CubeRefractionMapping
+// reads as glass interior for free. Glint stays on the specular highlight.
+const envCube = (() => {
+  const faces = [];
+  for (let f = 0; f < 6; f++) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 32);
+    if (f === 2) {
+      grad.addColorStop(0, '#8d84a8'); // up: ceiling haze
+      grad.addColorStop(1, '#6b6288');
+    } else if (f === 3) {
+      grad.addColorStop(0, '#7a5a40'); // down: warm floor
+      grad.addColorStop(1, '#5a4130');
+    } else {
+      grad.addColorStop(0, '#6e6590'); // walls
+      grad.addColorStop(1, '#4a4260');
+    }
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 32, 32);
+    if (f === 0) {
+      g.fillStyle = '#ffe7c2'; // the window streak, one face only
+      g.fillRect(18, 6, 9, 14);
+    }
+    faces.push(c);
+  }
+  const t = new THREE.CubeTexture(faces);
+  t.mapping = THREE.CubeRefractionMapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+})();
+function crystalMat() {
+  return new THREE.MeshPhongMaterial({
+    color: 0xeef4ff, envMap: envCube, refractionRatio: 0.92,
+    combine: THREE.MixOperation, reflectivity: 0.75,
+    shininess: 160, specular: 0xffffff, transparent: true, opacity: 0.88,
+  });
+}
+// Tiffany stained-glass shade: jewel panes with leaded lines, lit warm
+const tiffanyTex = makeCanvas(128, 64, (g) => {
+  const jewels = ['#c94f3f', '#3f7ac9', '#3fa060', '#d8a03a', '#8a4fc9', '#c9743f'];
+  for (let p = 0; p < 8; p++) {
+    g.fillStyle = jewels[p % jewels.length];
+    g.fillRect(p * 16, 0, 16, 40);
+    g.fillStyle = jewels[(p + 3) % jewels.length];
+    g.fillRect(p * 16, 40, 16, 24);
+  }
+  g.strokeStyle = '#3a3430';
+  g.lineWidth = 3;
+  for (let p = 0; p <= 8; p++) {
+    g.beginPath(); g.moveTo(p * 16, 0); g.lineTo(p * 16, 64); g.stroke();
+  }
+  g.beginPath(); g.moveTo(0, 40); g.lineTo(128, 40); g.stroke();
+  g.strokeRect(0, 1, 128, 62);
+});
+tiffanyTex.wrapS = THREE.RepeatWrapping;
 // small deterministic canvas "paintings" keyed by body index
 function artTex(i) {
   let s = (i * 2654435761) >>> 0;
@@ -223,10 +284,114 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
       const fl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), flame);
       fl.position.set(ax, 0.13, az);
       m.add(fl);
-      const drop = new THREE.Mesh(new THREE.OctahedronGeometry(0.022), new THREE.MeshPhongMaterial({ color: 0xdfe8f2, shininess: 140, specular: 0xffffff, transparent: true, opacity: 0.85 }));
+      const drop = new THREE.Mesh(new THREE.OctahedronGeometry(0.022), crystalMat());
       drop.position.set(ax, -0.06, az);
       m.add(drop);
     }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.148) < 0.003 && Math.abs(b - 0.019) < 0.003 && Math.abs(c - 0.118) < 0.004) {
+    // turntable plinth: brushed-silver deck, pitch strip, start button
+    m = new THREE.Group();
+    const deck = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      new THREE.MeshPhongMaterial({ color: 0x9ea4ad, shininess: 70, specular: 0xdde4ee })
+    );
+    m.add(deck);
+    const pitch = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.004, 0.05), toonMat(0x2a2730));
+    pitch.position.set(0.115, b + 0.002, 0.055);
+    m.add(pitch);
+    const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.004, 8), toonMat(0xc0c6cf));
+    btn.position.set(-0.12, b + 0.002, 0.095);
+    m.add(btn);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.072) < 0.003 && Math.abs(b - 0.013) < 0.002) {
+    // turntable platter: strobe-dotted rim, record, label, spindle
+    m = new THREE.Group();
+    const platter = new THREE.Mesh(
+      new THREE.CylinderGeometry(a, a, b * 2, 24),
+      new THREE.MeshPhongMaterial({ color: 0xb9bfc8, shininess: 80, specular: 0xe8eef8 })
+    );
+    m.add(platter);
+    const record = new THREE.Mesh(
+      new THREE.CylinderGeometry(a * 0.94, a * 0.94, 0.004, 24),
+      new THREE.MeshPhongMaterial({ color: 0x17151c, shininess: 120, specular: 0x8890a0 })
+    );
+    record.position.y = b + 0.002;
+    m.add(record);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.3, a * 0.3, 0.005, 16), toonMat(0xd8a03a));
+    label.position.y = b + 0.003;
+    m.add(label);
+    const spindle = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.014, 8), toonMat(0xc0c6cf));
+    spindle.position.y = b + 0.007;
+    m.add(spindle);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.013) < 0.002 && Math.abs(c - 0.053) < 0.003) {
+    // tonearm: S-arm tube, headshell, counterweight
+    m = new THREE.Group();
+    const armMat = new THREE.MeshPhongMaterial({ color: 0xaab0ba, shininess: 90, specular: 0xe8eef8 });
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, c * 1.8, 8), armMat);
+    tube.rotation.x = Math.PI / 2;
+    m.add(tube);
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.008, 0.02), toonMat(0x2a2730));
+    shell.position.set(0, -0.002, -c * 0.9);
+    m.add(shell);
+    const weight = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.014, 10), armMat);
+    weight.rotation.x = Math.PI / 2;
+    weight.position.z = c * 0.85;
+    m.add(weight);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.055) < 0.003 && Math.abs(b - 0.11) < 0.004) {
+    // Tiffany lamp: bronze base + stem, stained-glass cone shade, warm glow
+    m = new THREE.Group();
+    const bronze = new THREE.MeshPhongMaterial({ color: 0x6e5230, shininess: 50, specular: 0xc9a86a });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.036, 0.02, 12), bronze);
+    base.position.y = -b + 0.01;
+    m.add(base);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.009, 0.1, 8), bronze);
+    stem.position.y = -b + 0.07;
+    m.add(stem);
+    const shade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.062, 0.075, 16, 1, true),
+      new THREE.MeshPhongMaterial({
+        map: tiffanyTex, emissive: 0xa87848, emissiveMap: tiffanyTex,
+        emissiveIntensity: 0.55, shininess: 60, specular: 0xfff0d0, side: THREE.DoubleSide,
+      })
+    );
+    shade.position.y = b - 0.045;
+    m.add(shade);
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 6), bronze);
+    finial.position.y = b - 0.004;
+    m.add(finial);
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(0.02, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffe2b0 })
+    );
+    glow.position.y = b - 0.06;
+    m.add(glow);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.0025 && Math.abs(b - 0.014) < 0.0025) {
+    // game controller: body, angled grips, four face buttons, d-pad
+    m = new THREE.Group();
+    const shellMat = toonMat(0x2e2b36);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 1.6), shellMat);
+    m.add(body);
+    for (const gx of [-1, 1]) {
+      const grip = new THREE.Mesh(new THREE.CapsuleGeometry(0.011, 0.02, 3, 8), shellMat);
+      grip.position.set(gx * a * 0.72, 0, c * 0.45);
+      grip.rotation.x = 1.1;
+      grip.rotation.z = gx * 0.35;
+      m.add(grip);
+    }
+    const btnCols = [0x58c470, 0xd8534f, 0x4f7ed8, 0xd8b04f];
+    for (let k = 0; k < 4; k++) {
+      const ang = (k / 4) * Math.PI * 2;
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.0045, 6, 5), new THREE.MeshBasicMaterial({ color: btnCols[k] }));
+      dot.position.set(a * 0.55 + Math.cos(ang) * 0.009, b, -c * 0.25 + Math.sin(ang) * 0.009);
+      m.add(dot);
+    }
+    const dpad = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.004, 0.014), toonMat(0x4a4655));
+    dpad.position.set(-a * 0.55, b, -c * 0.25);
+    m.add(dpad);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.025) < 0.002 && Math.abs(b - 0.03) < 0.002 && Math.abs(c - 0.025) < 0.002) {
+    // chandelier crystal bauble: refractive glass teardrop
+    m = new THREE.Group();
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.032), crystalMat());
+    m.add(gem);
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
