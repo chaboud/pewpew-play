@@ -203,6 +203,30 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     screen.position.x = a + 0.002;
     screen.rotation.y = Math.PI / 2;
     m.add(screen);
+  } else if (cls === 0 && shape === 0 && py > 2 && Math.abs(a - 0.32) < 0.01) {
+    // chandelier: the sim's hub slab becomes a brass ring, arms, candles
+    m = new THREE.Group();
+    const brass = new THREE.MeshPhongMaterial({ color: 0xb08d3e, shininess: 90, specular: 0xffe8b0 });
+    const flame = new THREE.MeshBasicMaterial({ color: 0xffd98a });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(a * 0.85, 0.022, 8, 24), brass);
+    ring.rotation.x = Math.PI / 2;
+    m.add(ring);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 1.0, 8), brass);
+    stem.position.y = 0.52;
+    m.add(stem);
+    for (let k = 0; k < 6; k++) {
+      const ang = (k / 6) * Math.PI * 2;
+      const ax = Math.cos(ang) * a * 0.85, az = Math.sin(ang) * a * 0.85;
+      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.09, 6), toonMat(0xf2ead8));
+      candle.position.set(ax, 0.07, az);
+      m.add(candle);
+      const fl = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), flame);
+      fl.position.set(ax, 0.13, az);
+      m.add(fl);
+      const drop = new THREE.Mesh(new THREE.OctahedronGeometry(0.022), new THREE.MeshPhongMaterial({ color: 0xdfe8f2, shininess: 140, specular: 0xffffff, transparent: true, opacity: 0.85 }));
+      drop.position.set(ax, -0.06, az);
+      m.add(drop);
+    }
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
@@ -581,14 +605,26 @@ let lookYaw = HOME_YAW;
 let lookPitch = HOME_PITCH;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
-// bounded pinch zoom: scales the FOV (the vantage never translates —
-// diorama doctrine holds). <1 = step back a little.
+// bounded pinch zoom: scales the FOV. <1 = step back a little.
 const ZOOM_MIN = 0.7, ZOOM_MAX = 2.4;
 let zoom = 1;
+// bounded two-finger pan: translates the vantage on its own x/y plane —
+// the user stays set back from the diorama (z never changes), so this is
+// sliding a window across the front of the dollhouse, not orbiting into
+// it. Look clamps still forbid oblique views. This is the navigation for
+// the coming multi-room / multi-floor structures; on single rooms the
+// range is just "translation friendliness".
+let panX = 0, panY = 0;
+function panLimX() { return roomHX * 0.55; }
+const PAN_Y_MIN = -1.1, PAN_Y_MAX = 1.5;
+function clampPan() {
+  panX = Math.max(-panLimX(), Math.min(panLimX(), panX));
+  panY = Math.max(PAN_Y_MIN, Math.min(PAN_Y_MAX, panY));
+}
 function applyLook(bob = 0) {
   camera.position.set(
-    EYE.x + (Math.random() - 0.5) * shake * 0.06,
-    EYE.y + bob + (Math.random() - 0.5) * shake * 0.05,
+    EYE.x + panX + (Math.random() - 0.5) * shake * 0.06,
+    EYE.y + panY + bob + (Math.random() - 0.5) * shake * 0.05,
     EYE.z
   );
   const f = new THREE.Vector3(
@@ -640,6 +676,7 @@ const lookRay = new THREE.Raycaster();
 const lookPts = new Map(); // pointerId -> [x, y] for look-area pointers
 let grabDir = null;
 let pinchDist = 0;
+let pinchMid = null; // [x, y] centroid of the two-finger grip
 function pixelDir(x, y) {
   const { w, h } = viewSize();
   lookRay.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), camera);
@@ -649,6 +686,10 @@ function pinchSpan() {
   const [a, b] = [...lookPts.values()];
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
+function pinchCentroid() {
+  const [a, b] = [...lookPts.values()];
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+}
 addEventListener('pointerdown', (e) => {
   if (e.target.closest && e.target.closest('button, #panel')) return;
   if (e.clientY >= pad.getBoundingClientRect().top) return;
@@ -657,17 +698,33 @@ addEventListener('pointerdown', (e) => {
   if (lookPts.size === 1) {
     grabDir = pixelDir(e.clientX, e.clientY);
   } else {
-    grabDir = null; // second finger: the gesture becomes a pinch
+    grabDir = null; // second finger: pinch-zoom + plane-pan, one gesture
     pinchDist = pinchSpan();
+    pinchMid = pinchCentroid();
   }
 });
 addEventListener('pointermove', (e) => {
   if (!lookPts.has(e.pointerId)) return;
   lookPts.set(e.pointerId, [e.clientX, e.clientY]);
   if (lookPts.size === 2) {
+    // no modes, no bifurcation: every move decomposes into a zoom term
+    // (span ratio) and a pan term (centroid delta). The scene follows the
+    // fingers — drag right, the room slides right, so the eye goes left.
     const span = pinchSpan();
     if (pinchDist > 20) setZoom(zoom * (span / pinchDist));
     pinchDist = span;
+    const mid = pinchCentroid();
+    if (pinchMid) {
+      const { h } = viewSize();
+      const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * FOCUS_D) / h;
+      // camera-right is world -x from this vantage, and clientY grows
+      // downward — both flips cancel into straight += here
+      panX += (mid[0] - pinchMid[0]) * wpp;
+      panY += (mid[1] - pinchMid[1]) * wpp;
+      clampPan();
+      applyLook();
+    }
+    pinchMid = mid;
     return;
   }
   if (!grabDir) return;
@@ -709,6 +766,8 @@ function layoutRoom() {
   roomHZ = lk.lk_room_hz(sim);
   EYE.z = -(roomHZ + 2.6);
   FOCUS_D = roomHZ + 2.5;
+  panX = 0;
+  panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
   sun.shadow.camera.left = -b;
   sun.shadow.camera.right = b;
@@ -1085,6 +1144,8 @@ document.getElementById('reset').addEventListener('click', () => {
   // reset the view too — a stranded look with no way home was a playtest trap
   lookYaw = HOME_YAW;
   lookPitch = HOME_PITCH;
+  panX = 0;
+  panY = 0;
   setZoom(1);
   applyLook();
 });
@@ -1488,6 +1549,8 @@ window.__lk = {
   score: () => lk.lk_score(sim),
   sfx,
   setPurr,
+  pan: () => [panX, panY],
+  zoom: () => zoom,
   laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
   cat: () => {
     const count = lk.lk_body_count(sim);
