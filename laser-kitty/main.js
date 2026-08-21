@@ -1080,6 +1080,17 @@ function frame(now) {
         const piece = (code >>> 12) & 0xff;
         popScore('scratch!');
         if (meshes[piece]) burstPuffs(meshes[piece].position);
+      } else if (ev === 6) {
+        // structural collapse: the compound fell apart into its members
+        const prop = (code >>> 12) & 0xff;
+        const chain = (code >> 20) & 0xf;
+        popScore(`CRUNCH +${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
+        const m = meshes[prop];
+        if (m) {
+          burstPuffs(m.position);
+          burstPuffs(m.position);
+          for (let k = 0; k < 4; k++) sfx.impact(m); // many-parts clatter (+ rumble bed)
+        }
       }
     }
     acc -= DT;
