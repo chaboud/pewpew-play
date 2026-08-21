@@ -319,7 +319,7 @@ const catViews = new Map(); // body index -> {group, legs, tailSegs, mats, prev,
 const CAT_COATS = [0xff9d45, 0x8a8f9e, 0xf5f0e6, 0x3d3a45]; // orange, grey, cream, black
 const CAT_DARKS = [0xd97f2e, 0x6b7080, 0xd8cfc0, 0x2a2830];
 function buildCat(k) {
-  const view = { legs: [], tailSegs: [], prev: null, facing: 0, coat: CAT_COATS[k % 4] };
+  const view = { k, legs: [], tailSegs: [], prev: null, facing: 0, coat: CAT_COATS[k % 4] };
   const g = new THREE.Group();
   const fur = toonMat(view.coat);
   const dark = toonMat(CAT_DARKS[k % 4]);
@@ -398,6 +398,7 @@ function buildCat(k) {
   scene.add(view.los);
   view.tag = document.createElement('div');
   view.tag.className = 'cattag';
+  view.tag.style.marginTop = `${-k * 15}px`; // clustered cats stack, not overprint
   document.getElementById('tags').appendChild(view.tag);
   return view;
 }
@@ -566,9 +567,18 @@ function applyLook(bob = 0) {
   );
   camera.lookAt(camera.position.clone().add(f));
 }
+function viewSize() {
+  // One source of truth: the LAYOUT viewport (what iOS sizes fixed elements
+  // against; innerWidth/Height can disagree around the Safari URL bar).
+  // Never the canvas's own clientWidth — that follows the buffer attributes
+  // renderer.setSize writes, which feeds back exponentially.
+  const de = document.documentElement;
+  return { w: de.clientWidth || innerWidth, h: de.clientHeight || innerHeight };
+}
 function resize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  const aspect = innerWidth / innerHeight;
+  const { w, h } = viewSize();
+  renderer.setSize(w, h, false);
+  const aspect = w / h;
   camera.aspect = aspect;
   // zoom applies AFTER the aspect adaptation and its cap — otherwise tall
   // phones (already pinned at the cap) couldn't zoom out at all
@@ -600,10 +610,8 @@ const lookPts = new Map(); // pointerId -> [x, y] for look-area pointers
 let grabDir = null;
 let pinchDist = 0;
 function pixelDir(x, y) {
-  lookRay.setFromCamera(
-    new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1),
-    camera
-  );
+  const { w, h } = viewSize();
+  lookRay.setFromCamera(new THREE.Vector2((x / w) * 2 - 1, -(y / h) * 2 + 1), camera);
   return lookRay.ray.direction.clone();
 }
 function pinchSpan() {
@@ -667,10 +675,8 @@ function beltWorld() {
 }
 function updateLaserRay() {
   if (!aimScreen) return;
-  const ndc = new THREE.Vector2(
-    (aimScreen[0] / innerWidth) * 2 - 1,
-    -(aimScreen[1] / innerHeight) * 2 + 1
-  );
+  const { w, h } = viewSize();
+  const ndc = new THREE.Vector2((aimScreen[0] / w) * 2 - 1, -(aimScreen[1] / h) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const fwd = new THREE.Vector3();
   camera.getWorldDirection(fwd);
@@ -687,7 +693,7 @@ function padPoint(e) {
   const fx = Math.max(0, Math.min(1, (t.clientX - r.left) / r.width));
   const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
   const sx = r.left + fx * r.width;
-  const sy = innerHeight * (0.08 + fy * 0.52);
+  const sy = viewSize().h * (0.08 + fy * 0.52);
   aimScreen = [sx, sy];
   thumbEl.style.left = `${fx * r.width}px`;
   thumbEl.style.top = `${fy * r.height}px`;
@@ -1360,9 +1366,8 @@ function frame(now) {
     glint.visible = false;
     for (const s of sparkles) s.visible = false;
   }
-  // debug: per-cat LOS lines (eye -> dot, green = that cat sees it) and
-  // floating state tags with interest/visibility (founder ask)
-  const v3 = new THREE.Vector3();
+  // debug: per-cat LOS lines (eye -> dot, green = that cat sees it).
+  // (tags update after render, below, so they use this frame's matrices)
   for (const d of debugCats) {
     d.view.los.visible = debugLook && lit;
     if (d.view.los.visible) {
@@ -1371,19 +1376,6 @@ function frame(now) {
         dot.position,
       ]);
       d.view.los.material.color.setHex(d.vis > 0.05 ? 0x44ff66 : 0xff4455);
-    }
-    if (debugLook) {
-      v3.set(d.x, d.y + 0.42, d.z).project(camera);
-      const on = v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
-      d.view.tag.style.display = on ? 'block' : 'none';
-      if (on) {
-        d.view.tag.style.left = `${((v3.x + 1) / 2) * innerWidth}px`;
-        d.view.tag.style.top = `${((-v3.y + 1) / 2) * innerHeight}px`;
-        const name = d.st === 0 ? `IDLE·${AMB_NAMES[d.act] ?? '?'}` : STATE_NAMES[d.st] ?? '?';
-        d.view.tag.textContent = `${name} i${d.interest.toFixed(2)} v${d.vis.toFixed(2)}`;
-      }
-    } else {
-      d.view.tag.style.display = 'none';
     }
   }
 
@@ -1396,6 +1388,30 @@ function frame(now) {
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
   renderer.render(scene, camera);
+
+  // floating per-cat state tags — projected AFTER render so the camera
+  // matrices match the drawn frame exactly, with a view-space front test
+  // (points outside the frustum otherwise produce plausible-looking NDC
+  // and the tags float over empty space)
+  const v3 = new THREE.Vector3();
+  for (const d of debugCats) {
+    if (!debugLook) {
+      d.view.tag.style.display = 'none';
+      continue;
+    }
+    v3.set(d.x, d.y + 0.42, d.z).applyMatrix4(camera.matrixWorldInverse);
+    const front = v3.z < 0;
+    v3.applyMatrix4(camera.projectionMatrix);
+    const on = front && Math.abs(v3.x) < 1.02 && Math.abs(v3.y) < 1.02;
+    d.view.tag.style.display = on ? 'block' : 'none';
+    if (on) {
+      const { w, h } = viewSize();
+      d.view.tag.style.left = `${((v3.x + 1) / 2) * w}px`;
+      d.view.tag.style.top = `${((-v3.y + 1) / 2) * h}px`;
+      const name = d.st === 0 ? `IDLE·${AMB_NAMES[d.act] ?? '?'}` : STATE_NAMES[d.st] ?? '?';
+      d.view.tag.textContent = `${name} i${d.interest.toFixed(2)} v${d.vis.toFixed(2)}`;
+    }
+  }
   requestAnimationFrame(frame);
 }
 stateEl.textContent = 'PAD = LASER · DRAG ROOM = LOOK';
@@ -1404,12 +1420,13 @@ requestAnimationFrame(frame);
 // test hook (PewPew pattern): lets an automated driver aim at world points
 window.__lk = {
   aimPad(wx, wy, wz) {
+    const { w, h } = viewSize();
     const v = new THREE.Vector3(wx, wy, wz).project(camera);
-    const sx = ((v.x + 1) / 2) * innerWidth;
-    const sy = ((-v.y + 1) / 2) * innerHeight;
+    const sx = ((v.x + 1) / 2) * w;
+    const sy = ((-v.y + 1) / 2) * h;
     const r = pad.getBoundingClientRect();
     const fx = Math.max(0, Math.min(1, (sx - r.left) / r.width));
-    const fy = Math.max(0, Math.min(1, (sy / innerHeight - 0.08) / 0.52));
+    const fy = Math.max(0, Math.min(1, (sy / h - 0.08) / 0.52));
     return [r.left + fx * r.width, r.top + fy * r.height];
   },
   score: () => lk.lk_score(sim),
