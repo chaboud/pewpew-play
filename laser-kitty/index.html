@@ -57,8 +57,16 @@
 <button id="gear" class="ctl" aria-label="Settings">&#9881;</button>
 <div id="panel">
   <h3>SETTINGS</h3>
+  <label>Room</label>
+  <div class="row"><select id="s-room" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;">
+    <option value="0">Living room</option>
+    <option value="1">Great room</option>
+    <option value="2">Bathroom</option>
+    <option value="3">Kitchen</option>
+    <option value="4">Mansion entry</option>
+  </select></div>
   <label>Cats</label>
-  <div class="row"><input type="range" id="s-cats" min="1" max="4" step="1"><span class="val" id="v-cats"></span></div>
+  <div class="row"><input type="range" id="s-cats" min="1" max="8" step="1"><span class="val" id="v-cats"></span></div>
   <label>Cat weight</label>
   <div class="row"><input type="range" id="s-weight" min="0.5" max="2" step="0.05"><span class="val" id="v-weight"></span></div>
   <label>Cat strength</label>

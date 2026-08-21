@@ -12,16 +12,17 @@ const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, quality: 2, shadows: true, sound: true };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: true, sound: true };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
 function newSim() {
-  const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight);
+  const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight, cfg.room | 0);
   lk.lk_tune(s, cfg.strength, cfg.gravity, cfg.destruct);
   return s;
 }
 let sim = newSim();
+let roomHX = 3, roomHZ = 3;
 
 // --- three scene -----------------------------------------------------------
 const canvas = document.getElementById('scene');
@@ -252,6 +253,18 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
   } else if (book) {
     // book spines: deep saturated library colors
     mat = toonMat(new THREE.Color().setHSL(h, 0.55, 0.34 + ((i * 7) % 5) * 0.035));
+  } else if (cls === 1 && gloss >= 0.6) {
+    // porcelain fixtures (tub, toilet, sink, fridge)
+    mat = new THREE.MeshPhongMaterial({
+      color: 0xeceae4, shininess: 90, specular: 0xccd6dd,
+    });
+  } else if (cls === 0 && gloss >= 0.55) {
+    // marble / stone (pillars, counter tops)
+    mat = new THREE.MeshPhongMaterial({
+      color: 0xd8d4cc, shininess: 60, specular: 0xbbc4cc,
+    });
+  } else if (cls === 0 && gloss >= 0.15 && b < 1.2) {
+    mat = toonMat(0xa08056, { map: woodTex }); // built-ins: counters, shelves, steps
   } else if (cls !== 0 && gloss >= 0.5) {
     mat = new THREE.MeshPhongMaterial({
       color, shininess: 20 + gloss * 100, specular: 0xbbccdd,
@@ -271,48 +284,66 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
 }
 
 // --- render-side room dressing (no collision, pure decor) ------------------
-const decor = new THREE.Group();
-{
+let decor = null;
+function buildDecor(hx, hz, kind) {
+  if (decor) scene.remove(decor);
+  decor = new THREE.Group();
   const trimMat = toonMat(0x4a3a55);
-  for (const [x, z, w, d, ry] of [
-    [0, 2.975, 6.1, 0.05, 0],
-    [2.975, 0, 0.05, 5.95, 0],
-    [-2.975, 0, 0.05, 5.95, 0],
+  for (const [x, z, w, d] of [
+    [0, hz - 0.025, hx * 2 + 0.1, 0.05],
+    [hx - 0.025, 0, 0.05, hz * 2 - 0.05],
+    [-hx + 0.025, 0, 0.05, hz * 2 - 0.05],
   ]) {
     const bb = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, d), trimMat);
     bb.position.set(x, 0.07, z);
     decor.add(bb);
   }
   // front edge of the diorama floor slab: make the cut look intentional
-  const lip = new THREE.Mesh(new THREE.BoxGeometry(6.1, 0.06, 0.05), trimMat);
-  lip.position.set(0, 0.03, -2.995);
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 + 0.1, 0.06, 0.05), trimMat);
+  lip.position.set(0, 0.03, -hz + 0.005);
   decor.add(lip);
-  // window high on the left wall, over the sun's shoulder
-  const win = new THREE.Group();
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.95, 1.25), toonMat(0x3a2c20));
-  win.add(frame);
-  const pane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.1, 0.8),
-    new THREE.MeshBasicMaterial({ color: 0xffe7c2 })
-  );
-  pane.rotation.y = Math.PI / 2;
-  pane.position.x = 0.035;
-  win.add(pane);
-  for (const mz of [-0.19, 0.19]) {
-    const mull = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.85, 0.05), toonMat(0x3a2c20));
-    mull.position.set(0.01, 0, mz);
-    win.add(mull);
+  if (kind <= 1) {
+    // window high on the left wall, over the sun's shoulder
+    const win = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.95, 1.25), toonMat(0x3a2c20));
+    win.add(frame);
+    const pane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 0.8),
+      new THREE.MeshBasicMaterial({ color: 0xffe7c2 })
+    );
+    pane.rotation.y = Math.PI / 2;
+    pane.position.x = 0.035;
+    win.add(pane);
+    for (const mz of [-0.19, 0.19]) {
+      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.85, 0.05), toonMat(0x3a2c20));
+      mull.position.set(0.01, 0, mz);
+      win.add(mull);
+    }
+    win.position.set(-hx - 0.02, 2.05, 0.6);
+    decor.add(win);
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), toonMat(0x7a4258));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(0, 0.006, 0.2);
+    rug.receiveShadow = true;
+    decor.add(rug);
   }
-  win.position.set(-3.02, 2.05, 0.6);
-  decor.add(win);
-  // rug under the seating area
-  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.15, 28), toonMat(0x7a4258));
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(0, 0.006, 0.2);
-  rug.receiveShadow = true;
-  decor.add(rug);
+  if (kind === 4) {
+    // grand runner up the mansion stairs
+    const run = new THREE.Mesh(new THREE.PlaneGeometry(1.2, hz * 1.1), toonMat(0x8a3a4a));
+    run.rotation.x = -Math.PI / 2;
+    run.position.set(0, 0.007, -hz * 0.4 + 1.2);
+    run.receiveShadow = true;
+    decor.add(run);
+  }
+  if (kind === 2) {
+    const mat = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), toonMat(0x9ab8c8));
+    mat.rotation.x = -Math.PI / 2;
+    mat.position.set(-1.35, 0.006, 0.55);
+    mat.receiveShadow = true;
+    decor.add(mat);
+  }
+  scene.add(decor);
 }
-scene.add(decor);
 
 // --- the cats: render-side bodies (physics stays capsules) -----------------
 const catViews = new Map(); // body index -> {group, legs, tailSegs, mats, prev, facing}
@@ -544,7 +575,7 @@ function tickPuffs(dt) {
 
 // --- camera: fixed diorama vantage, grab-the-world arcball look ------------
 const H_FOV = 62 * (Math.PI / 180);
-const EYE = new THREE.Vector3(0, 2.0, -5.6);
+const EYE = new THREE.Vector3(0, 2.0, -5.6); // z re-derived per room
 const HOME_YAW = 0, HOME_PITCH = -0.26;
 let lookYaw = HOME_YAW;
 let lookPitch = HOME_PITCH;
@@ -668,11 +699,27 @@ let dotActive = false;
 let aimScreen = null;
 const raycaster = new THREE.Raycaster();
 const BELT_LOCAL = new THREE.Vector3(0, -0.75, 0.15);
-const FOCUS_D = 5.5;
+let FOCUS_D = 5.5; // re-derived per room
 const laserRay = { ox: 0, oy: 0, oz: 0, dx: 0, dy: 0, dz: 1 };
 function beltWorld() {
   return camera.position.clone().add(BELT_LOCAL.clone().applyQuaternion(camera.quaternion));
 }
+function layoutRoom() {
+  roomHX = lk.lk_room_hx(sim);
+  roomHZ = lk.lk_room_hz(sim);
+  EYE.z = -(roomHZ + 2.6);
+  FOCUS_D = roomHZ + 2.5;
+  const b = Math.max(roomHX, roomHZ) + 1.2;
+  sun.shadow.camera.left = -b;
+  sun.shadow.camera.right = b;
+  sun.shadow.camera.top = b;
+  sun.shadow.camera.bottom = -b;
+  sun.shadow.camera.updateProjectionMatrix();
+  floorTex.repeat.set(Math.max(2, Math.round(roomHX)), Math.max(2, Math.round(roomHZ)));
+  buildDecor(roomHX, roomHZ, cfg.room | 0);
+  applyLook();
+}
+
 function updateLaserRay() {
   if (!aimScreen) return;
   const { w, h } = viewSize();
@@ -1022,6 +1069,7 @@ function applyLookMode() {
 function rebuildSim() {
   lk.lk_free(sim);
   sim = newSim();
+  layoutRoom();
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
   for (const v of catViews.values()) {
@@ -1064,6 +1112,13 @@ function bindSlider(id, key, fmt, onChange) {
     if (onChange) onChange(cfg[key]);
   });
 }
+const roomEl = document.getElementById('s-room');
+roomEl.value = String(cfg.room | 0);
+roomEl.addEventListener('change', () => {
+  cfg.room = parseInt(roomEl.value, 10);
+  saveCfg();
+  rebuildSim();
+});
 const retune = () => lk.lk_tune(sim, cfg.strength, cfg.gravity, cfg.destruct);
 bindSlider('cats', 'cats', (v) => `${v}`, () => rebuildSim());
 bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
@@ -1414,6 +1469,7 @@ function frame(now) {
   }
   requestAnimationFrame(frame);
 }
+layoutRoom();
 stateEl.textContent = 'PAD = LASER · DRAG ROOM = LOOK';
 requestAnimationFrame(frame);
 
