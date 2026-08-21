@@ -146,37 +146,121 @@ function bodyColor(i, cls, dims, py) {
 
 let meshes = [];
 let debugLook = false;
+// position-hashed radial displacement: cheap fur/fuzz/foliage. Hashing on
+// position (not index) keeps UV-seam vertices together — no cracks.
+function roughen(geo, amt) {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const h = Math.sin(p.getX(i) * 93.9 + p.getY(i) * 47.2 + p.getZ(i) * 71.7) * 43758.55;
+    const s = 1 + ((h - Math.floor(h)) * 2 - 1) * amt;
+    p.setXYZ(i, p.getX(i) * s, p.getY(i) * s, p.getZ(i) * s);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+function eachMat(m, fn) {
+  m.traverse((o) => {
+    if (o.isMesh && o.material) fn(o.material);
+  });
+}
 // Materials derive from the sim's optics: gloss (the value the laser's
 // spill/glint math uses) picks the family — shiny phong, matte fabric, or
 // toon wood/plastic. One source of truth for how surfaces behave.
 function meshFor(i, shape, a, b, c, cls, py, gloss) {
+  const h = ((i * 2654435761) >>> 0) / 4294967296;
+  const color = bodyColor(i, cls, [a, b, c], py);
+  let m = null;
+  // decorated bodies: recognized by their sim dims, built as Groups (the
+  // render loop drives position/quaternion the same way)
+  if (cls === 2 && shape === 0 && Math.abs(a - 0.09) < 0.005 && Math.abs(b - 0.16) < 0.005) {
+    // floor speaker: cabinet + woofer/tweeter cones on the front face
+    m = new THREE.Group();
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x3a3540));
+    m.add(cab);
+    for (const [r, y] of [[0.055, -0.06], [0.028, 0.06]]) {
+      const cone = new THREE.Mesh(new THREE.CircleGeometry(r, 16), toonMat(0x181520));
+      cone.position.set(0, y, -c - 0.002);
+      cone.rotation.y = Math.PI;
+      m.add(cone);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(r, r + 0.008, 16), toonMat(0x6b6572));
+      rim.position.set(0, y, -c - 0.003);
+      rim.rotation.y = Math.PI;
+      m.add(rim);
+    }
+  } else if (cls === 2 && a < 0.06 && b > 0.2) {
+    // TV: bezel + inset glossy screen
+    m = new THREE.Group();
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2a2732));
+    m.add(bezel);
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(c * 1.8, b * 1.8),
+      new THREE.MeshPhongMaterial({ color: 0x101a26, emissive: 0x11323e, shininess: 130, specular: 0xaaccdd })
+    );
+    screen.position.x = a + 0.002;
+    screen.rotation.y = Math.PI / 2;
+    m.add(screen);
+  } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
+    // stereo: glossy slab + knobs + display strip on the front
+    m = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      new THREE.MeshPhongMaterial({ color: 0x23202b, shininess: 110, specular: 0xbbccdd })
+    );
+    m.add(body);
+    for (const kx of [-0.14, -0.08]) {
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.01, 10), toonMat(0x8a8494));
+      knob.rotation.x = Math.PI / 2;
+      knob.position.set(kx, 0, -c - 0.004);
+      m.add(knob);
+    }
+    const disp = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.12, 0.025),
+      new THREE.MeshBasicMaterial({ color: 0x2fe0a8 })
+    );
+    disp.position.set(0.08, 0.005, -c - 0.002);
+    disp.rotation.y = Math.PI;
+    m.add(disp);
+  }
+  if (m) {
+    m.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    scene.add(m);
+    return m;
+  }
   let geo;
-  if (shape === 1) geo = new THREE.SphereGeometry(a, 14, 12);
+  const fuzzy = cls === 2 && shape === 1 && gloss <= 0.1;
+  if (shape === 1) geo = new THREE.SphereGeometry(a, fuzzy ? 18 : 14, fuzzy ? 14 : 12);
   else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
+  if (fuzzy) roughen(geo, 0.14); // yarn, plush toys, foliage
   let mat;
-  const color = bodyColor(i, cls, [a, b, c], py);
   const painting = cls === 0 && (a < 0.025 || c < 0.025) && Math.max(a, b, c) < 0.6 && py > 0.9;
+  const book =
+    cls === 2 && shape === 0 && gloss < 0.4 && b >= 0.06 && b <= 0.12 &&
+    Math.min(a, c) <= 0.035 && Math.max(a, c) <= 0.07;
   if (cls === 0 && a > 2 && b < 0.2) {
     mat = toonMat(0xffffff, { map: floorTex }); // the floor slab
   } else if (painting) {
     mat = toonMat(0xffffff, { map: artTex(i) });
-  } else if (cls === 2 && a < 0.06 && b > 0.2) {
-    mat = new THREE.MeshPhongMaterial({
-      color: 0x1c2430, emissive: 0x0f2f3a, shininess: 120, specular: 0xaaccdd,
-    }); // the TV screen
+  } else if (book) {
+    // book spines: deep saturated library colors
+    mat = toonMat(new THREE.Color().setHSL(h, 0.55, 0.34 + ((i * 7) % 5) * 0.035));
   } else if (cls !== 0 && gloss >= 0.5) {
     mat = new THREE.MeshPhongMaterial({
       color, shininess: 20 + gloss * 100, specular: 0xbbccdd,
     });
   } else if (cls !== 0 && gloss <= 0.1) {
-    mat = toonMat(color, { map: fabricTex });
+    mat = fuzzy ? toonMat(color) : toonMat(color, { map: fabricTex });
   } else if (cls === 1) {
     mat = toonMat(color, { map: woodTex });
   } else {
     mat = toonMat(color);
   }
-  const m = new THREE.Mesh(geo, mat);
+  m = new THREE.Mesh(geo, mat);
   m.castShadow = cls !== 0;
   m.receiveShadow = true;
   scene.add(m);
@@ -237,7 +321,7 @@ function buildCat(k) {
   const fur = toonMat(view.coat);
   const dark = toonMat(CAT_DARKS[k % 4]);
   const white = toonMat(0xfff4e6);
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), fur);
+  const body = new THREE.Mesh(roughen(new THREE.SphereGeometry(0.115, 20, 16), 0.05), fur);
   body.scale.set(1.05, 0.92, 1.5);
   body.position.y = 0.02;
   g.add(body);
@@ -245,10 +329,23 @@ function buildCat(k) {
   const chest = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), white);
   chest.position.set(0, -0.03, 0.13);
   g.add(chest);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.088, 12, 10), fur);
+  const head = new THREE.Mesh(roughen(new THREE.SphereGeometry(0.088, 16, 12), 0.045), fur);
   head.position.set(0, 0.11, 0.2);
   g.add(head);
   view.head = head;
+  // whiskers: six thin white slivers off the muzzle
+  for (const sx of [-1, 1]) {
+    for (const [ang, dy] of [[0.25, 0.005], [0, 0], [-0.22, -0.006]]) {
+      const wh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.085, 0.0018, 0.0018),
+        new THREE.MeshBasicMaterial({ color: 0xf5efe4 })
+      );
+      wh.position.set(0.055 * sx, 0.08 + dy, 0.27);
+      wh.rotation.z = ang * sx;
+      wh.rotation.y = -0.5 * sx;
+      g.add(wh);
+    }
+  }
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), white);
   muzzle.position.set(0, 0.085, 0.265);
   g.add(muzzle);
@@ -273,7 +370,10 @@ function buildCat(k) {
   }
   const tail = new THREE.Group();
   for (let s = 0; s < 4; s++) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.026 - s * 0.003, 8, 6), s === 3 ? dark : fur);
+    const seg = new THREE.Mesh(
+      roughen(new THREE.SphereGeometry(0.026 - s * 0.003, 10, 8), 0.09),
+      s === 3 ? dark : fur
+    );
     tail.add(seg);
     view.tailSegs.push(seg);
   }
@@ -868,7 +968,7 @@ function popScore(text) {
 function applyLookMode() {
   for (const m of meshes) {
     if (!m) continue;
-    m.material.wireframe = debugLook;
+    eachMat(m, (mat) => (mat.wireframe = debugLook));
   }
   losLine.visible = false;
   document.getElementById('dbg').classList.toggle('on', debugLook);
@@ -1086,13 +1186,13 @@ function frame(now) {
     }
     if (!meshes[i]) {
       meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13]);
-      meshes[i].material.wireframe = debugLook;
+      eachMat(meshes[i], (mat) => (mat.wireframe = debugLook));
     }
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
-    if (data[o] === 2 && data[o + 12]) m.material.emissive?.setHex(0x551111);
-    if (data[o] === 1) {
+    if (data[o] === 2 && data[o + 12] && m.material) m.material.emissive?.setHex(0x551111);
+    if (data[o] === 1 && m.material) {
       // scratch wear: each stage mats and darkens the fabric a little
       const wear = data[o + 12] | 0;
       if ((m.userData.wear | 0) !== wear) {
