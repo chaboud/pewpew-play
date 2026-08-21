@@ -443,9 +443,9 @@ let lookYaw = HOME_YAW;
 let lookPitch = HOME_PITCH;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
-// bounded pinch zoom: narrows the FOV (the vantage never translates —
-// diorama doctrine holds)
-const ZOOM_MIN = 1, ZOOM_MAX = 2.4;
+// bounded pinch zoom: scales the FOV (the vantage never translates —
+// diorama doctrine holds). <1 = step back a little.
+const ZOOM_MIN = 0.7, ZOOM_MAX = 2.4;
 let zoom = 1;
 function applyLook(bob = 0) {
   camera.position.set(EYE.x, EYE.y + bob, EYE.z);
@@ -460,9 +460,12 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   const aspect = innerWidth / innerHeight;
   camera.aspect = aspect;
-  const hfov = 2 * Math.atan(Math.tan(H_FOV / 2) / zoom);
-  const vfov = 2 * Math.atan(Math.tan(hfov / 2) / Math.min(aspect, 1.2));
-  camera.fov = Math.min(105, (vfov * 180) / Math.PI);
+  // zoom applies AFTER the aspect adaptation and its cap — otherwise tall
+  // phones (already pinned at the cap) couldn't zoom out at all
+  const vfov = 2 * Math.atan(Math.tan(H_FOV / 2) / Math.min(aspect, 1.2));
+  const base = Math.min((105 * Math.PI) / 180, vfov);
+  const vz = 2 * Math.atan(Math.tan(base / 2) / zoom);
+  camera.fov = Math.min(120, (vz * 180) / Math.PI);
   camera.updateProjectionMatrix();
 }
 function setZoom(z) {
