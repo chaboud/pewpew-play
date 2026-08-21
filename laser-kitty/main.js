@@ -958,26 +958,6 @@ const sfx = {
 
 // --- comedy layer: mickey-mousing (research/audio.md — sound is half the
 // physics joke) ------------------------------------------------------------
-let whistleCount = 0;
-function startWhistle(view) {
-  if (!ac || whistleCount >= 2 || view.whistle) return;
-  const o = ac.createOscillator();
-  o.type = 'triangle';
-  const g = ac.createGain();
-  g.gain.value = 0.1;
-  o.connect(g).connect(sfxGain);
-  o.start();
-  view.whistle = { o, g };
-  whistleCount++;
-}
-function stopWhistle(view) {
-  if (!view.whistle) return;
-  const w = view.whistle;
-  view.whistle = null;
-  whistleCount--;
-  w.g.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.06);
-  w.o.stop(ac.currentTime + 0.08);
-}
 // dizzy stars for the post-tumble compose-yourself beat
 const starTex = new THREE.CanvasTexture(
   (() => {
@@ -1036,7 +1016,6 @@ function rebuildSim() {
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
   for (const v of catViews.values()) {
-    stopWhistle(v);
     if (v.stars) scene.remove(v.stars);
     scene.remove(v.group);
   }
@@ -1244,18 +1223,11 @@ function frame(now) {
       }
       // --- comedy beats -------------------------------------------------
       const vy = view.prev ? (y - view.prev[1]) * 60 : 0;
-      if (st === 4) {
-        // slide whistle rides the pounce arc: pitch tracks altitude
-        startWhistle(view);
-        if (view.whistle) view.whistle.o.frequency.value = 320 + Math.max(0, y) * 520;
-      } else if (view.lastSt === 4) {
-        stopWhistle(view);
-        if ((view.lastVy ?? 0) < -2.0) {
-          // hard landing: tumble roll, dizzy stars, a bonk
-          view.tumbleT = 0;
-          view.starT = 2.0;
-          sfx.impact(view.group);
-        }
+      if (st !== 4 && view.lastSt === 4 && (view.lastVy ?? 0) < -2.0) {
+        // hard landing: tumble roll, dizzy stars, a bonk
+        view.tumbleT = 0;
+        view.starT = 2.0;
+        sfx.impact(view.group);
       }
       if (st === 7 && now - (view.lastPuff ?? 0) > 110) {
         // zoomies kick up dust
