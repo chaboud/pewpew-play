@@ -597,6 +597,41 @@ let ac = null;
 let sfxGain = null;
 let noiseBuf = null;
 const sfxLast = {};
+// sample rack: drop CC0 files in sfx/ and list them in sfx/manifest.json
+// ({"impact": ["file.ogg", ...], "crash": [...], "meow": [...], ...});
+// every voice prefers a random pooled sample and falls back to synthesis.
+const samplePools = {};
+let sampleMan = null;
+fetch('sfx/manifest.json')
+  .then((r) => (r.ok ? r.json() : null))
+  .then((m) => {
+    sampleMan = m;
+    if (ac && m) loadSamples();
+  })
+  .catch(() => {});
+async function loadSamples() {
+  for (const [name, urls] of Object.entries(sampleMan)) {
+    samplePools[name] = samplePools[name] ?? [];
+    for (const u of urls) {
+      try {
+        const ab = await (await fetch('sfx/' + u)).arrayBuffer();
+        samplePools[name].push(await ac.decodeAudioData(ab));
+      } catch {}
+    }
+  }
+}
+function playSample(name, pan, rateJitter = 0.15, gain = 0.55, when = 0) {
+  const pool = samplePools[name];
+  if (!pool || !pool.length) return false;
+  const src = ac.createBufferSource();
+  src.buffer = pool[(Math.random() * pool.length) | 0];
+  src.playbackRate.value = 1 + (Math.random() * 2 - 1) * rateJitter;
+  const g = ac.createGain();
+  g.gain.value = gain;
+  src.connect(g).connect(outNode(pan));
+  src.start(ac.currentTime + when);
+  return true;
+}
 function sfxInit() {
   if (ac) return;
   ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -606,6 +641,7 @@ function sfxInit() {
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  if (sampleMan) loadSamples();
 }
 addEventListener('pointerdown', () => {
   sfxInit();
@@ -617,7 +653,14 @@ function throttled(name, ms) {
   sfxLast[name] = t;
   return false;
 }
-function tone(freq0, freq1, dur, type, gain, when = 0) {
+function outNode(pan) {
+  if (pan === undefined || !ac.createStereoPanner) return sfxGain;
+  const p = ac.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  p.connect(sfxGain);
+  return p;
+}
+function tone(freq0, freq1, dur, type, gain, when = 0, pan) {
   const o = ac.createOscillator();
   const g = ac.createGain();
   const t0 = ac.currentTime + when;
@@ -626,11 +669,11 @@ function tone(freq0, freq1, dur, type, gain, when = 0) {
   o.frequency.exponentialRampToValueAtTime(Math.max(1, freq1), t0 + dur);
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  o.connect(g).connect(sfxGain);
+  o.connect(g).connect(outNode(pan));
   o.start(t0);
   o.stop(t0 + dur + 0.02);
 }
-function noise(dur, freq, q, gain, when = 0, type = 'bandpass') {
+function noise(dur, freq, q, gain, when = 0, type = 'bandpass', pan) {
   const src = ac.createBufferSource();
   src.buffer = noiseBuf;
   src.loop = true;
@@ -642,9 +685,19 @@ function noise(dur, freq, q, gain, when = 0, type = 'bandpass') {
   const t0 = ac.currentTime + when;
   g.gain.setValueAtTime(gain, t0);
   g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  src.connect(f).connect(g).connect(sfxGain);
+  src.connect(f).connect(g).connect(outNode(pan));
   src.start(t0, Math.random());
   src.stop(t0 + dur + 0.02);
+}
+// world x -> stereo: the camera looks +z, so +x is screen-left
+const panOf = (mesh) => (mesh ? -mesh.position.x / 3 : 0);
+// cluster sense: many falls inside a beat get a rumble bed under the clatter
+const recentHits = [];
+function hitCluster() {
+  const t = performance.now();
+  recentHits.push(t);
+  while (recentHits.length && t - recentHits[0] > 300) recentHits.shift();
+  return recentHits.length;
 }
 // cat vocal: sawtooth through parallel formant filters with vibrato —
 // deliberately cartoon (realistic cat recordings are the uncanny risk
@@ -712,24 +765,45 @@ function setPurr(on) {
   }
 }
 const sfx = {
-  thunk() {
-    if (!ac || throttled('thunk', 60)) return;
-    const p = 0.9 + Math.random() * 0.25;
-    tone(110 * p, 55 * p, 0.13, 'sine', 0.5);
-    noise(0.05, 900, 1.2, 0.25);
+  // one voice PER falling object: pitch from its size, timbre from its
+  // shape, stereo position from where it fell, micro-delay so a bookcase
+  // avalanche mixes into clatter instead of one Atari click
+  impact(mesh) {
+    if (!ac) return;
+    const n = hitCluster();
+    if (n > 12) return; // voice budget: the bed carries the excess
+    const pan = panOf(mesh);
+    const prm = mesh?.geometry?.parameters ?? {};
+    const sphere = prm.radius !== undefined;
+    const size = prm.radius ?? Math.max(prm.width ?? 0.1, prm.height ?? 0.1, prm.depth ?? 0.1) / 2;
+    const f0 = Math.min(260, Math.max(58, 26 / (size + 0.05)));
+    const j = 0.92 + Math.random() * 0.16;
+    const w = Math.random() * 0.06;
+    if (!playSample('impact', pan, 0.22, 0.5, w)) {
+      tone(f0 * j, f0 * 0.55 * j, 0.16, 'triangle', 0.38, w, pan);
+      tone(f0 * 1.48 * j, f0 * 0.8, 0.11, 'triangle', 0.18, w + 0.006, pan); // detuned body
+      noise(0.04, 1100 + Math.random() * 700, 1.4, 0.22, w, 'bandpass', pan);
+      if (sphere) tone(f0 * 5.2, f0 * 4.5, 0.26, 'sine', 0.11, w + 0.01, pan); // hollow ring
+    }
+    if (n >= 3 && !throttled('rumble', 1200)) {
+      // the "whole bookcase came down" bed
+      noise(0.55, 240, 0.6, 0.45, 0, 'lowpass');
+      tone(58, 36, 0.55, 'triangle', 0.3, 0.02);
+    }
   },
-  crash() {
+  crash(pan) {
     if (!ac || throttled('crash', 90)) return;
+    if (playSample('crash', pan, 0.1, 0.6)) return;
     // real shatter shape: bright splash, a body clunk, then a shower of
     // sparse shard tinkles scattering over ~half a second
-    noise(0.18, 3500, 0.6, 0.5, 0, 'highpass');
-    tone(180, 85, 0.12, 'sine', 0.28, 0.01);
+    noise(0.18, 3500, 0.6, 0.5, 0, 'highpass', pan);
+    tone(180, 85, 0.12, 'sine', 0.28, 0.01, pan);
     for (let k = 0; k < 12; k++) {
       const f = 2600 * (1 + Math.random() * 1.9);
       const when = 0.03 + Math.random() * 0.45;
-      tone(f, f * 0.92, 0.06 + Math.random() * 0.1, 'sine', 0.16 * (1 - when), when);
+      tone(f, f * 0.92, 0.06 + Math.random() * 0.1, 'sine', 0.16 * (1 - when), when, pan);
     }
-    noise(0.4, 5200, 0.5, 0.12, 0.05, 'highpass'); // glittery tail
+    noise(0.4, 5200, 0.5, 0.12, 0.05, 'highpass', pan); // glittery tail
   },
   chirp() {
     if (!ac || throttled('chirp', 900)) return;
@@ -757,15 +831,18 @@ const sfx = {
   },
   meow() {
     if (!ac || throttled('meow', 4000)) return;
+    if (playSample('meow', 0, 0.12, 0.6)) return;
     vocal({ f0: 340, peak: 520, end: 230, dur: 0.55, gain: 0.5 });
   },
   mrrow() {
     if (!ac || throttled('mrrow', 700)) return;
+    if (playSample('mrrow', 0, 0.12, 0.65)) return;
     vocal({ f0: 560, peak: 640, end: 170, dur: 0.4, gain: 0.6 });
   },
-  scratch() {
+  scratch(pan) {
     if (!ac || throttled('scratch', 120)) return;
-    for (let k = 0; k < 3; k++) noise(0.07, 1400 + k * 300, 3.5, 0.3, k * 0.07);
+    if (playSample('scratch', pan, 0.15, 0.5)) return;
+    for (let k = 0; k < 3; k++) noise(0.07, 1400 + k * 300, 3.5, 0.3, k * 0.07, 'bandpass', pan);
   },
   boing() {
     if (!ac || throttled('boing', 150)) return;
@@ -887,9 +964,9 @@ function frame(now) {
         if (to === 6) sfx.meow(); // bored: "hey, keep playing"
       }
       if (ev === 2) sfx.boing();
-      if (ev === 3) sfx.thunk();
-      if (ev === 4) sfx.crash();
-      if (ev === 5) sfx.scratch();
+      if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0xff]);
+      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0xff]));
+      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0xff]));
       if (ev === 3 || ev === 4) {
         const chain = (code >> 20) & 0xf;
         const label = ev === 4 ? 'CRASH ' : '';
