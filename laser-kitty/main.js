@@ -12,7 +12,7 @@ const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 1, quality: 2, shadows: true, sound: true };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, quality: 2, shadows: true, sound: true };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
@@ -160,6 +160,7 @@ function roughen(geo, amt) {
   geo.computeVertexNormals();
   return geo;
 }
+const ease = (c, t, a) => c + (t - c) * a;
 function eachMat(m, fn) {
   m.traverse((o) => {
     if (o.isMesh && o.material) fn(o.material);
@@ -390,6 +391,14 @@ function buildCat(k) {
   });
   scene.add(g);
   view.group = g;
+  // per-cat debug gear: eye->dot LOS line + a floating state tag
+  view.losGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  view.los = new THREE.Line(view.losGeo, new THREE.LineBasicMaterial({ color: 0x44ff66 }));
+  view.los.visible = false;
+  scene.add(view.los);
+  view.tag = document.createElement('div');
+  view.tag.className = 'cattag';
+  document.getElementById('tags').appendChild(view.tag);
   return view;
 }
 
@@ -480,11 +489,6 @@ const glint = new THREE.Sprite(
 );
 glint.visible = false;
 scene.add(glint);
-// debug: line-of-sight from cat eye to dot (green = seen, red = blocked)
-const losGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-const losLine = new THREE.Line(losGeo, new THREE.LineBasicMaterial({ color: 0x44ff66 }));
-losLine.visible = false;
-scene.add(losLine);
 
 // --- dust puffs on topples -------------------------------------------------
 const puffTex = new THREE.CanvasTexture(
@@ -1007,7 +1011,6 @@ function applyLookMode() {
     if (!m) continue;
     eachMat(m, (mat) => (mat.wireframe = debugLook));
   }
-  losLine.visible = false;
   document.getElementById('dbg').classList.toggle('on', debugLook);
 }
 function rebuildSim() {
@@ -1017,6 +1020,8 @@ function rebuildSim() {
   meshes = [];
   for (const v of catViews.values()) {
     if (v.stars) scene.remove(v.stars);
+    scene.remove(v.los);
+    v.tag.remove();
     scene.remove(v.group);
   }
   catViews.clear();
@@ -1147,6 +1152,7 @@ function frame(now) {
   let hudAct = -1;
   let catOrdinal = 0;
   let anyLoaf = false;
+  const debugCats = [];
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS_PER_BODY;
     if (data[o] === 3) {
@@ -1185,25 +1191,26 @@ function frame(now) {
         const swing = Math.min(0.7, sp * 0.22);
         for (let li = 0; li < view.legs.length; li++) {
           const leg = view.legs[li];
+          // targets, then eased: cats are continuous, poses tween
+          let lt;
           if (st === 9 && li < 2) {
-            // swat flurry: front paws machine-gun forward, raised
-            leg.rotation.x = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7;
+            lt = -0.9 + Math.sin(now * 0.09 + (li ? Math.PI : 0)) * 0.7; // swat flurry
           } else if (st === 9) {
-            leg.rotation.x = 0.25; // haunches planted
+            lt = 0.25; // haunches planted
           } else if (crouch) {
-            // hunt-walk: bent legs, slow deliberate steps
-            leg.rotation.x = 0.35 + Math.sin(now * 0.008 + leg.userData.phase) * 0.25;
+            lt = 0.35 + Math.sin(now * 0.008 + leg.userData.phase) * 0.25; // hunt-walk
           } else if (pose === 0) {
-            leg.rotation.x = li < 2 ? 0 : 1.3; // sit: haunches folded
+            lt = li < 2 ? 0 : 1.3; // sit: haunches folded
           } else if (pose === 1) {
-            leg.rotation.x = li === 0 ? -0.9 : li < 2 ? 0 : 1.3; // groom: one paw up
+            lt = li === 0 ? -0.9 : li < 2 ? 0 : 1.3; // groom: one paw up
           } else if (pose === 2) {
-            leg.rotation.x = 1.5; // loaf: everything tucked
+            lt = 1.5; // loaf: everything tucked
           } else if (pose === 4) {
-            leg.rotation.x = li < 2 ? -1.1 : 0; // stretch: front legs long
+            lt = li < 2 ? -1.1 : 0; // stretch: front legs long
           } else {
-            leg.rotation.x = Math.sin(now * 0.02 + leg.userData.phase) * swing;
+            lt = Math.sin(now * 0.02 + leg.userData.phase) * swing;
           }
+          leg.rotation.x = ease(leg.rotation.x, lt, 0.28);
         }
         // tail: idle sway, hard lash during windup and swat
         const lash =
@@ -1216,10 +1223,14 @@ function frame(now) {
             -0.16 * t
           );
         }
-        // groom head-bob; loaf hunkers down; hunt-walk slinks low
-        view.head.position.y = pose === 1 ? 0.1 + Math.sin(now * 0.025) * 0.02 : crouch ? 0.06 : 0.11;
-        view.head.position.z = pose === 1 ? 0.17 : crouch ? 0.24 : 0.2;
-        view.body.position.y = pose === 2 || crouch ? -0.02 : 0.02;
+        // groom head-bob; loaf hunkers down; hunt-walk slinks low (tweened)
+        view.head.position.y = ease(
+          view.head.position.y,
+          pose === 1 ? 0.1 + Math.sin(now * 0.025) * 0.02 : crouch ? 0.06 : 0.11,
+          0.2
+        );
+        view.head.position.z = ease(view.head.position.z, pose === 1 ? 0.17 : crouch ? 0.24 : 0.2, 0.2);
+        view.body.position.y = ease(view.body.position.y, pose === 2 || crouch ? -0.02 : 0.02, 0.2);
       }
       // --- comedy beats -------------------------------------------------
       const vy = view.prev ? (y - view.prev[1]) * 60 : 0;
@@ -1250,6 +1261,7 @@ function frame(now) {
       } else {
         view.stars.visible = false;
       }
+      debugCats.push({ view, x, y, z, st, act, interest: data[o + 13], vis: data[o + 14] });
       view.lastSt = st;
       view.lastVy = vy;
       view.prev = [x, y, z];
@@ -1257,7 +1269,11 @@ function frame(now) {
       view.group.rotation.x =
         view.tumbleT != null
           ? -Math.PI * 2 * view.tumbleT // full forward roll on a botched landing
-          : pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : crouch ? 0.07 : st === 3 ? 0.14 : 0;
+          : ease(
+              view.group.rotation.x,
+              pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : crouch ? 0.07 : st === 3 ? 0.14 : 0,
+              0.18
+            );
       // windup: butt up, wiggling — the pounce telegraph
       view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.24 : 0);
       view.group.rotation.z = view.lean ?? 0;
@@ -1344,14 +1360,31 @@ function frame(now) {
     glint.visible = false;
     for (const s of sparkles) s.visible = false;
   }
-  // debug LOS line: cat eye -> dot, green when the cat can see it
-  losLine.visible = debugLook && lit && !!catPos;
-  if (losLine.visible) {
-    losGeo.setFromPoints([
-      new THREE.Vector3(catPos[0], catPos[1] + 0.16, catPos[2]),
-      dot.position,
-    ]);
-    losLine.material.color.setHex(L[9] > 0.05 ? 0x44ff66 : 0xff4455);
+  // debug: per-cat LOS lines (eye -> dot, green = that cat sees it) and
+  // floating state tags with interest/visibility (founder ask)
+  const v3 = new THREE.Vector3();
+  for (const d of debugCats) {
+    d.view.los.visible = debugLook && lit;
+    if (d.view.los.visible) {
+      d.view.losGeo.setFromPoints([
+        new THREE.Vector3(d.x, d.y + 0.16, d.z),
+        dot.position,
+      ]);
+      d.view.los.material.color.setHex(d.vis > 0.05 ? 0x44ff66 : 0xff4455);
+    }
+    if (debugLook) {
+      v3.set(d.x, d.y + 0.42, d.z).project(camera);
+      const on = v3.z < 1 && Math.abs(v3.x) < 1.1 && Math.abs(v3.y) < 1.1;
+      d.view.tag.style.display = on ? 'block' : 'none';
+      if (on) {
+        d.view.tag.style.left = `${((v3.x + 1) / 2) * innerWidth}px`;
+        d.view.tag.style.top = `${((-v3.y + 1) / 2) * innerHeight}px`;
+        const name = d.st === 0 ? `IDLE·${AMB_NAMES[d.act] ?? '?'}` : STATE_NAMES[d.st] ?? '?';
+        d.view.tag.textContent = `${name} i${d.interest.toFixed(2)} v${d.vis.toFixed(2)}`;
+      }
+    } else {
+      d.view.tag.style.display = 'none';
+    }
   }
 
   scoreEl.textContent = lk.lk_score(sim);

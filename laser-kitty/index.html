@@ -22,6 +22,11 @@
   .pop { position: absolute; font: 800 20px system-ui, sans-serif; color: #7dff8a; text-shadow: 0 2px 4px #000;
          animation: rise 0.9s ease-out forwards; }
   .pop.big { font-size: 32px; color: #ffd75e; animation-duration: 1.2s; }
+  #tags { position: fixed; inset: 0; pointer-events: none; }
+  .cattag { position: absolute; transform: translate(-50%, -100%); display: none;
+            font: 600 10px ui-monospace, monospace; color: #d7e3ff; white-space: nowrap;
+            background: rgba(20,18,28,0.75); border: 1px solid #3a3644; border-radius: 5px;
+            padding: 2px 5px; }
   @keyframes rise { to { transform: translateY(-60px); opacity: 0; } }
   .ctl { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 4px); z-index: 5;
          width: 44px; height: 44px; border-radius: 10px; border: 1px solid #3a3644;
@@ -75,6 +80,7 @@
 </div>
 <div id="pad"><div id="thumb"></div></div>
 <div id="pops"></div>
+<div id="tags"></div>
 <script type="module" src="main.js"></script>
 </body>
 </html>
