@@ -12,7 +12,7 @@ const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 1, quality: 2, shadows: true };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 1, quality: 2, shadows: true, sound: true };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
@@ -590,6 +590,86 @@ for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointeru
   }, { passive: false });
 }
 
+// --- SFX: synthesized in Web Audio — authored, so license-free by
+// construction; zero asset bytes; mickey-moused per the audio research.
+// (CC0 sample packs are the later richness pass.)
+let ac = null;
+let sfxGain = null;
+let noiseBuf = null;
+const sfxLast = {};
+function sfxInit() {
+  if (ac) return;
+  ac = new (window.AudioContext || window.webkitAudioContext)();
+  sfxGain = ac.createGain();
+  sfxGain.gain.value = cfg.sound ? 0.5 : 0;
+  sfxGain.connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+addEventListener('pointerdown', () => {
+  sfxInit();
+  if (ac.state === 'suspended') ac.resume();
+});
+function throttled(name, ms) {
+  const t = performance.now();
+  if (sfxLast[name] && t - sfxLast[name] < ms) return true;
+  sfxLast[name] = t;
+  return false;
+}
+function tone(freq0, freq1, dur, type, gain, when = 0) {
+  const o = ac.createOscillator();
+  const g = ac.createGain();
+  const t0 = ac.currentTime + when;
+  o.type = type;
+  o.frequency.setValueAtTime(freq0, t0);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1, freq1), t0 + dur);
+  g.gain.setValueAtTime(gain, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  o.connect(g).connect(sfxGain);
+  o.start(t0);
+  o.stop(t0 + dur + 0.02);
+}
+function noise(dur, freq, q, gain, when = 0) {
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+  const f = ac.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = freq;
+  f.Q.value = q;
+  const g = ac.createGain();
+  const t0 = ac.currentTime + when;
+  g.gain.setValueAtTime(gain, t0);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  src.connect(f).connect(g).connect(sfxGain);
+  src.start(t0, Math.random());
+  src.stop(t0 + dur + 0.02);
+}
+const sfx = {
+  thunk() {
+    if (!ac || throttled('thunk', 60)) return;
+    const p = 0.9 + Math.random() * 0.25;
+    tone(110 * p, 55 * p, 0.13, 'sine', 0.5);
+    noise(0.05, 900, 1.2, 0.25);
+  },
+  crash() {
+    if (!ac || throttled('crash', 90)) return;
+    noise(0.35, 3200, 0.8, 0.5);
+    for (const [f, w] of [[2100, 0], [3050, 0.02], [4400, 0.04], [5300, 0.07]]) {
+      tone(f * (0.95 + Math.random() * 0.1), f * 0.85, 0.3, 'triangle', 0.16, w);
+    }
+  },
+  scratch() {
+    if (!ac || throttled('scratch', 120)) return;
+    for (let k = 0; k < 3; k++) noise(0.07, 1400 + k * 300, 3.5, 0.3, k * 0.07);
+  },
+  boing() {
+    if (!ac || throttled('boing', 150)) return;
+    tone(240 * (0.9 + Math.random() * 0.2), 90, 0.22, 'sine', 0.3);
+  },
+};
+
 // --- HUD + buttons ---------------------------------------------------------
 const scoreEl = document.getElementById('score');
 const stateEl = document.getElementById('state');
@@ -661,6 +741,13 @@ bindSlider('destruct', 'destruct', (v) => (v === 0 ? 'OFF' : `${v.toFixed(1)}x`)
 bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) =>
   renderer.setPixelRatio(Math.min(devicePixelRatio, v))
 );
+const soundEl = document.getElementById('s-sound');
+soundEl.checked = cfg.sound;
+soundEl.addEventListener('change', () => {
+  cfg.sound = soundEl.checked;
+  saveCfg();
+  if (sfxGain) sfxGain.gain.value = cfg.sound ? 0.5 : 0;
+});
 const shadowsEl = document.getElementById('s-shadows');
 shadowsEl.checked = cfg.shadows;
 shadowsEl.addEventListener('change', () => {
@@ -688,6 +775,10 @@ function frame(now) {
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
       const ev = code >>> 24;
+      if (ev === 2) sfx.boing();
+      if (ev === 3) sfx.thunk();
+      if (ev === 4) sfx.crash();
+      if (ev === 5) sfx.scratch();
       if (ev === 3 || ev === 4) {
         const chain = (code >> 20) & 0xf;
         const label = ev === 4 ? 'CRASH ' : '';
