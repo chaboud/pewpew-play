@@ -630,12 +630,12 @@ function tone(freq0, freq1, dur, type, gain, when = 0) {
   o.start(t0);
   o.stop(t0 + dur + 0.02);
 }
-function noise(dur, freq, q, gain, when = 0) {
+function noise(dur, freq, q, gain, when = 0, type = 'bandpass') {
   const src = ac.createBufferSource();
   src.buffer = noiseBuf;
   src.loop = true;
   const f = ac.createBiquadFilter();
-  f.type = 'bandpass';
+  f.type = type;
   f.frequency.value = freq;
   f.Q.value = q;
   const g = ac.createGain();
@@ -646,6 +646,71 @@ function noise(dur, freq, q, gain, when = 0) {
   src.start(t0, Math.random());
   src.stop(t0 + dur + 0.02);
 }
+// cat vocal: sawtooth through parallel formant filters with vibrato —
+// deliberately cartoon (realistic cat recordings are the uncanny risk
+// per research/audio.md)
+function vocal({ f0, peak, end, dur, gain, when = 0 }) {
+  const t0 = ac.currentTime + when;
+  const o = ac.createOscillator();
+  o.type = 'sawtooth';
+  const de = 0.95 + Math.random() * 0.1;
+  o.frequency.setValueAtTime(f0 * de, t0);
+  o.frequency.exponentialRampToValueAtTime(peak * de, t0 + dur * 0.35);
+  o.frequency.exponentialRampToValueAtTime(end * de, t0 + dur);
+  const vib = ac.createOscillator();
+  vib.frequency.value = 6.5;
+  const vibG = ac.createGain();
+  vibG.gain.value = 14;
+  vib.connect(vibG).connect(o.frequency);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.001, t0);
+  g.gain.exponentialRampToValueAtTime(gain, t0 + 0.07);
+  g.gain.setValueAtTime(gain, t0 + dur * 0.55);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  for (const [ff, fq, fg] of [[1050, 5, 0.9], [2500, 8, 0.5]]) {
+    const f = ac.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.setValueAtTime(ff, t0);
+    f.frequency.exponentialRampToValueAtTime(ff * 0.75, t0 + dur);
+    f.Q.value = fq;
+    const fgain = ac.createGain();
+    fgain.gain.value = fg;
+    o.connect(f).connect(fgain).connect(g);
+  }
+  g.connect(sfxGain);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+  vib.start(t0);
+  vib.stop(t0 + dur);
+}
+// purr: AM'd low triangle while a cat loafs
+let purr = null;
+function setPurr(on) {
+  if (!ac) return;
+  if (on && !purr) {
+    const o = ac.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = 46;
+    const pg = ac.createGain();
+    pg.gain.setValueAtTime(0.001, ac.currentTime);
+    pg.gain.linearRampToValueAtTime(0.06, ac.currentTime + 0.4);
+    const am = ac.createOscillator();
+    am.frequency.value = 21;
+    const amG = ac.createGain();
+    amG.gain.value = 0.04;
+    am.connect(amG).connect(pg.gain);
+    o.connect(pg).connect(sfxGain);
+    o.start();
+    am.start();
+    purr = { o, am, pg };
+  } else if (!on && purr) {
+    const p = purr;
+    purr = null;
+    p.pg.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.3);
+    p.o.stop(ac.currentTime + 0.35);
+    p.am.stop(ac.currentTime + 0.35);
+  }
+}
 const sfx = {
   thunk() {
     if (!ac || throttled('thunk', 60)) return;
@@ -655,10 +720,48 @@ const sfx = {
   },
   crash() {
     if (!ac || throttled('crash', 90)) return;
-    noise(0.35, 3200, 0.8, 0.5);
-    for (const [f, w] of [[2100, 0], [3050, 0.02], [4400, 0.04], [5300, 0.07]]) {
-      tone(f * (0.95 + Math.random() * 0.1), f * 0.85, 0.3, 'triangle', 0.16, w);
+    // real shatter shape: bright splash, a body clunk, then a shower of
+    // sparse shard tinkles scattering over ~half a second
+    noise(0.18, 3500, 0.6, 0.5, 0, 'highpass');
+    tone(180, 85, 0.12, 'sine', 0.28, 0.01);
+    for (let k = 0; k < 12; k++) {
+      const f = 2600 * (1 + Math.random() * 1.9);
+      const when = 0.03 + Math.random() * 0.45;
+      tone(f, f * 0.92, 0.06 + Math.random() * 0.1, 'sine', 0.16 * (1 - when), when);
     }
+    noise(0.4, 5200, 0.5, 0.12, 0.05, 'highpass'); // glittery tail
+  },
+  chirp() {
+    if (!ac || throttled('chirp', 900)) return;
+    // lock-on trill: fast FM warble, rising
+    const t0 = ac.currentTime;
+    const o = ac.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(720, t0);
+    o.frequency.exponentialRampToValueAtTime(980, t0 + 0.16);
+    const tr = ac.createOscillator();
+    tr.frequency.value = 27;
+    const trG = ac.createGain();
+    trG.gain.value = 110;
+    tr.connect(trG).connect(o.frequency);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.22, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+    o.connect(g).connect(sfxGain);
+    o.start(t0); o.stop(t0 + 0.2);
+    tr.start(t0); tr.stop(t0 + 0.2);
+  },
+  chatter() {
+    if (!ac || throttled('chatter', 1600)) return;
+    for (let k = 0; k < 6; k++) tone(430 * (0.95 + Math.random() * 0.1), 380, 0.045, 'square', 0.09, k * 0.065);
+  },
+  meow() {
+    if (!ac || throttled('meow', 4000)) return;
+    vocal({ f0: 340, peak: 520, end: 230, dur: 0.55, gain: 0.5 });
+  },
+  mrrow() {
+    if (!ac || throttled('mrrow', 700)) return;
+    vocal({ f0: 560, peak: 640, end: 170, dur: 0.4, gain: 0.6 });
   },
   scratch() {
     if (!ac || throttled('scratch', 120)) return;
@@ -715,6 +818,7 @@ document.getElementById('dbg').addEventListener('click', () => {
 });
 document.getElementById('toss').addEventListener('click', () => {
   lk.lk_cat_toss(sim); // edge-fall rescue: lob the cat back in over the front
+  sfx.mrrow(); // startled protest
 });
 
 // --- settings panel --------------------------------------------------------
@@ -775,6 +879,13 @@ function frame(now) {
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
       const ev = code >>> 24;
+      if (ev === 1) {
+        // cat vocals ride the brain's state changes
+        const to = code & 0xff;
+        if (to === 1) sfx.chirp(); // lock-on
+        if (to === 3) sfx.chatter(); // windup excitement
+        if (to === 6) sfx.meow(); // bored: "hey, keep playing"
+      }
       if (ev === 2) sfx.boing();
       if (ev === 3) sfx.thunk();
       if (ev === 4) sfx.crash();
@@ -804,6 +915,7 @@ function frame(now) {
   let catPos = null;
   let hudAct = -1;
   let catOrdinal = 0;
+  let anyLoaf = false;
   for (let i = 0; i < count; i++) {
     const o = i * FLOATS_PER_BODY;
     if (data[o] === 3) {
@@ -824,6 +936,7 @@ function frame(now) {
       // ambient poses: idle cats live their act; bored cats sulk in a sit;
       // stalking cats with the creep hint drop into the hunt-walk crouch
       const pose = st === 6 ? 0 : st === 0 && act !== 3 ? act : -1;
+      if (pose === 2) anyLoaf = true;
       const crouch = st === 2 && act === 1;
       if (view.prev) {
         const vx = x - view.prev[0], vz = z - view.prev[2];
@@ -912,6 +1025,7 @@ function frame(now) {
     }
   }
 
+  setPurr(anyLoaf); // a loafing cat purrs
   tickPuffs(frameDt / 1000);
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
@@ -1000,6 +1114,8 @@ window.__lk = {
     return [r.left + fx * r.width, r.top + fy * r.height];
   },
   score: () => lk.lk_score(sim),
+  sfx,
+  setPurr,
   laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
   cat: () => {
     const count = lk.lk_body_count(sim);
