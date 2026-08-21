@@ -21,6 +21,7 @@
   #pops { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
   .pop { position: absolute; font: 800 20px system-ui, sans-serif; color: #7dff8a; text-shadow: 0 2px 4px #000;
          animation: rise 0.9s ease-out forwards; }
+  .pop.big { font-size: 32px; color: #ffd75e; animation-duration: 1.2s; }
   @keyframes rise { to { transform: translateY(-60px); opacity: 0; } }
   .ctl { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 4px); z-index: 5;
          width: 44px; height: 44px; border-radius: 10px; border: 1px solid #3a3644;

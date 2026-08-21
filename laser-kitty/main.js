@@ -146,6 +146,8 @@ function bodyColor(i, cls, dims, py) {
 
 let meshes = [];
 let debugLook = false;
+// screen shake: feedback punctuation, not camera motion — decays fast
+let shake = 0;
 // position-hashed radial displacement: cheap fur/fuzz/foliage. Hashing on
 // position (not index) keeps UV-seam vertices together — no cracks.
 function roughen(geo, amt) {
@@ -548,7 +550,11 @@ const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
 const ZOOM_MIN = 0.7, ZOOM_MAX = 2.4;
 let zoom = 1;
 function applyLook(bob = 0) {
-  camera.position.set(EYE.x, EYE.y + bob, EYE.z);
+  camera.position.set(
+    EYE.x + (Math.random() - 0.5) * shake * 0.06,
+    EYE.y + bob + (Math.random() - 0.5) * shake * 0.05,
+    EYE.z
+  );
   const f = new THREE.Vector3(
     Math.sin(lookYaw) * Math.cos(lookPitch),
     Math.sin(lookPitch),
@@ -950,19 +956,70 @@ const sfx = {
   },
 };
 
+// --- comedy layer: mickey-mousing (research/audio.md — sound is half the
+// physics joke) ------------------------------------------------------------
+let whistleCount = 0;
+function startWhistle(view) {
+  if (!ac || whistleCount >= 2 || view.whistle) return;
+  const o = ac.createOscillator();
+  o.type = 'triangle';
+  const g = ac.createGain();
+  g.gain.value = 0.1;
+  o.connect(g).connect(sfxGain);
+  o.start();
+  view.whistle = { o, g };
+  whistleCount++;
+}
+function stopWhistle(view) {
+  if (!view.whistle) return;
+  const w = view.whistle;
+  view.whistle = null;
+  whistleCount--;
+  w.g.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.06);
+  w.o.stop(ac.currentTime + 0.08);
+}
+// dizzy stars for the post-tumble compose-yourself beat
+const starTex = new THREE.CanvasTexture(
+  (() => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const g = c.getContext('2d');
+    g.translate(16, 16);
+    g.fillStyle = '#ffe86b';
+    g.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const r = k % 2 ? 5 : 12;
+      const a = (k * Math.PI) / 5 - Math.PI / 2;
+      g[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r);
+    }
+    g.fill();
+    return c;
+  })()
+);
+function makeStars() {
+  const grp = new THREE.Group();
+  for (let k = 0; k < 3; k++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTex, depthWrite: false }));
+    s.scale.setScalar(0.055);
+    grp.add(s);
+  }
+  grp.visible = false;
+  scene.add(grp);
+  return grp;
+}
 // --- HUD + buttons ---------------------------------------------------------
 const scoreEl = document.getElementById('score');
 const stateEl = document.getElementById('state');
 const meterEl = document.getElementById('meterfill');
 const popsEl = document.getElementById('pops');
-function popScore(text) {
+function popScore(text, big = false) {
   const div = document.createElement('div');
-  div.className = 'pop';
+  div.className = big ? 'pop big' : 'pop';
   div.textContent = text;
   div.style.left = `${30 + Math.random() * 40}%`;
   div.style.top = '28%';
   popsEl.appendChild(div);
-  setTimeout(() => div.remove(), 900);
+  setTimeout(() => div.remove(), big ? 1200 : 900);
 }
 
 function applyLookMode() {
@@ -978,7 +1035,11 @@ function rebuildSim() {
   sim = newSim();
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
-  for (const v of catViews.values()) scene.remove(v.group);
+  for (const v of catViews.values()) {
+    stopWhistle(v);
+    if (v.stars) scene.remove(v.stars);
+    scene.remove(v.group);
+  }
   catViews.clear();
 }
 document.getElementById('reset').addEventListener('click', () => {
@@ -1070,7 +1131,9 @@ function frame(now) {
       if (ev === 3 || ev === 4) {
         const chain = (code >> 20) & 0xf;
         const label = ev === 4 ? 'CRASH ' : '';
-        popScore(`${label}+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
+        popScore(`${label}+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, chain >= 4 || ev === 4);
+        if (chain >= 4) shake = Math.max(shake, 0.5 + chain * 0.06);
+        if (ev === 4) shake = Math.max(shake, 0.5);
         const prop = (code >>> 12) & 0xff;
         if (meshes[prop]) {
           burstPuffs(meshes[prop].position);
@@ -1084,7 +1147,8 @@ function frame(now) {
         // structural collapse: the compound fell apart into its members
         const prop = (code >>> 12) & 0xff;
         const chain = (code >> 20) & 0xf;
-        popScore(`CRUNCH +${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`);
+        popScore(`CRUNCH +${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, true);
+        shake = Math.max(shake, 1.0);
         const m = meshes[prop];
         if (m) {
           burstPuffs(m.position);
@@ -1178,10 +1242,50 @@ function frame(now) {
         view.head.position.z = pose === 1 ? 0.17 : crouch ? 0.24 : 0.2;
         view.body.position.y = pose === 2 || crouch ? -0.02 : 0.02;
       }
+      // --- comedy beats -------------------------------------------------
+      const vy = view.prev ? (y - view.prev[1]) * 60 : 0;
+      if (st === 4) {
+        // slide whistle rides the pounce arc: pitch tracks altitude
+        startWhistle(view);
+        if (view.whistle) view.whistle.o.frequency.value = 320 + Math.max(0, y) * 520;
+      } else if (view.lastSt === 4) {
+        stopWhistle(view);
+        if ((view.lastVy ?? 0) < -2.0) {
+          // hard landing: tumble roll, dizzy stars, a bonk
+          view.tumbleT = 0;
+          view.starT = 2.0;
+          sfx.impact(view.group);
+        }
+      }
+      if (st === 7 && now - (view.lastPuff ?? 0) > 110) {
+        // zoomies kick up dust
+        view.lastPuff = now;
+        burstPuffs(new THREE.Vector3(x, y - 0.15, z));
+      }
+      if (view.tumbleT != null) {
+        view.tumbleT += frameDt / 450;
+        if (view.tumbleT >= 1) view.tumbleT = null;
+      }
+      if (!view.stars) view.stars = makeStars();
+      if (view.starT > 0) {
+        view.starT -= frameDt / 1000;
+        view.stars.visible = true;
+        view.stars.position.set(x, y + 0.3, z);
+        view.stars.children.forEach((s, k) => {
+          const a = now * 0.006 + (k * Math.PI * 2) / 3;
+          s.position.set(Math.cos(a) * 0.16, Math.sin(now * 0.01 + k) * 0.02, Math.sin(a) * 0.16);
+        });
+      } else {
+        view.stars.visible = false;
+      }
+      view.lastSt = st;
+      view.lastVy = vy;
       view.prev = [x, y, z];
       view.group.position.set(x, y, z);
       view.group.rotation.x =
-        pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : crouch ? 0.07 : st === 3 ? 0.14 : 0;
+        view.tumbleT != null
+          ? -Math.PI * 2 * view.tumbleT // full forward roll on a botched landing
+          : pose === 0 || pose === 1 ? -0.2 : pose === 4 ? 0.26 : crouch ? 0.07 : st === 3 ? 0.14 : 0;
       // windup: butt up, wiggling — the pounce telegraph
       view.group.rotation.y = view.facing + (st === 3 ? Math.sin(now * 0.045) * 0.24 : 0);
       view.group.rotation.z = view.lean ?? 0;
@@ -1214,6 +1318,8 @@ function frame(now) {
   }
 
   setPurr(anyLoaf); // a loafing cat purrs
+  shake *= 0.85;
+  if (shake < 0.02) shake = 0;
   tickPuffs(frameDt / 1000);
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
