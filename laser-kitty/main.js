@@ -12,7 +12,7 @@ const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: true, sound: true };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: true, sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
@@ -1693,6 +1693,8 @@ const stateEl = document.getElementById('state');
 const meterEl = document.getElementById('meterfill');
 const popsEl = document.getElementById('pops');
 function popScore(text, big = false) {
+  // score call-outs cover the carnage mid-chaos — off unless asked for
+  if (!cfg.pops) return;
   const div = document.createElement('div');
   div.className = big ? 'pop big' : 'pop';
   div.textContent = text;
@@ -1779,6 +1781,12 @@ soundEl.addEventListener('change', () => {
   cfg.sound = soundEl.checked;
   saveCfg();
   if (sfxGain) sfxGain.gain.value = cfg.sound ? 0.5 : 0;
+});
+const popsCk = document.getElementById('s-pops');
+popsCk.checked = cfg.pops;
+popsCk.addEventListener('change', () => {
+  cfg.pops = popsCk.checked;
+  saveCfg();
 });
 const shadowsEl = document.getElementById('s-shadows');
 shadowsEl.checked = cfg.shadows;
