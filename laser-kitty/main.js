@@ -665,6 +665,26 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
       score2.position.set(-0.04 + k2 * 0.04, 0.014, 0);
       m.add(score2);
     }
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.02) < 0.003 && Math.abs(b - 0.16) < 0.004 && Math.abs(c - 0.16) < 0.004) {
+    // dartboard: rings and a bullseye on both faces (either wall)
+    m = new THREE.Group();
+    for (const fx of [a + 0.002, -a - 0.002]) {
+      const face = new THREE.Group();
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.16, 20), toonMat(0x2c2018));
+      face.add(disc);
+      const r1 = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.13, 20), toonMat(0xc94f3f));
+      r1.position.z = 0.002;
+      face.add(r1);
+      const r2 = new THREE.Mesh(new THREE.RingGeometry(0.045, 0.075, 20), toonMat(0x3f7ac9));
+      r2.position.z = 0.002;
+      face.add(r2);
+      const bull = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), toonMat(0x62e08a));
+      bull.position.z = 0.004;
+      face.add(bull);
+      face.rotation.y = fx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      face.position.x = fx;
+      m.add(face);
+    }
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
@@ -1823,28 +1843,28 @@ function frame(now) {
         if (to === 6) sfx.meow(); // bored: "hey, keep playing"
       }
       if (ev === 2) sfx.boing();
-      if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0xff]);
-      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0xff]));
-      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0xff]));
+      if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1ff]);
+      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0x1ff]));
+      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0xfff]));
       if (ev === 3 || ev === 4) {
-        const chain = (code >> 20) & 0xf;
+        const chain = (code >> 21) & 0x7;
         const label = ev === 4 ? 'CRASH ' : '';
         popScore(`${label}+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, chain >= 4 || ev === 4);
         if (chain >= 4) shake = Math.max(shake, 0.5 + chain * 0.06);
         if (ev === 4) shake = Math.max(shake, 0.5);
-        const prop = (code >>> 12) & 0xff;
+        const prop = (code >>> 12) & 0x1ff;
         if (meshes[prop]) {
           burstPuffs(meshes[prop].position);
           if (ev === 4) burstPuffs(meshes[prop].position); // double burst for a break
         }
       } else if (ev === 5) {
-        const piece = (code >>> 12) & 0xff;
+        const piece = (code >>> 12) & 0xfff;
         popScore('scratch!');
         if (meshes[piece]) burstPuffs(meshes[piece].position);
       } else if (ev === 6) {
         // structural collapse: the compound fell apart into its members
-        const prop = (code >>> 12) & 0xff;
-        const chain = (code >> 20) & 0xf;
+        const prop = (code >>> 12) & 0x1ff;
+        const chain = (code >> 21) & 0x7;
         popScore(`CRUNCH +${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, true);
         shake = Math.max(shake, 1.0);
         const m = meshes[prop];
