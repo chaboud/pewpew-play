@@ -2254,6 +2254,30 @@ shadowsEl.addEventListener('change', () => {
   });
 });
 
+// arrow keys pan too (founder): held arrows glide the vantage. Signs
+// follow view intent (right arrow reveals what's to the right), which
+// is the opposite of the drag gestures' content-follows-finger signs
+// because camera-right is world -x from this vantage.
+const heldArrows = new Set();
+addEventListener('keydown', (e) => {
+  if (e.key.startsWith('Arrow') && !e.target.closest?.('input, select')) {
+    heldArrows.add(e.key);
+    e.preventDefault();
+  }
+});
+addEventListener('keyup', (e) => heldArrows.delete(e.key));
+addEventListener('blur', () => heldArrows.clear());
+function arrowPan(dtMs) {
+  if (!heldArrows.size) return;
+  const s = (dtMs / 1000) * Math.max(2.2, FOCUS_D * 0.28);
+  if (heldArrows.has('ArrowRight')) panX -= s;
+  if (heldArrows.has('ArrowLeft')) panX += s;
+  if (heldArrows.has('ArrowUp')) panY += s;
+  if (heldArrows.has('ArrowDown')) panY -= s;
+  clampPan();
+  applyLook();
+}
+
 // --- fixed-tick loop -------------------------------------------------------
 let last = performance.now();
 let acc = 0;
@@ -2262,6 +2286,7 @@ function frame(now) {
   const frameDt = Math.min(now - last, 100);
   acc = Math.min(acc + frameDt, 100);
   last = now;
+  arrowPan(frameDt);
   updateLaserRay();
   while (acc >= DT) {
     lk.lk_step(sim, laserRay.ox, laserRay.oy, laserRay.oz, laserRay.dx, laserRay.dy, laserRay.dz, dotActive ? 1 : 0);
