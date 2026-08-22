@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k2'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k3'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -40,9 +40,14 @@ scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.45));
 const sun = new THREE.DirectionalLight(0xffe3b8, 1.35);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
-sun.shadow.radius = 6;
-sun.shadow.blurSamples = 12;
+// device-scaled shadow budget: the 4096 VSM blur pass is a desktop
+// luxury — on coarse-pointer devices (phones/tablets) it stuttered
+// iPhone Chrome (founder report, cafe/bar), so they get 2048 + a
+// lighter blur
+const coarsePointer = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('lite');
+sun.shadow.mapSize.set(coarsePointer ? 2048 : 4096, coarsePointer ? 2048 : 4096);
+sun.shadow.radius = coarsePointer ? 4 : 6;
+sun.shadow.blurSamples = coarsePointer ? 6 : 12;
 sun.shadow.camera.left = -4;
 sun.shadow.camera.right = 4;
 sun.shadow.camera.top = 4;
@@ -1598,11 +1603,17 @@ const EYE = new THREE.Vector3(0, 2.0, -5.6); // z re-derived per room
 const HOME_YAW = 0, HOME_PITCH = -0.26;
 let lookYaw = HOME_YAW;
 let lookPitch = HOME_PITCH;
+// camera smoothing (founder): inputs write targets, the frame loop
+// eases actuals toward them (~110ms critical damp). Every path — look
+// drag, two-finger pan/zoom, wheel, handle, arrows — inherits it.
+let yawT = HOME_YAW;
+let pitchT = HOME_PITCH;
 const YAW_LIM = 0.9;
 const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
 // bounded pinch zoom: scales the FOV. <1 = step back a little.
 const ZOOM_MIN = 0.7, ZOOM_MAX = 2.4;
 let zoom = 1;
+let zoomT = 1;
 // bounded two-finger pan: translates the vantage on its own x/y plane —
 // the user stays set back from the diorama (z never changes), so this is
 // sliding a window across the front of the dollhouse, not orbiting into
@@ -1610,11 +1621,12 @@ let zoom = 1;
 // the coming multi-room / multi-floor structures; on single rooms the
 // range is just "translation friendliness".
 let panX = 0, panY = 0;
+let panXT = 0, panYT = 0;
 let panYMin = -1.3, panYMax = 1.7; // widened per room in layoutRoom
 function panLimX() { return roomHX * ((cfg.room | 0) === 7 ? 0.8 : 0.55); }
 function clampPan() {
-  panX = Math.max(-panLimX(), Math.min(panLimX(), panX));
-  panY = Math.max(panYMin, Math.min(panYMax, panY));
+  panXT = Math.max(-panLimX(), Math.min(panLimX(), panXT));
+  panYT = Math.max(panYMin, Math.min(panYMax, panYT));
 }
 function applyLook(bob = 0) {
   camera.position.set(
@@ -1651,15 +1663,14 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 function setZoom(z) {
-  zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
-  resize();
+  zoomT = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
 }
 addEventListener('resize', resize);
 addEventListener(
   'wheel',
   (e) => {
     if (e.clientY >= pad.getBoundingClientRect().top) return;
-    setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    setZoom(zoomT * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
     e.preventDefault();
   },
   { passive: false }
@@ -1682,8 +1693,8 @@ panhand.addEventListener('pointermove', (e) => {
   if (!phPrev) return;
   const { h } = viewSize();
   const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * FOCUS_D) / h;
-  panX += (e.clientX - phPrev[0]) * wpp;
-  panY += (e.clientY - phPrev[1]) * wpp;
+  panXT += (e.clientX - phPrev[0]) * wpp;
+  panYT += (e.clientY - phPrev[1]) * wpp;
   clampPan();
   applyLook();
   phPrev = [e.clientX, e.clientY];
@@ -1735,7 +1746,7 @@ addEventListener('pointermove', (e) => {
     // (span ratio) and a pan term (centroid delta). The scene follows the
     // fingers — drag right, the room slides right, so the eye goes left.
     const span = pinchSpan();
-    if (pinchDist > 20) setZoom(zoom * (span / pinchDist));
+    if (pinchDist > 20) setZoom(zoomT * (span / pinchDist));
     pinchDist = span;
     const mid = pinchCentroid();
     if (pinchMid) {
@@ -1743,8 +1754,8 @@ addEventListener('pointermove', (e) => {
       const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * FOCUS_D) / h;
       // camera-right is world -x from this vantage, and clientY grows
       // downward — both flips cancel into straight += here
-      panX += (mid[0] - pinchMid[0]) * wpp;
-      panY += (mid[1] - pinchMid[1]) * wpp;
+      panXT += (mid[0] - pinchMid[0]) * wpp;
+      panYT += (mid[1] - pinchMid[1]) * wpp;
       clampPan();
       applyLook();
     }
@@ -1757,8 +1768,8 @@ addEventListener('pointermove', (e) => {
   const f = new THREE.Vector3();
   camera.getWorldDirection(f);
   f.applyQuaternion(q);
-  lookPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.asin(Math.max(-0.99, Math.min(0.99, f.y)))));
-  lookYaw = Math.max(-YAW_LIM, Math.min(YAW_LIM, Math.atan2(f.x, f.z)));
+  pitchT = Math.max(PITCH_MIN, Math.min(PITCH_MAX, Math.asin(Math.max(-0.99, Math.min(0.99, f.y)))));
+  yawT = Math.max(-YAW_LIM, Math.min(YAW_LIM, Math.atan2(f.x, f.z)));
   applyLook();
 });
 for (const ev of ['pointerup', 'pointercancel']) {
@@ -1805,8 +1816,8 @@ function layoutRoom() {
   // lights wired to the switch zones carry the interior instead
   sun.castShadow = cfg.shadows && r !== 7;
   sun.intensity = r === 7 ? 0.9 : 1.35;
-  panX = 0;
-  panY = 0;
+  panX = panXT = 0;
+  panY = panYT = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
   sun.shadow.camera.left = -b;
   sun.shadow.camera.right = b;
@@ -2185,10 +2196,10 @@ function rebuildSim() {
 document.getElementById('reset').addEventListener('click', () => {
   rebuildSim();
   // reset the view too — a stranded look with no way home was a playtest trap
-  lookYaw = HOME_YAW;
-  lookPitch = HOME_PITCH;
-  panX = 0;
-  panY = 0;
+  lookYaw = yawT = HOME_YAW;
+  lookPitch = pitchT = HOME_PITCH;
+  panX = panXT = 0;
+  panY = panYT = 0;
   setZoom(1);
   applyLook();
 });
@@ -2273,10 +2284,10 @@ addEventListener('blur', () => heldArrows.clear());
 function arrowPan(dtMs) {
   if (!heldArrows.size) return;
   const s = (dtMs / 1000) * Math.max(2.2, FOCUS_D * 0.28);
-  if (heldArrows.has('ArrowRight')) panX -= s;
-  if (heldArrows.has('ArrowLeft')) panX += s;
-  if (heldArrows.has('ArrowUp')) panY += s;
-  if (heldArrows.has('ArrowDown')) panY -= s;
+  if (heldArrows.has('ArrowRight')) panXT -= s;
+  if (heldArrows.has('ArrowLeft')) panXT += s;
+  if (heldArrows.has('ArrowUp')) panYT += s;
+  if (heldArrows.has('ArrowDown')) panYT -= s;
   clampPan();
   applyLook();
 }
@@ -2512,6 +2523,17 @@ function frame(now) {
   shake *= 0.85;
   if (shake < 0.02) shake = 0;
   tickPuffs(frameDt / 1000);
+  {
+    const ea = 1 - Math.exp(-frameDt / 110);
+    panX += (panXT - panX) * ea;
+    panY += (panYT - panY) * ea;
+    lookYaw += (yawT - lookYaw) * ea;
+    lookPitch += (pitchT - lookPitch) * ea;
+    if (Math.abs(zoomT - zoom) > 0.0004) {
+      zoom += (zoomT - zoom) * ea;
+      resize();
+    }
+  }
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
   const L = new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10);
