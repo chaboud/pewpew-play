@@ -34,6 +34,12 @@
   #reset { left: 10px; }
   #toss { left: 62px; font-size: 20px; }
   #dbg { right: 10px; font-size: 12px; letter-spacing: 0.06em; }
+  #panhand { position: fixed; right: 12px; bottom: calc(33vh + 16px); z-index: 5;
+             width: 46px; height: 46px; border-radius: 50%; border: 1px solid #3a3644;
+             background: rgba(30,27,38,0.8); color: #9ad; font: 700 20px system-ui, sans-serif;
+             display: flex; align-items: center; justify-content: center;
+             touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  #panhand:active { cursor: grabbing; border-color: #53c8d8; color: #53c8d8; }
   #dbg.on { border-color: #53c8d8; color: #53c8d8; }
   #gear { right: 62px; font-size: 19px; }
   #panel { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 54px); right: 10px; z-index: 6;
@@ -93,6 +99,7 @@
   <div id="meter"><div id="meterfill"></div></div>
 </div>
 <div id="pad"><div id="thumb"></div></div>
+<div id="panhand" aria-label="Drag to pan the view">&#10021;</div>
 <div id="pops"></div>
 <div id="tags"></div>
 <script type="module" src="main.js"></script>

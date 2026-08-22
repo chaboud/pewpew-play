@@ -842,6 +842,25 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     m.add(rim);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 8), toonMat(0x24221f));
     m.add(hub);
+  } else if (cls === 2 && shape === 0 && c < 0.035 && a >= 0.2 && b >= 0.14) {
+    // flatscreen TV, z-thin: bezel + glossy screen facing the couch
+    m = new THREE.Group();
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2a2732));
+    m.add(bezel);
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(a * 1.8, b * 1.8),
+      new THREE.MeshPhongMaterial({ color: 0x101a26, emissive: 0x11323e, shininess: 130, specular: 0xaaccdd })
+    );
+    screen.position.z = -c - 0.002;
+    screen.rotation.y = Math.PI;
+    m.add(screen);
+  } else if (cls === 0 && shape === 0 && (cfg.room | 0) === 7 && ((Math.abs(a - 0.04) < 0.005 && Math.abs(b - 1.25) < 0.01) || (Math.abs(b - 0.55) < 0.01 && Math.abs(c - 0.015) < 0.004))) {
+    // tower walls: paint by floor, so each level reads as its own home
+    const flr = Math.max(0, Math.floor(py / 2.6));
+    m = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      toonMat(new THREE.Color().setHSL((0.52 + flr * 0.115) % 1, 0.16, 0.62))
+    );
   } else if (cls === 2 && shape === 0 && Math.abs(gloss - 0.12) < 0.005) {
     // cardboard: every box the sim marks with the 0.12-gloss signature
     // reads as kraft brown with a packing-tape seam, not party pastel
@@ -1037,7 +1056,13 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
       color, shininess: 20 + gloss * 100, specular: 0xbbccdd,
     });
   } else if (cls !== 0 && gloss <= 0.1) {
-    mat = fuzzy ? toonMat(color) : toonMat(color, { map: fabricTex });
+    // soft furniture reads its hue from the sim tint: one upholstery
+    // library, thirty-six differently dressed apartments (and every
+    // older couch inherits a color too)
+    const fabCol = cls === 1 && tint !== undefined
+      ? new THREE.Color().setHSL((tint * 2.83) % 1, 0.42, 0.46)
+      : color;
+    mat = fuzzy ? toonMat(fabCol) : toonMat(fabCol, { map: fabricTex });
   } else if (cls === 1) {
     mat = toonMat(color, { map: woodTex });
   } else {
@@ -1053,6 +1078,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
 // --- render-side room dressing (no collision, pure decor) ------------------
 let decor = null;
 let lightOverlays = []; // per-zone darkness boxes (apartments)
+let floorLights = []; // per-floor switchable point lights (apartments)
 function buildDecor(hx, hz, kind) {
   if (decor) scene.remove(decor);
   decor = new THREE.Group();
@@ -1227,6 +1253,17 @@ function buildDecor(hx, hz, kind) {
         glow.position.set(sx, fy + 1.99, hz - 0.06);
         decor.add(glow);
       }
+      // a rug per cell: color says whose home this is
+      for (let c2 = 0; c2 < 4; c2++) {
+        const rug = new THREE.Mesh(
+          new THREE.CircleGeometry(0.62, 22),
+          toonMat(new THREE.Color().setHSL(((f * 4 + c2) * 0.083 + 0.02) % 1, 0.38, 0.42))
+        );
+        rug.rotation.x = -Math.PI / 2;
+        rug.position.set(-5.4 + 3.6 * c2, fy + 0.008, 0.35);
+        rug.receiveShadow = true;
+        decor.add(rug);
+      }
       // exit sign over this floor's stairwell doorway
       const gx = f === 0 ? -3.2 : f % 2 === 0 ? -3.15 : 3.15;
       const sign = new THREE.Mesh(
@@ -1236,8 +1273,21 @@ function buildDecor(hx, hz, kind) {
       sign.position.set(gx, fy + 1.22, 1.5);
       decor.add(sign);
     }
+    // interior light: one warm shadowless point per floor, wired to that
+    // floor's switch zone — a cat swatting the lights out actually takes
+    // the light with it. Founder direction for scale: replace N dynamic
+    // lights with a Minecraft-style volume light map (one texture sample
+    // per fragment) once cell counts climb further.
+    floorLights = [];
+    for (let f = 0; f < FLOORS; f++) {
+      const fl = new THREE.PointLight(0xffd9a8, 0.6, 5.5);
+      fl.position.set(0, f * PITCH + 1.7, -0.4);
+      decor.add(fl);
+      floorLights.push(fl);
+    }
   } else {
     lightOverlays = [];
+    floorLights = [];
   }
   if (kind === 8) {
     // the bar: neon sign, pendant lamps over the counter, a dartboard
@@ -1614,6 +1664,35 @@ addEventListener(
 resize();
 applyLook();
 
+// desktop pan handle: mice have no second finger. Dragging the handle
+// feeds the exact same pan math as the two-finger gesture; wheel zoom
+// already covers the pinch half.
+const panhand = document.getElementById('panhand');
+let phPrev = null;
+panhand.addEventListener('pointerdown', (e) => {
+  panhand.setPointerCapture(e.pointerId);
+  phPrev = [e.clientX, e.clientY];
+  e.stopPropagation();
+  e.preventDefault();
+});
+panhand.addEventListener('pointermove', (e) => {
+  if (!phPrev) return;
+  const { h } = viewSize();
+  const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * FOCUS_D) / h;
+  panX += (e.clientX - phPrev[0]) * wpp;
+  panY += (e.clientY - phPrev[1]) * wpp;
+  clampPan();
+  applyLook();
+  phPrev = [e.clientX, e.clientY];
+  e.stopPropagation();
+});
+for (const ev of ['pointerup', 'pointercancel']) {
+  panhand.addEventListener(ev, (e) => {
+    phPrev = null;
+    e.stopPropagation();
+  });
+}
+
 const lookRay = new THREE.Raycaster();
 const lookPts = new Map(); // pointerId -> [x, y] for look-area pointers
 let grabDir = null;
@@ -1633,7 +1712,7 @@ function pinchCentroid() {
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 addEventListener('pointerdown', (e) => {
-  if (e.target.closest && e.target.closest('button, #panel')) return;
+  if (e.target.closest && e.target.closest('button, #panel, #panhand')) return;
   if (e.clientY >= pad.getBoundingClientRect().top) return;
   if (lookPts.size >= 2) return;
   lookPts.set(e.pointerId, [e.clientX, e.clientY]);
@@ -1717,6 +1796,12 @@ function layoutRoom() {
   FOCUS_D = roomHZ + (r === 7 ? 10.4 : tall ? 5.3 : 2.5);
   panYMin = tall ? -2.4 : -1.3;
   panYMax = r === 7 ? 21.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7; // tower: pan to floor 9
+  // per-room light, first slice (founder: area/point lights, not a
+  // per-room sun): in the tower the global sun drops its shadow (one
+  // 2048 map over a 23m facade = smears) and dims, and per-floor point
+  // lights wired to the switch zones carry the interior instead
+  sun.castShadow = cfg.shadows && r !== 7;
+  sun.intensity = r === 7 ? 0.9 : 1.9;
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -2163,7 +2248,7 @@ shadowsEl.addEventListener('change', () => {
   cfg.shadows = shadowsEl.checked;
   saveCfg();
   renderer.shadowMap.enabled = cfg.shadows;
-  sun.castShadow = cfg.shadows;
+  sun.castShadow = cfg.shadows && (cfg.room | 0) !== 7;
   scene.traverse((o) => {
     if (o.isMesh) o.material.needsUpdate = true;
   });
@@ -2467,6 +2552,7 @@ function frame(now) {
   if (lightOverlays.length) {
     const off = lk.lk_lights_off(sim);
     lightOverlays.forEach((ov, zi) => (ov.visible = (off & (1 << zi)) !== 0));
+    floorLights.forEach((fl, zi) => (fl.intensity = (off & (1 << zi)) !== 0 ? 0.06 : 0.6));
   }
   const stName =
     catState === 0 && hudAct >= 0
