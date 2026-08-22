@@ -88,7 +88,13 @@
   <div class="row"><input type="range" id="s-destruct" min="0" max="2" step="0.1"><span class="val" id="v-destruct"></span></div>
   <label>Render quality</label>
   <div class="row"><input type="range" id="s-quality" min="0.75" max="2" step="0.25"><span class="val" id="v-quality"></span></div>
-  <label class="row" style="margin-top:10px"><input type="checkbox" id="s-shadows"> Shadows</label>
+  <label style="margin-top:10px">Shadows</label>
+  <div class="row"><select id="s-shadows" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;">
+    <option value="auto">Auto (fits device)</option>
+    <option value="soft">Soft &middot; high</option>
+    <option value="light">Light &middot; fast</option>
+    <option value="off">Off</option>
+  </select></div>
   <label class="row"><input type="checkbox" id="s-sound"> Sound</label>
   <label class="row"><input type="checkbox" id="s-pops"> Score pop-ups</label>
   <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live</div>
@@ -102,6 +108,6 @@
 <div id="panhand" aria-label="Drag to pan the view">&#10021;</div>
 <div id="pops"></div>
 <div id="tags"></div>
-<script type="module" src="main.js?v=k3"></script>
+<script type="module" src="main.js?v=k4"></script>
 </body>
 </html>

@@ -8,13 +8,15 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k3'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k4'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: true, sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
+// older saves stored shadows as a boolean; fold into the mode string
+if (typeof cfg.shadows === 'boolean') cfg.shadows = cfg.shadows ? 'auto' : 'off';
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
 function newSim() {
   const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight, cfg.room | 0);
@@ -28,7 +30,7 @@ let roomHX = 3, roomHZ = 3;
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.quality));
-renderer.shadowMap.enabled = cfg.shadows;
+renderer.shadowMap.enabled = cfg.shadows !== 'off';
 renderer.shadowMap.type = THREE.VSMShadowMap; // blurred soft pass
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x272138);
@@ -40,21 +42,41 @@ scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.45));
 const sun = new THREE.DirectionalLight(0xffe3b8, 1.35);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
-// device-scaled shadow budget: the 4096 VSM blur pass is a desktop
-// luxury — on coarse-pointer devices (phones/tablets) it stuttered
-// iPhone Chrome (founder report, cafe/bar), so they get 2048 + a
-// lighter blur
-const coarsePointer = matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('lite');
-sun.shadow.mapSize.set(coarsePointer ? 2048 : 4096, coarsePointer ? 2048 : 4096);
-sun.shadow.radius = coarsePointer ? 4 : 6;
-sun.shadow.blurSamples = coarsePointer ? 6 : 12;
+// shadow mode lives in the gear menu (founder): auto = device-scaled
+// (the 4096 VSM blur pass is a desktop luxury — it stuttered iPhone
+// Chrome, so coarse-pointer devices take 2048 + a lighter blur, and
+// ?lite=1 forces that path), soft/light pin it, off kills shadows.
+function shadowLite() {
+  if (cfg.shadows === 'soft') return false;
+  if (cfg.shadows === 'light') return true;
+  return matchMedia('(pointer: coarse)').matches || new URLSearchParams(location.search).has('lite');
+}
+function applyShadowMode() {
+  const on = cfg.shadows !== 'off';
+  const lite = shadowLite();
+  renderer.shadowMap.enabled = on;
+  sun.castShadow = on && (cfg.room | 0) !== 7; // the tower stays shadowless
+  const sz = lite ? 2048 : 4096;
+  if (sun.shadow.mapSize.x !== sz) {
+    sun.shadow.mapSize.set(sz, sz);
+    if (sun.shadow.map) {
+      sun.shadow.map.dispose();
+      sun.shadow.map = null;
+    }
+  }
+  sun.shadow.radius = lite ? 4 : 6;
+  sun.shadow.blurSamples = lite ? 6 : 12;
+  scene.traverse((o) => {
+    if (o.isMesh && o.material) o.material.needsUpdate = true;
+  });
+}
+applyShadowMode();
 sun.shadow.camera.left = -4;
 sun.shadow.camera.right = 4;
 sun.shadow.camera.top = 4;
 sun.shadow.camera.bottom = -4;
 sun.shadow.camera.far = 14;
 sun.shadow.bias = -0.0004; // VSM wants a much smaller bias
-sun.castShadow = cfg.shadows;
 scene.add(sun);
 const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
 lampGlow.position.set(2.2, 1.35, -1.6); // the floor lamp is "on"
@@ -1814,7 +1836,7 @@ function layoutRoom() {
   // per-room sun): in the tower the global sun drops its shadow (one
   // 2048 map over a 23m facade = smears) and dims, and per-floor point
   // lights wired to the switch zones carry the interior instead
-  sun.castShadow = cfg.shadows && r !== 7;
+  applyShadowMode();
   sun.intensity = r === 7 ? 0.9 : 1.35;
   panX = panXT = 0;
   panY = panYT = 0;
@@ -2257,15 +2279,11 @@ popsCk.addEventListener('change', () => {
   saveCfg();
 });
 const shadowsEl = document.getElementById('s-shadows');
-shadowsEl.checked = cfg.shadows;
+shadowsEl.value = cfg.shadows;
 shadowsEl.addEventListener('change', () => {
-  cfg.shadows = shadowsEl.checked;
+  cfg.shadows = shadowsEl.value;
   saveCfg();
-  renderer.shadowMap.enabled = cfg.shadows;
-  sun.castShadow = cfg.shadows && (cfg.room | 0) !== 7;
-  scene.traverse((o) => {
-    if (o.isMesh) o.material.needsUpdate = true;
-  });
+  applyShadowMode();
 });
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
