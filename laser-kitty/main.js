@@ -213,6 +213,22 @@ const tiffanyTex = makeCanvas(128, 64, (g) => {
   g.strokeRect(0, 1, 128, 62);
 });
 tiffanyTex.wrapS = THREE.RepeatWrapping;
+// soccer ball: white with black pentagon patches
+const soccerTex = makeCanvas(128, 64, (g) => {
+  g.fillStyle = '#eef0ee';
+  g.fillRect(0, 0, 128, 64);
+  g.fillStyle = '#22221f';
+  for (const [px, py2, r] of [[16, 18, 9], [58, 40, 10], [98, 14, 9], [36, 54, 8], [82, 58, 8], [122, 44, 9], [4, 44, 8]]) {
+    g.beginPath();
+    for (let k = 0; k < 5; k++) {
+      const a2 = (k / 5) * Math.PI * 2 - Math.PI / 2;
+      g[k ? 'lineTo' : 'moveTo'](px + Math.cos(a2) * r, py2 + Math.sin(a2) * r);
+    }
+    g.closePath();
+    g.fill();
+  }
+});
+soccerTex.wrapS = THREE.RepeatWrapping;
 // small deterministic canvas "paintings" keyed by body index
 function artTex(i) {
   let s = (i * 2654435761) >>> 0;
@@ -706,6 +722,138 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     disp.position.set(0.08, 0.005, -c - 0.002);
     disp.rotation.y = Math.PI;
     m.add(disp);
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.075) < 0.003) {
+    // basketball: pebbled orange with black seams
+    m = new THREE.Group();
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(a, 16, 13), toonMat(0xd06a28));
+    m.add(ball);
+    for (const rx of [0, Math.PI / 2]) {
+      const seam = new THREE.Mesh(new THREE.TorusGeometry(a, 0.0022, 6, 24), toonMat(0x2a231d));
+      seam.rotation.x = rx;
+      m.add(seam);
+    }
+    const seam3 = new THREE.Mesh(new THREE.TorusGeometry(a * 0.72, 0.0022, 6, 22), toonMat(0x2a231d));
+    seam3.rotation.x = Math.PI / 2;
+    seam3.position.y = a * 0.68;
+    m.add(seam3);
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.068) < 0.003) {
+    // soccer ball: white with pentagon patches
+    m = new THREE.Mesh(new THREE.SphereGeometry(a, 16, 13), toonMat(0xffffff, { map: soccerTex }));
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.032) < 0.0025) {
+    // tennis ball: fuzzy optic yellow
+    m = new THREE.Mesh(roughen(new THREE.SphereGeometry(a, 14, 11), 0.1), toonMat(0xcfe04a));
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.021) < 0.002) {
+    // golf ball: bright white, hard specular
+    m = new THREE.Mesh(
+      new THREE.SphereGeometry(a, 12, 10),
+      new THREE.MeshPhongMaterial({ color: 0xf4f4ee, shininess: 130, specular: 0xffffff })
+    );
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.016) < 0.002 && Math.abs(b - 0.48) < 0.02 && Math.abs(c - 0.035) < 0.004) {
+    // leaning lawn implements: pole + rake/shovel/broom head by index
+    // (dynamic cousins of the wall-rack statics — the group follows the
+    // body quaternion, so the sim's spawn tilt reads as a lean for free)
+    m = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, b * 1.9, 6), toonMat(0x9a7548, { map: woodTex }));
+    m.add(pole);
+    const v3 = i % 3;
+    if (v3 === 0) {
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.14), toonMat(0x8a8f9e));
+      head.position.y = -b * 0.92;
+      m.add(head);
+      for (let k2 = 0; k2 < 5; k2++) {
+        const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.05, 4), toonMat(0x8a8f9e));
+        tine.position.set(0, -b * 0.92 - 0.03, -0.06 + k2 * 0.03);
+        m.add(tine);
+      }
+    } else if (v3 === 1) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.12, 0.09), toonMat(0x8a8f9e));
+      blade.position.y = -b * 0.95;
+      m.add(blade);
+    } else {
+      const brush = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.11), toonMat(0xc9a86a));
+      brush.position.y = -b * 0.95;
+      m.add(brush);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.012) < 0.0015 && Math.abs(b - 0.44) < 0.02 && Math.abs(c - 0.012) < 0.0015) {
+    // golf club: steel shaft, grip, angled head at the floor end
+    m = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, b * 1.9, 6), toonMat(0xb8bcc4));
+    m.add(shaft);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.16, 6), toonMat(0x2a2732));
+    grip.position.y = b * 0.8;
+    m.add(grip);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.055), toonMat(0x8a8f9e));
+    head.position.set(0, -b * 0.95, 0.02);
+    head.rotation.x = 0.3;
+    m.add(head);
+  } else if (shape === 0 && Math.abs(a - 0.085) < 0.004 && Math.abs(b - 0.004) < 0.0015 && Math.abs(c - 0.026) < 0.003) {
+    // handsaw: tapered steel blade + wooden grip
+    m = new THREE.Group();
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(a * 1.6, 0.004, c * 1.7), new THREE.MeshPhongMaterial({ color: 0xc4c8ce, shininess: 110, specular: 0xffffff }));
+    blade.position.x = -a * 0.25;
+    m.add(blade);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.014, 0.036), toonMat(0x8a5c34, { map: woodTex }));
+    grip.position.set(a * 0.72, 0.004, 0);
+    m.add(grip);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.24) < 0.005 && Math.abs(b - 0.07) < 0.005 && Math.abs(c - 0.3) < 0.005) {
+    // riding mower deck: green enamel with a dark skirt
+    m = new THREE.Group();
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), new THREE.MeshPhongMaterial({ color: 0x2f7a34, shininess: 70, specular: 0xaaccaa }));
+    m.add(deck);
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(a * 2.1, b * 0.8, c * 2.05), toonMat(0x24251f));
+    skirt.position.y = -b * 0.7;
+    m.add(skirt);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.13) < 0.004 && Math.abs(b - 0.08) < 0.004 && Math.abs(c - 0.14) < 0.004) {
+    // riding mower hood: green with a grille stripe
+    m = new THREE.Group();
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), new THREE.MeshPhongMaterial({ color: 0x2f7a34, shininess: 70, specular: 0xaaccaa }));
+    m.add(hood);
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.5, b * 1.1), toonMat(0xd8c93a));
+    stripe.position.set(0, 0, -c - 0.002);
+    stripe.rotation.y = Math.PI;
+    m.add(stripe);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.055) < 0.003 && Math.abs(b - 0.21) < 0.01 && Math.abs(c - 0.055) < 0.003) {
+    // golf bag: red barrel with a shoulder strap and top rim
+    m = new THREE.Group();
+    const bag = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.05, a * 0.95, b * 2, 12), toonMat(0xb03a34));
+    m.add(bag);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(a * 0.95, 0.008, 6, 14), toonMat(0x2a2732));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = b;
+    m.add(rim);
+    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.012, b * 1.4, 0.03), toonMat(0x2a2732));
+    strap.position.set(a + 0.008, 0, 0);
+    strap.rotation.z = 0.12;
+    m.add(strap);
+  } else if (cls === 1 && shape === 0 && ((Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.11) < 0.004 && Math.abs(c - 0.11) < 0.004) || (Math.abs(a - 0.04) < 0.003 && Math.abs(b - 0.07) < 0.003 && Math.abs(c - 0.07) < 0.003))) {
+    // riding mower wheels: chunky rubber cylinders with a hub
+    m = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(b, b, a * 2, 14), toonMat(0x24221f));
+    tire.rotation.z = Math.PI / 2;
+    m.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(b * 0.45, b * 0.45, a * 2.05, 10), toonMat(0xd8c93a));
+    hub.rotation.z = Math.PI / 2;
+    m.add(hub);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.06) < 0.003 && Math.abs(b - 0.012) < 0.002 && Math.abs(c - 0.06) < 0.003) {
+    // riding mower steering wheel: black rim + spoke hub
+    m = new THREE.Group();
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(a * 0.85, 0.009, 6, 16), toonMat(0x24221f));
+    rim.rotation.x = Math.PI / 2;
+    m.add(rim);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 8), toonMat(0x24221f));
+    m.add(hub);
+  } else if (cls === 2 && shape === 0 && Math.abs(gloss - 0.12) < 0.005) {
+    // cardboard: every box the sim marks with the 0.12-gloss signature
+    // reads as kraft brown with a packing-tape seam, not party pastel
+    m = new THREE.Group();
+    const hcard = ((i * 2654435761) >>> 0) / 4294967296;
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      toonMat(new THREE.Color().setHSL(0.075 + hcard * 0.02, 0.42, 0.52 + hcard * 0.1))
+    );
+    m.add(box);
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(a * 0.36, b * 2.01, c * 2.01), toonMat(0xc2a06a));
+    m.add(tape);
   }
   if (m) {
     m.traverse((o) => {
