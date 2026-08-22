@@ -503,6 +503,54 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     const t = new THREE.Mesh(new THREE.TorusGeometry(a * 0.62, b * 0.95, 10, 20), toonMat(0x2b2926));
     t.rotation.x = Math.PI / 2;
     m.add(t);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.028) < 0.003 && Math.abs(b - 0.52) < 0.01 && Math.abs(c - 0.26) < 0.01) {
+    // apartment door: panels + brass knob (break it down; knobs later)
+    m = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x8a6a48, { map: woodTex }));
+    m.add(slab);
+    for (const py2 of [0.16, -0.2]) {
+      for (const sx2 of [-1, 1]) {
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(c * 1.6, py2 > 0 ? 0.3 : 0.36), toonMat(0x76583a));
+        panel.rotation.y = sx2 > 0 ? Math.PI / 2 : -Math.PI / 2;
+        panel.position.set(sx2 * (a + 0.002), py2, 0);
+        m.add(panel);
+      }
+    }
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshPhongMaterial({ color: 0xc9a227, shininess: 120, specular: 0xffe8b0 }));
+    knob.position.set(a + 0.014, -0.03, c * 0.7);
+    m.add(knob);
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.016) < 0.002 && Math.abs(b - 0.035) < 0.004) {
+    // light switch: wall plate + rocker
+    m = new THREE.Group();
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xe8e4da));
+    m.add(plate);
+    const rocker = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.02, 0.012), toonMat(0xcfc9bc));
+    rocker.position.x = a + 0.004;
+    m.add(rocker);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.24) < 0.008 && Math.abs(b - 0.42) < 0.01) {
+    // jukebox: arch, glowing lights arc, grille
+    m = new THREE.Group();
+    const bodyM = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), new THREE.MeshPhongMaterial({ color: 0x5a2e22, shininess: 70, specular: 0xcc9977 }));
+    m.add(bodyM);
+    const arch = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.98, a * 0.98, c * 1.6, 20, 1, false, 0, Math.PI), new THREE.MeshPhongMaterial({ color: 0x6a3628, shininess: 70, specular: 0xcc9977 }));
+    arch.rotation.x = Math.PI / 2;
+    arch.position.y = b;
+    m.add(arch);
+    for (let k2 = 0; k2 < 5; k2++) {
+      const ang = Math.PI * (0.15 + 0.175 * k2);
+      const cols = [0xff5a4a, 0xffc84a, 0x62e08a, 0x5ab8ff, 0xc98aff];
+      const lt = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), new THREE.MeshBasicMaterial({ color: cols[k2] }));
+      lt.position.set(Math.cos(ang) * a * 0.8, b + Math.sin(ang) * a * 0.75, -c - 0.004);
+      m.add(lt);
+    }
+    const grille = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.4, 0.22), toonMat(0x2c2018));
+    grille.rotation.y = Math.PI;
+    grille.position.set(0, -0.12, -c - 0.002);
+    m.add(grille);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.3, 0.12), new THREE.MeshBasicMaterial({ color: 0x3a4c66 }));
+    win.rotation.y = Math.PI;
+    win.position.set(0, 0.22, -c - 0.003);
+    m.add(win);
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
@@ -586,6 +634,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
 
 // --- render-side room dressing (no collision, pure decor) ------------------
 let decor = null;
+let lightOverlays = []; // per-zone darkness boxes (apartments)
 function buildDecor(hx, hz, kind) {
   if (decor) scene.remove(decor);
   decor = new THREE.Group();
@@ -688,6 +737,57 @@ function buildDecor(hx, hz, kind) {
     }
     peg.position.set(-2.6, 1.35, hz - 0.005);
     decor.add(peg);
+  }
+  if (kind === 7) {
+    // per-floor darkness: a smoked box swallows a zone whose lights are
+    // off (toggled by cat-swat on the wall switches; polled each frame)
+    lightOverlays = [];
+    for (const [cy, hh] of [[0.63, 1.22], [1.92, 1.2], [3.26, 1.28]]) {
+      const ov = new THREE.Mesh(
+        new THREE.BoxGeometry(7.2, hh, 3.95),
+        new THREE.MeshBasicMaterial({ color: 0x05040a, transparent: true, opacity: 0.62, depthWrite: false })
+      );
+      ov.position.set(0, cy, -0.425);
+      ov.renderOrder = 5;
+      ov.visible = false;
+      decor.add(ov);
+      lightOverlays.push(ov);
+    }
+  } else {
+    lightOverlays = [];
+  }
+  if (kind === 8) {
+    // the bar: neon sign, pendant lamps over the counter, a dartboard
+    const neon = new THREE.Group();
+    const tube = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.02, 8, 24), new THREE.MeshBasicMaterial({ color: 0xff4fa0 }));
+    neon.add(tube);
+    const tube2 = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.015, 8, 20), new THREE.MeshBasicMaterial({ color: 0x53e0d8 }));
+    neon.add(tube2);
+    neon.position.set(-1.4, 2.15, hz - 0.03);
+    decor.add(neon);
+    for (const px of [-2.4, -1.4, -0.4]) {
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6), toonMat(0x2a2530));
+      cord.position.set(px, 2.35, 2.35);
+      decor.add(cord);
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.11, 0.1, 12, 1, true), new THREE.MeshPhongMaterial({ color: 0x2f5a3e, shininess: 60, specular: 0x9adfb0, side: THREE.DoubleSide }));
+      shade.position.set(px, 2.06, 2.35);
+      decor.add(shade);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffe2a8 }));
+      bulb.position.set(px, 2.02, 2.35);
+      decor.add(bulb);
+    }
+    const board = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.16, 20), toonMat(0x2c2018));
+    board.add(disc);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.09, 20), toonMat(0xc94f3f));
+    ring.position.z = 0.002;
+    board.add(ring);
+    const bull = new THREE.Mesh(new THREE.CircleGeometry(0.02, 12), toonMat(0x62e08a));
+    bull.position.z = 0.004;
+    board.add(bull);
+    board.rotation.y = -Math.PI / 2;
+    board.position.set(hx - 0.02, 1.7, -1.2);
+    decor.add(board);
   }
   scene.add(decor);
 }
@@ -938,11 +1038,11 @@ let zoom = 1;
 // the coming multi-room / multi-floor structures; on single rooms the
 // range is just "translation friendliness".
 let panX = 0, panY = 0;
+let panYMin = -1.3, panYMax = 1.7; // widened per room in layoutRoom
 function panLimX() { return roomHX * 0.55; }
-const PAN_Y_MIN = -1.1, PAN_Y_MAX = 1.5;
 function clampPan() {
   panX = Math.max(-panLimX(), Math.min(panLimX(), panX));
-  panY = Math.max(PAN_Y_MIN, Math.min(PAN_Y_MAX, panY));
+  panY = Math.max(panYMin, Math.min(panYMax, panY));
 }
 function applyLook(bob = 0) {
   camera.position.set(
@@ -1089,10 +1189,13 @@ function layoutRoom() {
   roomHZ = lk.lk_room_hz(sim);
   // multi-level structures (home, apartments) are tall: step back and up
   // so the dollhouse face reads whole instead of edge-on plate slices
-  const tall = (cfg.room | 0) >= 6;
+  const r = cfg.room | 0;
+  const tall = r === 6 || r === 7;
   EYE.z = -(roomHZ + (tall ? 4.6 : 2.6));
   EYE.y = tall ? 2.6 : 2.0;
   FOCUS_D = roomHZ + (tall ? 4.5 : 2.5);
+  panYMin = tall ? -1.9 : -1.3;
+  panYMax = tall ? 3.2 : 1.7;
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -1682,6 +1785,13 @@ function frame(now) {
         view.head.position.z = ease(view.head.position.z, pose === 1 ? 0.17 : crouch ? 0.24 : 0.2, 0.2);
         view.body.position.y = ease(view.body.position.y, pose === 2 || crouch ? -0.02 : 0.02, 0.2);
       }
+      // slinky stretch: the torso lengthens with speed (fast cats pour)
+      const spd = view.prev
+        ? Math.hypot(x - view.prev[0], z - view.prev[2]) * 60
+        : 0;
+      const stretch = Math.min(1.38, 1 + spd * 0.13);
+      view.body.scale.z = ease(view.body.scale.z, 1.5 * stretch, 0.15);
+      view.body.scale.y = ease(view.body.scale.y, 0.92 / Math.sqrt(stretch), 0.15);
       // --- comedy beats -------------------------------------------------
       const vy = view.prev ? (y - view.prev[1]) * 60 : 0;
       if (st !== 4 && view.lastSt === 4 && (view.lastVy ?? 0) < -2.0) {
@@ -1824,6 +1934,10 @@ function frame(now) {
   }
 
   scoreEl.textContent = lk.lk_score(sim);
+  if (lightOverlays.length) {
+    const off = lk.lk_lights_off(sim);
+    lightOverlays.forEach((ov, zi) => (ov.visible = (off & (1 << zi)) !== 0));
+  }
   const stName =
     catState === 0 && hudAct >= 0
       ? `IDLE·${AMB_NAMES[hudAct] ?? '?'}`
