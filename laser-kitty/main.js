@@ -878,7 +878,7 @@ function buildDecor(hx, hz, kind) {
     // per-floor darkness: a smoked box swallows a zone whose lights are
     // off (toggled by cat-swat on the wall switches; polled each frame)
     lightOverlays = [];
-    for (const [cy, hh] of [[0.63, 1.22], [1.92, 1.2], [3.26, 1.28]]) {
+    for (const [cy, hh] of [[1.27, 2.5], [3.85, 2.5], [6.45, 2.5]]) {
       const ov = new THREE.Mesh(
         new THREE.BoxGeometry(7.2, hh, 3.95),
         new THREE.MeshBasicMaterial({ color: 0x05040a, transparent: true, opacity: 0.62, depthWrite: false })
@@ -1362,12 +1362,14 @@ function layoutRoom() {
   // multi-level structures (home, apartments) are tall: step back and up
   // so the dollhouse face reads whole instead of edge-on plate slices
   const r = cfg.room | 0;
+  // multi-story rooms frame farther back and pan much higher — the
+  // apartment tower is 7.8 tall, the home 4.4
   const tall = r === 6 || r === 7;
-  EYE.z = -(roomHZ + (tall ? 4.6 : 2.6));
-  EYE.y = tall ? 2.6 : 2.0;
-  FOCUS_D = roomHZ + (tall ? 4.5 : 2.5);
-  panYMin = tall ? -1.9 : -1.3;
-  panYMax = tall ? 3.2 : 1.7;
+  EYE.z = -(roomHZ + (r === 7 ? 6.6 : tall ? 5.4 : 2.6));
+  EYE.y = r === 7 ? 3.4 : tall ? 2.8 : 2.0;
+  FOCUS_D = roomHZ + (r === 7 ? 6.5 : tall ? 5.3 : 2.5);
+  panYMin = tall ? -2.2 : -1.3;
+  panYMax = r === 7 ? 5.6 : tall ? 3.6 : 1.7;
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
