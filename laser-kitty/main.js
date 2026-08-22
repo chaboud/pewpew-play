@@ -112,6 +112,18 @@ const concreteTex = makeCanvas(512, 512, (g) => {
   }
 });
 concreteTex.wrapS = concreteTex.wrapT = THREE.RepeatWrapping;
+// cafe checkerboard: cream and charcoal marble checks
+const checkerTex = makeCanvas(256, 256, (g) => {
+  for (let r = 0; r < 8; r++) {
+    for (let c2 = 0; c2 < 8; c2++) {
+      g.fillStyle = (r + c2) % 2 ? '#2e2b33' : '#e8e2d4';
+      g.fillRect(c2 * 32, r * 32, 32, 32);
+      g.fillStyle = (r + c2) % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+      g.fillRect(c2 * 32 + 4 * ((r * 7 + c2) % 5), r * 32 + 6, 10, 5);
+    }
+  }
+});
+checkerTex.wrapS = checkerTex.wrapT = THREE.RepeatWrapping;
 // neutral-toned detail maps: material color tints them (map * color)
 const woodTex = makeCanvas(256, 256, (g) => {
   g.fillStyle = '#cfcfcf';
@@ -551,6 +563,108 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     win.rotation.y = Math.PI;
     win.position.set(0, 0.22, -c - 0.003);
     m.add(win);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.025) < 0.003 && Math.abs(b - 0.16) < 0.004 && Math.abs(c - 0.16) < 0.004) {
+    // bicycle wheel: rim, tire, spokes
+    m = new THREE.Group();
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(b * 0.92, 0.014, 8, 22), toonMat(0x2b2926));
+    rim.rotation.y = Math.PI / 2;
+    m.add(rim);
+    for (let k2 = 0; k2 < 5; k2++) {
+      const sp2 = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, b * 1.7, 4), toonMat(0x9aa0a8));
+      sp2.rotation.z = (k2 / 5) * Math.PI;
+      m.add(sp2);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, a * 1.6, 8), toonMat(0x9aa0a8));
+    hub.rotation.z = Math.PI / 2;
+    m.add(hub);
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.02) < 0.003 && Math.abs(b - 0.06) < 0.008 && Math.abs(c - 0.75) < 0.02) {
+    // wall-hung ladder: rails + rungs
+    m = new THREE.Group();
+    const railMat = toonMat(0xb08a56, { map: woodTex });
+    for (const ry of [-0.05, 0.05]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, c * 2), railMat);
+      rail.position.y = ry;
+      m.add(rail);
+    }
+    for (let k2 = 0; k2 < 6; k2++) {
+      const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.1, 6), railMat);
+      rung.position.z = -c + 0.12 + k2 * 0.25;
+      m.add(rung);
+    }
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.015) < 0.002 && Math.abs(b - 0.5) < 0.02) {
+    // garden tools on the wall: rake / shovel / broom by body index
+    m = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, b * 1.9, 6), toonMat(0x9a7548, { map: woodTex }));
+    m.add(pole);
+    const v2 = i % 3;
+    if (v2 === 0) {
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.14), toonMat(0x8a8f9e));
+      head.position.y = -b * 0.92;
+      m.add(head);
+      for (let k2 = 0; k2 < 5; k2++) {
+        const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.05, 4), toonMat(0x8a8f9e));
+        tine.position.set(0, -b * 0.92 - 0.03, -0.06 + k2 * 0.03);
+        m.add(tine);
+      }
+    } else if (v2 === 1) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.12, 0.09), toonMat(0x8a8f9e));
+      blade.position.y = -b * 0.95;
+      m.add(blade);
+    } else {
+      const brush = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.11), toonMat(0xc9a86a));
+      brush.position.y = -b * 0.95;
+      m.add(brush);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.13) < 0.004 && Math.abs(b - 0.035) < 0.004 && Math.abs(c - 0.13) < 0.004) {
+    // coiled garden hose
+    m = new THREE.Group();
+    for (const hy2 of [-0.015, 0.012]) {
+      const loop = new THREE.Mesh(new THREE.TorusGeometry(a * 0.75, 0.018, 8, 20), toonMat(0x3e7a4e));
+      loop.rotation.x = Math.PI / 2;
+      loop.position.y = hy2;
+      m.add(loop);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.12) < 0.004 && Math.abs(b - 0.09) < 0.004 && Math.abs(c - 0.08) < 0.004) {
+    // espresso machine: chrome body, group head, cups on top
+    m = new THREE.Group();
+    const chrome = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 130, specular: 0xffffff });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), chrome));
+    const head2 = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.03, 10), toonMat(0x2b2926));
+    head2.position.set(0, -b * 0.4, -c - 0.014);
+    m.add(head2);
+    const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.07, 6), chrome);
+    lever.position.set(0.05, b + 0.03, 0);
+    m.add(lever);
+    for (const cx3 of [-0.06, -0.015, 0.035]) {
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.009, 0.018, 8), toonMat(0xf2ead8));
+      cup.position.set(cx3, b + 0.012, 0.02);
+      m.add(cup);
+    }
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.028) < 0.003) {
+    // croissant: golden crescent
+    m = new THREE.Group();
+    const gold = toonMat(0xc98d3f);
+    const tor = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.013, 8, 14, Math.PI * 1.4), gold);
+    tor.rotation.x = Math.PI / 2;
+    m.add(tor);
+    for (const tx2 of [-1, 1]) {
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.011, 6, 5), gold);
+      const ang = Math.PI * 0.7 * tx2;
+      tip.position.set(Math.cos(ang) * 0.02, 0, Math.sin(ang) * 0.02);
+      m.add(tip);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.09) < 0.004 && Math.abs(b - 0.018) < 0.003 && Math.abs(c - 0.018) < 0.003) {
+    // baguette: golden loaf with score marks
+    m = new THREE.Group();
+    const loaf = new THREE.Mesh(roughen(new THREE.SphereGeometry(0.05, 12, 8), 0.05), toonMat(0xc99a52));
+    loaf.scale.set(1.9, 0.42, 0.42);
+    m.add(loaf);
+    for (let k2 = 0; k2 < 3; k2++) {
+      const score2 = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.02, 0.016), toonMat(0xf2e0b8));
+      score2.rotation.y = 0.5;
+      score2.position.set(-0.04 + k2 * 0.04, 0.014, 0);
+      m.add(score2);
+    }
   } else if (cls === 2 && Math.abs(a - 0.22) < 0.01 && Math.abs(b - 0.05) < 0.01) {
     // stereo: glossy slab + knobs + display strip on the front
     m = new THREE.Group();
@@ -595,8 +709,10 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     cls === 2 && shape === 0 && gloss < 0.4 && b >= 0.06 && b <= 0.12 &&
     Math.min(a, c) <= 0.035 && Math.max(a, c) <= 0.07;
   if (cls === 0 && a > 2 && b < 0.2) {
-    // the floor slab: wood everywhere, bare concrete in the garage
-    mat = toonMat(0xffffff, { map: (cfg.room | 0) === 5 ? concreteTex : floorTex });
+    // the floor slab: wood by default, concrete in the garage,
+    // checkerboard in the cafe
+    const fr2 = cfg.room | 0;
+    mat = toonMat(0xffffff, { map: fr2 === 5 ? concreteTex : fr2 === 9 ? checkerTex : floorTex });
   } else if (painting) {
     mat = toonMat(0xffffff, { map: artTex(i) });
   } else if (book) {
@@ -788,6 +904,42 @@ function buildDecor(hx, hz, kind) {
     board.rotation.y = -Math.PI / 2;
     board.position.set(hx - 0.02, 1.7, -1.2);
     decor.add(board);
+  }
+  if (kind === 9) {
+    // striped awning over the counter, string lights, window boxes
+    const awn = new THREE.Group();
+    const canvas9 = makeCanvas(128, 32, (g) => {
+      for (let k2 = 0; k2 < 8; k2++) {
+        g.fillStyle = k2 % 2 ? '#f2ead8' : '#b03040';
+        g.fillRect(k2 * 16, 0, 16, 32);
+      }
+    });
+    const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.55), toonMat(0xffffff, { map: canvas9, side: THREE.DoubleSide }));
+    cloth.rotation.x = Math.PI - 0.5;
+    cloth.position.set(-1.1, 1.62, hz - 0.35);
+    decor.add(cloth);
+    const hem = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.02), toonMat(0xb03040));
+    hem.position.set(-1.1, 1.48, hz - 0.6);
+    decor.add(hem);
+    for (let k2 = 0; k2 < 9; k2++) {
+      const bx = -hx + 0.5 + (k2 * (hx * 2 - 1)) / 8;
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.02, 6, 5),
+        new THREE.MeshBasicMaterial({ color: k2 % 2 ? 0xffe2a8 : 0xffc9de })
+      );
+      bulb.position.set(bx, 2.35 - Math.sin((k2 / 8) * Math.PI) * 0.12, hz - 0.15);
+      decor.add(bulb);
+    }
+    for (const wx2 of [-hx + 0.02, hx - 0.02]) {
+      const box9 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.7), toonMat(0x6a4a30, { map: woodTex }));
+      box9.position.set(wx2, 1.0, 0.6);
+      decor.add(box9);
+      for (let k2 = 0; k2 < 4; k2++) {
+        const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), toonMat([0xd85a6a, 0xe8b04a, 0xd85a6a, 0x9a6ac9][k2]));
+        bloom.position.set(wx2, 1.06, 0.32 + k2 * 0.18);
+        decor.add(bloom);
+      }
+    }
   }
   scene.add(decor);
 }
@@ -1206,6 +1358,7 @@ function layoutRoom() {
   sun.shadow.camera.updateProjectionMatrix();
   floorTex.repeat.set(Math.max(2, Math.round(roomHX)), Math.max(2, Math.round(roomHZ)));
   concreteTex.repeat.set(Math.max(1, Math.round(roomHX * 0.6)), Math.max(1, Math.round(roomHZ * 0.6)));
+  checkerTex.repeat.set(Math.max(2, Math.round(roomHX * 1.2)), Math.max(2, Math.round(roomHZ * 1.2)));
   buildDecor(roomHX, roomHZ, cfg.room | 0);
   applyLook();
 }
