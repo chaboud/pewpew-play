@@ -1157,19 +1157,84 @@ function buildDecor(hx, hz, kind) {
     decor.add(peg);
   }
   if (kind === 7) {
-    // per-floor darkness: a smoked box swallows a zone whose lights are
-    // off (toggled by cat-swat on the wall switches; polled each frame)
+    // the tower: nine floors of darkness overlays, windows, sconces, and
+    // exit signs over each stairwell doorway
     lightOverlays = [];
-    for (const [cy, hh] of [[1.27, 2.5], [3.85, 2.5], [6.45, 2.5]]) {
+    const FLOORS = 9;
+    const PITCH = 2.6;
+    const exitTex = makeCanvas(64, 24, (g) => {
+      g.fillStyle = '#0c2a14';
+      g.fillRect(0, 0, 64, 24);
+      g.fillStyle = '#6cf2a0';
+      g.font = 'bold 15px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('EXIT', 32, 13);
+    });
+    for (let f = 0; f < FLOORS; f++) {
+      const fy = f * PITCH;
+      // darkness: a smoked box swallows a floor whose lights are off
+      // (toggled by cat-swat on the wall switches; polled each frame)
       const ov = new THREE.Mesh(
-        new THREE.BoxGeometry(7.2, hh, 3.95),
+        new THREE.BoxGeometry(hx * 2, 2.5, 3.95),
         new THREE.MeshBasicMaterial({ color: 0x05040a, transparent: true, opacity: 0.62, depthWrite: false })
       );
-      ov.position.set(0, cy, -0.425);
+      ov.position.set(0, fy + 1.27, -0.425);
       ov.renderOrder = 5;
       ov.visible = false;
       decor.add(ov);
       lightOverlays.push(ov);
+      // windows: two on the far wall, one on each side wall; some lit
+      // warm, some night-slate — an occupied building, not a grid
+      const winSpots = [
+        [-5.0, fy + 1.55, hz - 0.02, 0],
+        [5.0, fy + 1.55, hz - 0.02, 0],
+        [-hx + 0.02, fy + 1.55, -0.8, 1],
+        [hx - 0.02, fy + 1.55, -0.8, 2],
+      ];
+      for (let w = 0; w < winSpots.length; w++) {
+        const [wx, wy, wz, side] = winSpots[w];
+        const win = new THREE.Group();
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.94, 0.04), toonMat(0x3a2c20));
+        win.add(frame);
+        const lit = (f * 3 + w * 2 + f) % 3 !== 0;
+        const pane = new THREE.Mesh(
+          new THREE.PlaneGeometry(0.6, 0.8),
+          new THREE.MeshBasicMaterial({ color: lit ? 0xffe0a8 : 0x2a3a4e })
+        );
+        pane.position.z = 0.026;
+        win.add(pane);
+        for (const my of [-0.2, 0.2]) {
+          const mull = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.04, 0.012), toonMat(0x3a2c20));
+          mull.position.set(0, my, 0.027);
+          win.add(mull);
+        }
+        if (side === 0) win.rotation.y = Math.PI;
+        if (side === 1) win.rotation.y = Math.PI / 2;
+        if (side === 2) win.rotation.y = -Math.PI / 2;
+        win.position.set(wx, wy, wz);
+        decor.add(win);
+      }
+      // hallway sconces flanking the stair strip on the far wall
+      for (const sx of [-1.2, 1.2]) {
+        const shade = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.05, 0.028, 0.09, 10, 1, true),
+          new THREE.MeshPhongMaterial({ color: 0x6a5a40, shininess: 50, specular: 0xffe8b0, side: THREE.DoubleSide })
+        );
+        shade.position.set(sx, fy + 1.95, hz - 0.06);
+        decor.add(shade);
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffdf9a }));
+        glow.position.set(sx, fy + 1.99, hz - 0.06);
+        decor.add(glow);
+      }
+      // exit sign over this floor's stairwell doorway
+      const gx = f === 0 ? -3.2 : f % 2 === 0 ? -3.15 : 3.15;
+      const sign = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.09, 0.03),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, map: exitTex })
+      );
+      sign.position.set(gx, fy + 1.22, 1.5);
+      decor.add(sign);
     }
   } else {
     lightOverlays = [];
@@ -1493,7 +1558,7 @@ let zoom = 1;
 // range is just "translation friendliness".
 let panX = 0, panY = 0;
 let panYMin = -1.3, panYMax = 1.7; // widened per room in layoutRoom
-function panLimX() { return roomHX * 0.55; }
+function panLimX() { return roomHX * ((cfg.room | 0) === 7 ? 0.8 : 0.55); }
 function clampPan() {
   panX = Math.max(-panLimX(), Math.min(panLimX(), panX));
   panY = Math.max(panYMin, Math.min(panYMax, panY));
@@ -1647,11 +1712,11 @@ function layoutRoom() {
   // multi-story rooms frame farther back and pan much higher — the
   // apartment tower is 7.8 tall, the home 4.4
   const tall = r === 6 || r === 7;
-  EYE.z = -(roomHZ + (r === 7 ? 6.6 : tall ? 5.4 : 2.6));
-  EYE.y = r === 7 ? 3.4 : tall ? 2.8 : 2.0;
-  FOCUS_D = roomHZ + (r === 7 ? 6.5 : tall ? 5.3 : 2.5);
-  panYMin = tall ? -2.2 : -1.3;
-  panYMax = r === 7 ? 5.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7; // bar: pan to the top tier
+  EYE.z = -(roomHZ + (r === 7 ? 10.5 : tall ? 5.4 : 2.6));
+  EYE.y = r === 7 ? 3.6 : tall ? 2.8 : 2.0;
+  FOCUS_D = roomHZ + (r === 7 ? 10.4 : tall ? 5.3 : 2.5);
+  panYMin = tall ? -2.4 : -1.3;
+  panYMax = r === 7 ? 21.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7; // tower: pan to floor 9
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -2118,7 +2183,7 @@ function frame(now) {
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
-      const ev = code >>> 24;
+      const ev = code >>> 28; // type moved up when prop grew to 13 bits
       if (ev === 1) {
         // cat vocals ride the brain's state changes
         const to = code & 0xff;
@@ -2127,28 +2192,28 @@ function frame(now) {
         if (to === 6) sfx.meow(); // bored: "hey, keep playing"
       }
       if (ev === 2) sfx.boing();
-      if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1ff]);
-      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0x1ff]));
-      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0xfff]));
+      if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1fff]);
+      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0x1fff]));
+      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0x1fff]));
       if (ev === 3 || ev === 4) {
-        const chain = (code >> 21) & 0x7;
+        const chain = (code >> 25) & 0x7;
         const label = ev === 4 ? 'CRASH ' : '';
         popScore(`${label}+${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, chain >= 4 || ev === 4);
         if (chain >= 4) shake = Math.max(shake, 0.5 + chain * 0.06);
         if (ev === 4) shake = Math.max(shake, 0.5);
-        const prop = (code >>> 12) & 0x1ff;
+        const prop = (code >>> 12) & 0x1fff;
         if (meshes[prop]) {
           burstPuffs(meshes[prop].position);
           if (ev === 4) burstPuffs(meshes[prop].position); // double burst for a break
         }
       } else if (ev === 5) {
-        const piece = (code >>> 12) & 0xfff;
+        const piece = (code >>> 12) & 0x1fff;
         popScore('scratch!');
         if (meshes[piece]) burstPuffs(meshes[piece].position);
       } else if (ev === 6) {
         // structural collapse: the compound fell apart into its members
-        const prop = (code >>> 12) & 0x1ff;
-        const chain = (code >> 21) & 0x7;
+        const prop = (code >>> 12) & 0x1fff;
+        const chain = (code >> 25) & 0x7;
         popScore(`CRUNCH +${code & 0xfff}${chain > 1 ? ` x${chain}` : ''}`, true);
         shake = Math.max(shake, 1.0);
         const m = meshes[prop];
