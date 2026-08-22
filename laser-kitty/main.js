@@ -825,8 +825,8 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     strap.position.set(a + 0.008, 0, 0);
     strap.rotation.z = 0.12;
     m.add(strap);
-  } else if (cls === 1 && shape === 0 && ((Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.11) < 0.004 && Math.abs(c - 0.11) < 0.004) || (Math.abs(a - 0.04) < 0.003 && Math.abs(b - 0.07) < 0.003 && Math.abs(c - 0.07) < 0.003))) {
-    // riding mower wheels: chunky rubber cylinders with a hub
+  } else if (cls === 1 && shape === 0 && ((Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.11) < 0.004 && Math.abs(c - 0.11) < 0.004) || (Math.abs(a - 0.04) < 0.003 && Math.abs(b - 0.07) < 0.003 && Math.abs(c - 0.07) < 0.003) || (Math.abs(a - 0.018) < 0.002 && Math.abs(b - 0.1) < 0.004 && Math.abs(c - 0.1) < 0.004) || (Math.abs(a - 0.018) < 0.002 && Math.abs(b - 0.062) < 0.003 && Math.abs(c - 0.062) < 0.003))) {
+    // riding mower / tricycle wheels: rubber cylinders with a hub
     m = new THREE.Group();
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(b, b, a * 2, 14), toonMat(0x24221f));
     tire.rotation.z = Math.PI / 2;
@@ -902,6 +902,91 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.004, a * 0.9, b * 0.5, 8), squeezeMat);
     tip.position.y = b * 0.75;
     m.add(tip);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.14) < 0.005 && Math.abs(b - 0.015) < 0.003 && Math.abs(c - 0.05) < 0.004) {
+    // skateboard: kicked deck + trucks + four wheels
+    m = new THREE.Group();
+    const deckCol = [0xc94f3f, 0x3f7ac9][i % 2];
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(a * 1.9, 0.012, c * 1.9), toonMat(deckCol));
+    deck.position.y = 0.006;
+    m.add(deck);
+    for (const kx of [-1, 1]) {
+      const kick = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.01, c * 1.85), toonMat(deckCol));
+      kick.position.set(kx * (a * 1.9 * 0.5 + 0.012), 0.016, 0);
+      kick.rotation.z = kx * 0.45;
+      m.add(kick);
+    }
+    for (const wx of [-a * 1.1, a * 1.1]) {
+      for (const wz of [-c * 0.85, c * 0.85]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.012, 8), toonMat(0xe8dfc9));
+        wheel.rotation.x = Math.PI / 2;
+        wheel.position.set(wx, -0.008, wz);
+        m.add(wheel);
+      }
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.11) < 0.005 && Math.abs(b - 0.9) < 0.03 && Math.abs(c - 0.025) < 0.004) {
+    // surfboard: squashed-sphere longboard, center stripe, tail fin
+    m = new THREE.Group();
+    const board = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 18, 12),
+      new THREE.MeshPhongMaterial({ color: 0x3fb8b0, shininess: 90, specular: 0xdff2ee })
+    );
+    board.scale.set(a, b, c * 0.9);
+    m.add(board);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(a * 0.36, b * 1.2, 0.004), toonMat(0xf2ead8));
+    stripe.position.z = -c * 0.86;
+    m.add(stripe);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.09, 0.05), toonMat(0x2a2732));
+    fin.position.set(0, -b * 0.78, c * 1.4);
+    m.add(fin);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.045) < 0.003 && Math.abs(b - 0.09) < 0.005 && Math.abs(c - 0.045) < 0.003) {
+    // traffic cone: safety orange with a reflective band
+    m = new THREE.Group();
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(a * 0.95, b * 2, 12), toonMat(0xe06428));
+    m.add(cone);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.62, a * 0.72, b * 0.4, 12), toonMat(0xf2ede0));
+    band.position.y = -b * 0.15;
+    m.add(band);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(a * 2.2, 0.012, c * 2.2), toonMat(0xd85a20));
+    base.position.y = -b + 0.006;
+    m.add(base);
+  } else if (cls === 1 && shape === 0 && ((Math.abs(a - 0.012) < 0.0015 && Math.abs(b - 0.012) < 0.0015 && Math.abs(c - 0.16) < 0.005) || (Math.abs(a - 0.012) < 0.0015 && Math.abs(b - 0.09) < 0.004 && Math.abs(c - 0.012) < 0.0015) || (Math.abs(a - 0.07) < 0.004 && Math.abs(b - 0.01) < 0.0015 && Math.abs(c - 0.01) < 0.0015) || (Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.012) < 0.0015 && Math.abs(c - 0.045) < 0.003) || (Math.abs(a - 0.12) < 0.004 && Math.abs(b - 0.012) < 0.0015 && Math.abs(c - 0.012) < 0.0015)) && py < 0.6) {
+    // tricycle frame parts: little-red-trike enamel
+    m = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      new THREE.MeshPhongMaterial({ color: 0xc9302a, shininess: 100, specular: 0xffccbb })
+    );
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.008) < 0.0015 && Math.abs(b - 0.6) < 0.03 && Math.abs(c - 0.008) < 0.0015) {
+    // fishing rod: tapered blank + reel + grip
+    m = new THREE.Group();
+    const blank = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.007, b * 2, 6), toonMat(0x6a5238));
+    m.add(blank);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.18, 6), toonMat(0x2a2732));
+    grip.position.y = -b * 0.82;
+    m.add(grip);
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.012, 10), toonMat(0x8a8f9e));
+    reel.rotation.z = Math.PI / 2;
+    reel.position.set(0.015, -b * 0.62, 0);
+    m.add(reel);
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.09) < 0.004) {
+    // r 0.09 spheres split by gloss: the mansion globe vs the beach ball
+    m = new THREE.Group();
+    if (gloss < 0.45) {
+      const sea = new THREE.Mesh(new THREE.SphereGeometry(a, 16, 13), toonMat(0x3a6a9a));
+      m.add(sea);
+      for (const [ly, lz, s] of [[0.35, 0.2, 0.045], [-0.25, -0.3, 0.055], [0.1, -0.55, 0.035]]) {
+        const land = new THREE.Mesh(new THREE.SphereGeometry(a * 1.005, 8, 6), toonMat(0x5a9a4e));
+        land.scale.set(0.6, 0.5, 0.6);
+        land.position.set(s, ly * a, lz * a);
+        m.add(land);
+      }
+    } else {
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(a, 18, 14), toonMat(0xf2ede0));
+      m.add(ball);
+      for (let k2 = 0; k2 < 3; k2++) {
+        const panel = new THREE.Mesh(new THREE.SphereGeometry(a * 1.004, 18, 14, (k2 * 2 * Math.PI) / 3, Math.PI / 3), toonMat([0xc94f3f, 0x3f7ac9, 0xd8a622][k2]));
+        m.add(panel);
+      }
+    }
   }
   if (m) {
     const noShadow = m.userData.noShadow === true;
