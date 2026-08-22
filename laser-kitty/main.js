@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k2'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -29,24 +29,26 @@ const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.quality));
 renderer.shadowMap.enabled = cfg.shadows;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.VSMShadowMap; // blurred soft pass
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x272138);
 // fog kept far outside the room: camera sits ~5.6m out, far wall ~9m — the
 // first pass started fog at 9 and drowned the back half on phone OLEDs.
 scene.fog = new THREE.Fog(0x272138, 13, 26);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
-scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.25));
-const sun = new THREE.DirectionalLight(0xffe3b8, 1.9);
+scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.45));
+const sun = new THREE.DirectionalLight(0xffe3b8, 1.35);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.radius = 6;
+sun.shadow.blurSamples = 12;
 sun.shadow.camera.left = -4;
 sun.shadow.camera.right = 4;
 sun.shadow.camera.top = 4;
 sun.shadow.camera.bottom = -4;
 sun.shadow.camera.far = 14;
-sun.shadow.bias = -0.002;
+sun.shadow.bias = -0.0004; // VSM wants a much smaller bias
 sun.castShadow = cfg.shadows;
 scene.add(sun);
 const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
@@ -854,12 +856,12 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     screen.position.z = -c - 0.002;
     screen.rotation.y = Math.PI;
     m.add(screen);
-  } else if (cls === 0 && shape === 0 && (cfg.room | 0) === 7 && ((Math.abs(a - 0.04) < 0.005 && Math.abs(b - 1.25) < 0.01) || (Math.abs(b - 0.55) < 0.01 && Math.abs(c - 0.015) < 0.004))) {
-    // tower walls: paint by floor, so each level reads as its own home
-    const flr = Math.max(0, Math.floor(py / 2.6));
+  } else if (cls === 0 && shape === 0 && (cfg.room | 0) === 7 && ((Math.abs(a - 0.04) < 0.005 && Math.abs(b - 1.25) < 0.01) || (Math.abs(b - 0.55) < 0.01 && (Math.abs(c - 0.015) < 0.004 || Math.abs(a - 0.015) < 0.004)))) {
+    // tower walls: every wall gets its own paint (hashed per body), so
+    // each apartment reads as somebody's color choices
     m = new THREE.Mesh(
       new THREE.BoxGeometry(a * 2, b * 2, c * 2),
-      toonMat(new THREE.Color().setHSL((0.52 + flr * 0.115) % 1, 0.16, 0.62))
+      toonMat(new THREE.Color().setHSL((0.04 + h * 0.96) % 1, 0.26, 0.64))
     );
   } else if (cls === 2 && shape === 0 && Math.abs(gloss - 0.12) < 0.005) {
     // cardboard: every box the sim marks with the 0.12-gloss signature
@@ -1202,7 +1204,7 @@ function buildDecor(hx, hz, kind) {
       // darkness: a smoked box swallows a floor whose lights are off
       // (toggled by cat-swat on the wall switches; polled each frame)
       const ov = new THREE.Mesh(
-        new THREE.BoxGeometry(hx * 2, 2.5, 3.95),
+        new THREE.BoxGeometry(hx * 2 - 0.12, 2.5, 3.86),
         new THREE.MeshBasicMaterial({ color: 0x05040a, transparent: true, opacity: 0.62, depthWrite: false })
       );
       ov.position.set(0, fy + 1.27, -0.425);
@@ -1213,10 +1215,10 @@ function buildDecor(hx, hz, kind) {
       // windows: two on the far wall, one on each side wall; some lit
       // warm, some night-slate — an occupied building, not a grid
       const winSpots = [
-        [-5.0, fy + 1.55, hz - 0.02, 0],
-        [5.0, fy + 1.55, hz - 0.02, 0],
-        [-hx + 0.02, fy + 1.55, -0.8, 1],
-        [hx - 0.02, fy + 1.55, -0.8, 2],
+        [-5.0, fy + 1.55, hz - 0.05, 0],
+        [5.0, fy + 1.55, hz - 0.05, 0],
+        [-hx + 0.05, fy + 1.55, -0.8, 1],
+        [hx - 0.05, fy + 1.55, -0.8, 2],
       ];
       for (let w = 0; w < winSpots.length; w++) {
         const [wx, wy, wz, side] = winSpots[w];
@@ -1264,13 +1266,14 @@ function buildDecor(hx, hz, kind) {
         rug.receiveShadow = true;
         decor.add(rug);
       }
-      // exit sign over this floor's stairwell doorway
-      const gx = f === 0 ? -3.2 : f % 2 === 0 ? -3.15 : 3.15;
+      // exit sign on the departure stairwell's back wall, visible down
+      // the open bay from the front
+      const gx = (f % 2 === 0 ? -1 : 1) * 7.65;
       const sign = new THREE.Mesh(
         new THREE.BoxGeometry(0.24, 0.09, 0.03),
         new THREE.MeshBasicMaterial({ color: 0xffffff, map: exitTex })
       );
-      sign.position.set(gx, fy + 1.22, 1.5);
+      sign.position.set(gx, fy + 1.5, hz - 0.07);
       decor.add(sign);
     }
     // interior light: one warm shadowless point per floor, wired to that
@@ -1801,7 +1804,7 @@ function layoutRoom() {
   // 2048 map over a 23m facade = smears) and dims, and per-floor point
   // lights wired to the switch zones carry the interior instead
   sun.castShadow = cfg.shadows && r !== 7;
-  sun.intensity = r === 7 ? 0.9 : 1.9;
+  sun.intensity = r === 7 ? 0.9 : 1.35;
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
