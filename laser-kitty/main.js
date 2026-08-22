@@ -286,7 +286,7 @@ function eachMat(m, fn) {
 // Materials derive from the sim's optics: gloss (the value the laser's
 // spill/glint math uses) picks the family — shiny phong, matte fabric, or
 // toon wood/plastic. One source of truth for how surfaces behave.
-function meshFor(i, shape, a, b, c, cls, py, gloss) {
+function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   const color = bodyColor(i, cls, [a, b, c], py);
   let m = null;
@@ -854,11 +854,60 @@ function meshFor(i, shape, a, b, c, cls, py, gloss) {
     m.add(box);
     const tape = new THREE.Mesh(new THREE.BoxGeometry(a * 0.36, b * 2.01, c * 2.01), toonMat(0xc2a06a));
     m.add(tape);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.027) < 0.004 && Math.abs(b - 0.078) < 0.012 && Math.abs(c - 0.027) < 0.004) {
+    // liquor/wine bottle: colored glass cylinder, shoulder, neck, cap.
+    // Palette keyed by body index so a packed shelf reads as a real
+    // back-bar, not a row of clones; clear bottles get transparency.
+    // Glass casts no shadow — 150 bottles painting hard ellipses on the
+    // back wall read as a scalloped garland, measured and rejected
+    m = new THREE.Group();
+    m.userData.noShadow = true;
+    const BOTTLE_GLASS = [0x8a4f1a, 0x2e6a38, 0x7a2530, 0x2f5a7a, 0xcfd8da, 0x4a2c12];
+    const ci = ((i * 2654435761) >>> 0) % 6;
+    const glassCol = BOTTLE_GLASS[ci];
+    const glassMat = new THREE.MeshPhongMaterial({
+      color: glassCol, shininess: 130, specular: 0xffffff,
+      transparent: ci === 4, opacity: ci === 4 ? 0.55 : 1,
+    });
+    const body2 = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.12, a * 1.12, b * 1.44, 10), glassMat);
+    body2.position.y = -b * 0.28;
+    m.add(body2);
+    const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, a * 1.05, b * 0.28, 10), glassMat);
+    shoulder.position.y = b * 0.58;
+    m.add(shoulder);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, b * 0.5, 8), glassMat);
+    neck.position.y = b * 0.78;
+    m.add(neck);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.012, 8), toonMat([0xd8c93a, 0xb03a34, 0x2a2732, 0xc9c2b0][((i * 7) >>> 0) % 4]));
+    cap.position.y = b;
+    m.add(cap);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.13, a * 1.13, b * 0.5, 10), toonMat(ci % 2 ? 0xe8e2d0 : 0xd8cdb2));
+    label.position.y = -b * 0.32;
+    m.add(label);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.024) < 0.0025 && Math.abs(b - 0.045) < 0.004 && Math.abs(c - 0.024) < 0.0025) {
+    // bar glass: clear tumbler (no shadow — glass)
+    m = new THREE.Mesh(
+      new THREE.CylinderGeometry(a * 1.1, a * 0.95, b * 2, 10),
+      new THREE.MeshPhongMaterial({ color: 0xdfeaf0, shininess: 150, specular: 0xffffff, transparent: true, opacity: 0.5 })
+    );
+    m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.02) < 0.002 && Math.abs(b - 0.04) < 0.004 && Math.abs(c - 0.02) < 0.002) {
+    // condiment squeeze bottle: ketchup red or mustard yellow by tint
+    m = new THREE.Group();
+    const col = tint !== undefined && tint > 0.85 ? 0xc9302a : 0xd8a622;
+    const squeezeMat = new THREE.MeshPhongMaterial({ color: col, shininess: 70, specular: 0xccbbaa });
+    const body3 = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.05, a * 1.05, b * 1.6, 10), squeezeMat);
+    body3.position.y = -b * 0.2;
+    m.add(body3);
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.004, a * 0.9, b * 0.5, 8), squeezeMat);
+    tip.position.y = b * 0.75;
+    m.add(tip);
   }
   if (m) {
+    const noShadow = m.userData.noShadow === true;
     m.traverse((o) => {
       if (o.isMesh) {
-        o.castShadow = true;
+        o.castShadow = !noShadow;
         o.receiveShadow = true;
       }
     });
@@ -1047,11 +1096,11 @@ function buildDecor(hx, hz, kind) {
     neon.add(tube);
     const tube2 = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.015, 8, 20), new THREE.MeshBasicMaterial({ color: 0x53e0d8 }));
     neon.add(tube2);
-    neon.position.set(-1.4, 2.15, hz - 0.03);
+    neon.position.set(-1.4, 3.18, hz - 0.03); // above the top back-bar tier
     decor.add(neon);
     for (const px of [-2.4, -1.4, -0.4]) {
-      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6), toonMat(0x2a2530));
-      cord.position.set(px, 2.35, 2.35);
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.4, 6), toonMat(0x2a2530));
+      cord.position.set(px, 2.8, 2.35);
       decor.add(cord);
       const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.11, 0.1, 12, 1, true), new THREE.MeshPhongMaterial({ color: 0x2f5a3e, shininess: 60, specular: 0x9adfb0, side: THREE.DoubleSide }));
       shade.position.set(px, 2.06, 2.35);
@@ -1517,7 +1566,7 @@ function layoutRoom() {
   EYE.y = r === 7 ? 3.4 : tall ? 2.8 : 2.0;
   FOCUS_D = roomHZ + (r === 7 ? 6.5 : tall ? 5.3 : 2.5);
   panYMin = tall ? -2.2 : -1.3;
-  panYMax = r === 7 ? 5.6 : tall ? 3.6 : 1.7;
+  panYMax = r === 7 ? 5.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7; // bar: pan to the top tier
   panX = 0;
   panY = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -2179,7 +2228,7 @@ function frame(now) {
       continue;
     }
     if (!meshes[i]) {
-      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13]);
+      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14]);
       eachMat(meshes[i], (mat) => (mat.wireframe = debugLook));
     }
     const m = meshes[i];
