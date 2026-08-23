@@ -13,11 +13,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k16'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k17'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'auto', aoStrength: 4, laser: 'pad', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'auto', aoStrength: 4, laser: 'pad', padScale: 0.5, sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -2552,6 +2552,7 @@ addEventListener(
   'wheel',
   (e) => {
     if (e.clientY >= pad.getBoundingClientRect().top) return;
+    if (e.target.closest && e.target.closest('#panel')) return; // menu scrolls, not zoom
     setZoom(zoomT * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
     e.preventDefault();
   },
@@ -2726,9 +2727,20 @@ function updateLaserRay() {
   camera.getWorldDirection(fwd);
   const t = FOCUS_D / Math.max(0.2, raycaster.ray.direction.dot(fwd));
   const p = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(t));
-  const belt = beltWorld();
-  const d = p.sub(belt).normalize();
-  laserRay.ox = belt.x; laserRay.oy = belt.y; laserRay.oz = belt.z;
+  let origin;
+  if (cfg.laser === 'compact') {
+    // compact mode: the ray leaves a point ~1.5in BELOW the screen's
+    // bottom edge (screen-space belly button), so the beam fans at an
+    // angle instead of rising near-vertically — unproject that anchor
+    // a half-meter in front of the camera to get a world origin
+    const andc = new THREE.Vector2(0, -(((h + 144) / h) * 2 - 1));
+    raycaster.setFromCamera(andc, camera);
+    origin = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(0.5));
+  } else {
+    origin = beltWorld();
+  }
+  const d = p.sub(origin).normalize();
+  laserRay.ox = origin.x; laserRay.oy = origin.y; laserRay.oz = origin.z;
   laserRay.dx = d.x; laserRay.dy = d.y; laserRay.dz = d.z;
 }
 function padPoint(e) {
@@ -2737,7 +2749,12 @@ function padPoint(e) {
   const fx = Math.max(0, Math.min(1, (t.clientX - r.left) / r.width));
   const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
   const { w, h } = viewSize();
-  if (cfg.laser === 'wand') {
+  if (cfg.laser === 'compact') {
+    // classic aim math, but fx/fy come from a smaller pad — the whole
+    // screen band stays addressable from less thumb travel (the pad's
+    // size is the influence dial; see the Pad size slider)
+    aimScreen = [fx * w, h * (0.08 + fy * 0.52)];
+  } else if (cfg.laser === 'wand') {
     // wand mode (founder): the tail of the laser is tied to the belly
     // button and the hand steers the head — the belt's screen
     // projection is the pivot, pad x swings the wand (~±54°), pad y
@@ -2773,9 +2790,24 @@ function padPoint(e) {
   thumbEl.style.top = `${fy * r.height}px`;
 }
 function applyLaserMode() {
-  // the wand wants a smaller strip of screen (founder): the pad drops
-  // to 22vh in wand mode, back to 33vh in classic
+  // pad geometry per mode: classic = full-width 33vh strip; wand =
+  // full-width 22vh; compact = a centered island scaled by the Pad
+  // size slider (0.5 = half size each way, double influence)
   pad.classList.toggle('short', cfg.laser === 'wand');
+  if (cfg.laser === 'compact') {
+    const sc = cfg.padScale;
+    pad.style.width = `${sc * 100}%`;
+    pad.style.left = `${(1 - sc) * 50}%`;
+    pad.style.right = 'auto';
+    pad.style.height = `${sc * 33}vh`;
+    pad.style.borderRadius = '14px 14px 0 0';
+  } else {
+    pad.style.width = '';
+    pad.style.left = '';
+    pad.style.right = '';
+    pad.style.height = '';
+    pad.style.borderRadius = '';
+  }
 }
 for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointerup', false], ['pointercancel', false]]) {
   pad.addEventListener(ev, (e) => {
@@ -3213,6 +3245,7 @@ laserEl.addEventListener('change', () => {
   saveCfg();
   applyLaserMode();
 });
+bindSlider('padscale', 'padScale', (v) => `${(v * 100).toFixed(0)}%`, () => applyLaserMode());
 applyLaserMode();
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs

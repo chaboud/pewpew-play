@@ -47,7 +47,10 @@
   #panel { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 54px); right: 10px; z-index: 6;
            width: 230px; padding: 12px 14px; border-radius: 12px; border: 1px solid #3a3644;
            background: rgba(24,21,32,0.94); color: #cfd4e6; font: 500 12px system-ui, sans-serif;
-           display: none; }
+           display: none;
+           max-height: calc(100vh - env(safe-area-inset-top, 8px) - 90px);
+           overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain;
+           -webkit-overflow-scrolling: touch; }
   #panel.open { display: block; }
   #panel h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.14em; color: #9ad; }
   #panel label { display: block; margin: 8px 0 2px; }
@@ -111,7 +114,10 @@
   <div class="row"><select id="s-laser" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;">
     <option value="pad">Pad &middot; direct (classic)</option>
     <option value="wand">Wand &middot; from the hip</option>
+    <option value="compact">Compact pad &middot; belly fan</option>
   </select></div>
+  <label>Pad size (compact)</label>
+  <div class="row"><input type="range" id="s-padscale" min="0.3" max="1" step="0.05"><span class="val" id="v-padscale"></span></div>
   <label class="row"><input type="checkbox" id="s-sound"> Sound</label>
   <label class="row"><input type="checkbox" id="s-pops"> Score pop-ups</label>
   <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live</div>
@@ -132,6 +138,6 @@
   "postprocessing": "./vendor/pp-stub.js"
 }}
 </script>
-<script type="module" src="main.js?v=k16"></script>
+<script type="module" src="main.js?v=k17"></script>
 </body>
 </html>
