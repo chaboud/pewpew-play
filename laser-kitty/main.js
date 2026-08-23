@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k6'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k7'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -308,6 +308,66 @@ function bodyColor(i, cls, dims, py) {
 }
 
 let meshes = [];
+// cloth patches: the sim's particle grids render as ONE fabric each
+// (founder: "triangles, with meshed cross linking — one continuous
+// fabric"). Particle bodies get a shared off-scene dummy; the sheet's
+// vertices track them every frame.
+let clothPatches = [];
+let clothSet = new Set();
+const clothDummy = new THREE.Object3D();
+function rebuildCloths() {
+  for (const cp of clothPatches) {
+    scene.remove(cp.mesh);
+    cp.mesh.geometry.dispose();
+  }
+  clothPatches = [];
+  clothSet = new Set();
+  const n = lk.lk_cloth_count(sim);
+  for (let ci = 0; ci < n; ci++) {
+    const info = lk.lk_cloth_info(sim, ci);
+    const first = info >>> 8;
+    const cols = (info >>> 4) & 0xf;
+    const rows = info & 0xf;
+    for (let k = 0; k < cols * rows; k++) clothSet.add(first + k);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cols * rows * 3), 3));
+    const idx = [];
+    for (let j = 0; j < rows - 1; j++) {
+      for (let i = 0; i < cols - 1; i++) {
+        const a = j * cols + i;
+        idx.push(a, a + cols, a + 1, a + 1, a + cols, a + cols + 1);
+      }
+    }
+    geo.setIndex(idx);
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 25, specular: 0x555555, side: THREE.DoubleSide })
+    );
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    clothPatches.push({ first, cols, rows, mesh, tinted: false });
+  }
+}
+rebuildCloths();
+function updateCloths(data) {
+  for (const cp of clothPatches) {
+    if (!cp.tinted) {
+      const tint = data[cp.first * 15 + 14];
+      cp.mesh.material.color.setHSL((tint * 2.83) % 1, 0.42, 0.55);
+      cp.tinted = true;
+    }
+    const attr = cp.mesh.geometry.attributes.position;
+    const nP = cp.cols * cp.rows;
+    for (let k = 0; k < nP; k++) {
+      const o = (cp.first + k) * 15;
+      attr.setXYZ(k, data[o + 5], data[o + 6], data[o + 7]);
+    }
+    attr.needsUpdate = true;
+    cp.mesh.geometry.computeVertexNormals();
+  }
+}
 let debugLook = false;
 // screen shake: feedback punctuation, not camera motion — decays fast
 let shake = 0;
@@ -2357,6 +2417,7 @@ function rebuildSim() {
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
   animParts.length = 0; // registered by recognition branches per build
+  rebuildCloths();
   for (const v of catViews.values()) {
     if (v.stars) scene.remove(v.stars);
     scene.remove(v.los);
@@ -2670,8 +2731,12 @@ function frame(now) {
       continue;
     }
     if (!meshes[i]) {
-      meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14]);
-      eachMat(meshes[i], (mat) => (mat.wireframe = debugLook));
+      if (clothSet.has(i)) {
+        meshes[i] = clothDummy; // skinned by its patch, not per-particle
+      } else {
+        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14]);
+        eachMat(meshes[i], (mat) => (mat.wireframe = debugLook));
+      }
     }
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
@@ -2783,6 +2848,7 @@ function frame(now) {
   stateEl.textContent = debugLook ? `${stName} · vis ${(L[9] ?? 0).toFixed(2)}` : stName;
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
+  updateCloths(data);
   renderer.render(scene, camera);
 
   // floating per-cat state tags — projected AFTER render so the camera
