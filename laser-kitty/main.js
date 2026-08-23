@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k22'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k23'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -474,6 +474,9 @@ function applyLightBudget() {
   const picks = [...pendingLights].sort((a2, b2) => b2.intensity - a2.intensity).slice(0, budget);
   for (const pk of picks) {
     const pl = new THREE.PointLight(pk.color, pk.intensity, pk.distance, 2);
+    pl.userData.bodyIndex = pk.node.userData.bodyIndex;
+    pl.userData.wasClass = pk.node.userData.cls;
+    pl.userData.base = pk.intensity;
     // pull the light off its mounting surface toward the room center —
     // flush against a wall or ceiling, the inverse-square falloff blows
     // the surface out into a white halo (founder: "hot spotting")
@@ -2126,6 +2129,8 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     }
   }
   if (m) {
+    m.userData.bodyIndex = i;
+    m.userData.cls = cls;
     const noShadow = m.userData.noShadow === true;
     m.traverse((o) => {
       if (o.isMesh) {
@@ -3883,6 +3888,13 @@ function frame(now) {
   if (lightsDirty && count > 0) {
     applyLightBudget(); // every mesh for this room now exists
     lightsDirty = false;
+  }
+  for (const l of litLights) {
+    const bi = l.userData.bodyIndex;
+    if (bi === undefined) continue;
+    const bcls = data[bi * 15];
+    const broken = bcls === 4 || (l.userData.wasClass === 1 && bcls === 2);
+    l.intensity = broken ? 0 : l.userData.base;
   }
   updateCloths(data);
   updateRings(data);
