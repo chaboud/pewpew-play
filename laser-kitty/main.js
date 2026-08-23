@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k11'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k12'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3273,9 +3273,14 @@ function frame(now) {
   const count = lk.lk_body_count(sim);
   const ptr = lk.lk_render_data(sim);
   const data = new Float32Array(lk.memory.buffer, ptr, count * FLOATS_PER_BODY);
-  const catState = lk.lk_cat_state(sim);
-  let catPos = null;
+  // the single HUD meter follows the MOST ENGAGED cat (founder), not
+  // cat 0: rank states by how engaged they read, break ties on interest
+  const CAT_PRIORITY = [0, 6, 7, 8, 9, 4, 1, 3, 5, 9]; // idx = state
+  let hudEng = -1;
+  let hudSt = 0;
   let hudAct = -1;
+  let hudInterest = 0;
+  let catPos = null;
   let catOrdinal = 0;
   let anyLoaf = false;
   const debugCats = [];
@@ -3292,9 +3297,13 @@ function frame(now) {
       const f = data[o + 12] | 0; // per-cat: state in the low nibble, ambient act above
       const st = f & 15;
       const act = f >> 4;
-      if (!catPos) {
-        catPos = [x, y, z]; // cat 0: HUD + debug LOS line
+      if (!catPos) catPos = [x, y, z]; // cat 0: debug LOS line
+      const eng = (CAT_PRIORITY[st] ?? 0) * 10 + data[o + 13];
+      if (eng > hudEng) {
+        hudEng = eng;
+        hudSt = st;
         hudAct = st === 0 ? act : -1;
+        hudInterest = data[o + 13];
       }
       // ambient poses: idle cats live their act; bored cats sulk in a sit;
       // stalking cats with the creep hint drop into the hunt-walk crouch
@@ -3533,11 +3542,11 @@ function frame(now) {
     floorLights.forEach((fl, zi) => (fl.intensity = (off & (1 << zi)) !== 0 ? 0.06 : 0.6));
   }
   const stName =
-    catState === 0 && hudAct >= 0
+    hudSt === 0 && hudAct >= 0
       ? `IDLE·${AMB_NAMES[hudAct] ?? '?'}`
-      : STATE_NAMES[catState] ?? '?';
+      : STATE_NAMES[hudSt] ?? '?';
   stateEl.textContent = debugLook ? `${stName} · vis ${(L[9] ?? 0).toFixed(2)}` : stName;
-  meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
+  meterEl.style.width = `${(hudInterest * 100).toFixed(0)}%`;
 
   updateCloths(data);
   updateRings(data);
