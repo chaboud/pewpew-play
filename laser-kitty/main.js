@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k5'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k6'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -267,16 +267,25 @@ function artTex(i) {
   let s = (i * 2654435761) >>> 0;
   const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
   return makeCanvas(128, 96, (g) => {
-    g.fillStyle = `hsl(${Math.round(rnd() * 360)},45%,72%)`;
+    // geometric polygon cubism (founder): angular shards over a ground
+    g.fillStyle = `hsl(${Math.round(rnd() * 360)},38%,70%)`;
     g.fillRect(0, 0, 128, 96);
-    for (let k = 0; k < 6; k++) {
-      g.fillStyle = `hsl(${Math.round(rnd() * 360)},60%,${45 + Math.round(rnd() * 25)}%)`;
-      if (rnd() < 0.5) {
-        g.beginPath();
-        g.arc(rnd() * 128, rnd() * 96, 8 + rnd() * 22, 0, 7);
-        g.fill();
-      } else {
-        g.fillRect(rnd() * 100, rnd() * 70, 12 + rnd() * 40, 8 + rnd() * 30);
+    for (let k = 0; k < 9; k++) {
+      g.fillStyle = `hsl(${Math.round(rnd() * 360)},${50 + Math.round(rnd() * 30)}%,${40 + Math.round(rnd() * 30)}%)`;
+      const cx4 = rnd() * 128, cy4 = rnd() * 96, r4 = 10 + rnd() * 26;
+      const n4 = 3 + Math.floor(rnd() * 3);
+      const a0 = rnd() * Math.PI * 2;
+      g.beginPath();
+      for (let v = 0; v < n4; v++) {
+        const av = a0 + (v / n4) * Math.PI * 2 + rnd() * 0.6;
+        g[v ? 'lineTo' : 'moveTo'](cx4 + Math.cos(av) * r4, cy4 + Math.sin(av) * r4 * 0.8);
+      }
+      g.closePath();
+      g.fill();
+      if (rnd() < 0.4) {
+        g.strokeStyle = 'rgba(30,22,18,0.7)';
+        g.lineWidth = 2;
+        g.stroke();
       }
     }
     g.strokeStyle = '#3a2c20';
@@ -285,6 +294,10 @@ function artTex(i) {
   });
 }
 
+// recognition meshes can register locally-animated children (fan
+// blades, oscillating heads); the frame loop drives them while the
+// sim keeps owning the body transform
+const animParts = [];
 // deterministic per-body color variety within each class palette
 function bodyColor(i, cls, dims, py) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
@@ -920,6 +933,105 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     frameM.position.z = 0.002;
     glassM.position.z = -0.006;
     m.add(frameM);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.07) < 0.004 && Math.abs(b - 0.07) < 0.004 && Math.abs(c - 0.05) < 0.004) {
+    // oscillating fan head: cage, hub, spinning blades, slow yaw
+    m = new THREE.Group();
+    const face = new THREE.Group();
+    const cage = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.004, 6, 20), toonMat(0x8a8f9e));
+    face.add(cage);
+    const spinner = new THREE.Group();
+    for (let k2 = 0; k2 < 4; k2++) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.022, 0.004), toonMat(0xb8bcc4));
+      blade.position.set(Math.cos((k2 * Math.PI) / 2) * 0.032, Math.sin((k2 * Math.PI) / 2) * 0.032, 0);
+      blade.rotation.z = (k2 * Math.PI) / 2;
+      spinner.add(blade);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 8), toonMat(0x2a2732));
+    hub.rotation.x = Math.PI / 2;
+    face.add(hub);
+    face.add(spinner);
+    face.position.z = -0.03;
+    m.add(face);
+    animParts.push({ node: spinner, mode: 'spin' });
+    animParts.push({ node: face, mode: 'yaw' });
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.11) < 0.005 && Math.abs(b - 0.33) < 0.015 && Math.abs(c - 0.03) < 0.006) {
+    // guitar: waisted body, neck, headstock, strings
+    m = new THREE.Group();
+    const wood = toonMat(0xa5642c, { map: woodTex });
+    const lower = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.05, 18), wood);
+    lower.rotation.x = Math.PI / 2;
+    lower.position.y = -0.19;
+    m.add(lower);
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.078, 0.05, 16), wood);
+    upper.rotation.x = Math.PI / 2;
+    upper.position.y = -0.045;
+    m.add(upper);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.032, 14), toonMat(0x241a10));
+    hole.position.set(0, -0.12, -0.026);
+    hole.rotation.y = Math.PI;
+    m.add(hole);
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, 0.018), toonMat(0x6a4022));
+    neck.position.y = 0.16;
+    m.add(neck);
+    const head3 = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.07, 0.016), toonMat(0x2a2732));
+    head3.position.y = 0.36;
+    m.add(head3);
+    for (const sx2 of [-0.008, 0, 0.008]) {
+      const str = new THREE.Mesh(new THREE.BoxGeometry(0.0015, 0.5, 0.0015), toonMat(0xd8dce4));
+      str.position.set(sx2, 0.05, -0.027);
+      m.add(str);
+    }
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.32) < 0.005 && Math.abs(b - 0.42) < 0.005 && Math.abs(c - 0.28) < 0.005) {
+    // stove body: enamel range with an oven door and handle
+    m = new THREE.Group();
+    const bodyS = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), new THREE.MeshPhongMaterial({ color: 0xd8d4cc, shininess: 70, specular: 0xccd6dd }));
+    m.add(bodyS);
+    const oven = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.5, b * 1.0), toonMat(0x2a2732));
+    oven.position.set(0, -0.04, -c - 0.002);
+    oven.rotation.y = Math.PI;
+    m.add(oven);
+    const handle3 = new THREE.Mesh(new THREE.BoxGeometry(a * 1.6, 0.02, 0.02), toonMat(0x8a8f9e));
+    handle3.position.set(0, b * 0.55, -c - 0.02);
+    m.add(handle3);
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.34) < 0.005 && Math.abs(b - 0.02) < 0.005 && Math.abs(c - 0.29) < 0.005) {
+    // cooktop: dark top, four burners
+    m = new THREE.Group();
+    const top3 = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2a2732));
+    m.add(top3);
+    for (const [bx3, bz3] of [[-0.15, -0.12], [0.15, -0.12], [-0.15, 0.12], [0.15, 0.12]]) {
+      const burner = new THREE.Mesh(new THREE.CircleGeometry(0.055, 14), toonMat(0x14121a));
+      burner.rotation.x = -Math.PI / 2;
+      burner.position.set(bx3, b + 0.002, bz3);
+      m.add(burner);
+      const ring2 = new THREE.Mesh(new THREE.RingGeometry(0.04, 0.048, 14), toonMat(0x53c8d8));
+      ring2.rotation.x = -Math.PI / 2;
+      ring2.position.set(bx3, b + 0.003, bz3);
+      m.add(ring2);
+    }
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.16) < 0.004 && Math.abs(b - 0.06) < 0.004 && Math.abs(c - 0.14) < 0.004) {
+    // kitchen sink: steel basin inset with a faucet arc
+    m = new THREE.Group();
+    const steel = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 120, specular: 0xffffff });
+    const rim2 = new THREE.Mesh(new THREE.BoxGeometry(a * 2, 0.012, c * 2), steel);
+    rim2.position.y = b;
+    m.add(rim2);
+    const bowl = new THREE.Mesh(new THREE.BoxGeometry(a * 1.7, 0.01, c * 1.7), toonMat(0x8a8f9e));
+    bowl.position.y = b - 0.035;
+    m.add(bowl);
+    const spout = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.008, 6, 12, Math.PI), steel);
+    spout.position.set(0, b + 0.045, c * 0.75);
+    m.add(spout);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.055) < 0.003 && Math.abs(b - 0.045) < 0.004 && Math.abs(c - 0.055) < 0.003 && gloss > 0.5) {
+    // steel pot: cylinder, rim, handle nubs
+    m = new THREE.Group();
+    const steelP = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 110, specular: 0xffffff });
+    const potB = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.05, a * 0.95, b * 2, 14), steelP);
+    m.add(potB);
+    for (const hx4 of [-1, 1]) {
+      const nub = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.01, 0.03), toonMat(0x2a2732));
+      nub.position.set(hx4 * (a + 0.012), b * 0.4, 0);
+      m.add(nub);
+    }
   } else if (cls === 2 && shape === 0 && Math.abs(gloss - 0.12) < 0.005) {
     // cardboard: every box the sim marks with the 0.12-gloss signature
     // reads as kraft brown with a packing-tape seam, not party pastel
@@ -2244,6 +2356,7 @@ function rebuildSim() {
   layoutRoom();
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
+  animParts.length = 0; // registered by recognition branches per build
   for (const v of catViews.values()) {
     if (v.stars) scene.remove(v.stars);
     scene.remove(v.los);
@@ -2588,6 +2701,10 @@ function frame(now) {
       zoom += (zoomT - zoom) * ea;
       resize();
     }
+  }
+  for (const p of animParts) {
+    if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
+    else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
