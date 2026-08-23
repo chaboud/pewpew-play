@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k10'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k11'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3193,14 +3193,36 @@ function arrowPan(dtMs) {
 let last = performance.now();
 let acc = 0;
 const DT = 1000 / 60;
+// catch-up cap: 100ms guards the death spiral in production; ?test=1
+// raises it so headless playtests on software GL (~3fps) still run
+// real-time sim seconds per wall second
+const ACC_CAP = new URLSearchParams(location.search).has('test') ? 400 : 100;
 function frame(now) {
-  const frameDt = Math.min(now - last, 100);
-  acc = Math.min(acc + frameDt, 100);
+  const frameDt = Math.min(now - last, ACC_CAP);
+  acc = Math.min(acc + frameDt, ACC_CAP);
   last = now;
   arrowPan(frameDt);
+  const prevRay = { ...laserRay };
   updateLaserRay();
+  // when a slow frame catches up several ticks at once, sweep the ray
+  // from last frame's aim to this frame's across them — the cat's
+  // perception sees continuous dot motion, not a park-then-teleport
+  // (matters at ~20fps on a struggling phone, and for the headless
+  // playtest driver at software-GL frame rates)
+  const nTicks = Math.floor(acc / DT);
+  let tickK = 0;
   while (acc >= DT) {
-    lk.lk_step(sim, laserRay.ox, laserRay.oy, laserRay.oz, laserRay.dx, laserRay.dy, laserRay.dz, dotActive ? 1 : 0);
+    tickK++;
+    const f = nTicks > 1 ? tickK / nTicks : 1;
+    const rx = prevRay.ox + (laserRay.ox - prevRay.ox) * f;
+    const ry = prevRay.oy + (laserRay.oy - prevRay.oy) * f;
+    const rz = prevRay.oz + (laserRay.oz - prevRay.oz) * f;
+    let dx = prevRay.dx + (laserRay.dx - prevRay.dx) * f;
+    let dy = prevRay.dy + (laserRay.dy - prevRay.dy) * f;
+    let dz = prevRay.dz + (laserRay.dz - prevRay.dz) * f;
+    const dl = Math.hypot(dx, dy, dz) || 1;
+    dx /= dl; dy /= dl; dz /= dl;
+    lk.lk_step(sim, rx, ry, rz, dx, dy, dz, dotActive ? 1 : 0);
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
@@ -3554,8 +3576,20 @@ requestAnimationFrame(frame);
 // test hook (PewPew pattern): lets an automated driver aim at world points
 window.__lk = {
   aimPad(wx, wy, wz) {
+    // the laser leaves the BELT, not the camera: aiming exactly at a
+    // world point means finding where the belt->target line crosses the
+    // focus plane, and pressing the pad spot whose ray goes through
+    // THAT — projecting the raw target only works for points already on
+    // the plane (playtest-caught: floor lures landed short)
     const { w, h } = viewSize();
-    const v = new THREE.Vector3(wx, wy, wz).project(camera);
+    const T = new THREE.Vector3(wx, wy, wz);
+    const belt = beltWorld();
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    const s = (FOCUS_D - belt.clone().sub(camera.position).dot(fwd)) /
+      Math.max(0.05, T.clone().sub(belt).dot(fwd));
+    const p = belt.clone().add(T.sub(belt).multiplyScalar(s));
+    const v = p.project(camera);
     const sx = ((v.x + 1) / 2) * w;
     const sy = ((-v.y + 1) / 2) * h;
     const r = pad.getBoundingClientRect();
@@ -3569,6 +3603,18 @@ window.__lk = {
   pan: () => [panX, panY],
   zoom: () => zoom,
   laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
+  rings: () => {
+    const n = lk.lk_ring_count(sim);
+    return Array.from({ length: n }, (_, i) => lk.lk_ring_info(sim, i) >>> 0).map((v) => ({
+      rec: v & 0x7fffffff,
+      attached: !!(v >>> 31),
+    }));
+  },
+  body: (rec) => {
+    const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
+    const o = rec * FLOATS_PER_BODY;
+    return [d[o + 5], d[o + 6], d[o + 7]];
+  },
   cat: () => {
     const count = lk.lk_body_count(sim);
     const ptr = lk.lk_render_data(sim);
