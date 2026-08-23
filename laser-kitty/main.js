@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k15'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k16'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -2748,14 +2748,23 @@ function padPoint(e) {
     // Its apparent anchor is simply bottom-center of the frame.
     const nx = 0.5 * w;
     const ny = 1.02 * h;
-    const th = (fx - 0.5) * 1.9;
+    // angular gain (founder: "the entire room should be hittable from
+    // the middle 3rd of the laser space"): a tanh compressor makes the
+    // center hot — ~96% of full swing by a third off center — with the
+    // outer thirds easing into saturation instead of going dead
+    const u = (fx - 0.5) * 2;
+    const sw = Math.tanh(6 * u) / Math.tanh(6);
+    const th = sw * 0.95;
     const reach = 1 - fy * 0.8;
     // elliptical fan: the width budget caps the sideways swing so the
     // tip stays on a portrait screen; straight ahead at full reach hits
     // the same top line the classic mapping uses
+    // vertical pays only half the tilt (cos(th/2)): a full sideways
+    // swing must still clear the stage front, or edge shots aim at the
+    // apron and hit nothing (probe-caught)
     aimScreen = [
-      nx + Math.sin(th) * w * 0.47 * reach,
-      ny - Math.cos(th) * (ny - h * 0.08) * reach,
+      nx + (Math.sin(th) / Math.sin(0.95)) * w * 0.47,
+      ny - Math.cos(th * 0.5) * (ny - h * 0.08) * reach,
     ];
   } else {
     aimScreen = [r.left + fx * r.width, h * (0.08 + fy * 0.52)];
