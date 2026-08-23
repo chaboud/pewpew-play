@@ -13,11 +13,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k13'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k14'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', ao: 'auto', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'auto', aoStrength: 4, laser: 'pad', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -71,6 +71,7 @@ function applyShadowMode() {
   }
   sun.shadow.radius = lite ? 5 : 9; // founder: "didn't end up very soft"
   sun.shadow.blurSamples = lite ? 8 : 16;
+  sun.shadow.intensity = cfg.shadowStrength; // gear slider, live
   scene.traverse((o) => {
     if (o.isMesh && o.material) o.material.needsUpdate = true;
   });
@@ -119,7 +120,7 @@ function applyAO() {
     // room-scale reach: props are centimeters, the room is meters
     n8ao.configuration.aoRadius = 0.45;
     n8ao.configuration.distanceFalloff = 0.45;
-    n8ao.configuration.intensity = 4;
+    n8ao.configuration.intensity = cfg.aoStrength; // gear slider, live
     // occlusion tinted toward the fog purple, not dead black — keeps
     // the toon palette warm in the corners
     n8ao.configuration.color = new THREE.Color(0x181226);
@@ -2735,11 +2736,37 @@ function padPoint(e) {
   const t = e.touches ? e.touches[0] : e;
   const fx = Math.max(0, Math.min(1, (t.clientX - r.left) / r.width));
   const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
-  const sx = r.left + fx * r.width;
-  const sy = viewSize().h * (0.08 + fy * 0.52);
-  aimScreen = [sx, sy];
+  const { w, h } = viewSize();
+  if (cfg.laser === 'wand') {
+    // wand mode (founder): the tail of the laser is tied to the belly
+    // button and the hand steers the head — the belt's screen
+    // projection is the pivot, pad x swings the wand (~±54°), pad y
+    // runs the tip out along it (pad top = full reach). Same ray
+    // machinery downstream; the CONTROL is polar instead of positional.
+    // the belt rides the camera at camera-space z +0.15 — BEHIND the
+    // near plane, so projecting it yields garbage NDC (probe-caught).
+    // Its apparent anchor is simply bottom-center of the frame.
+    const nx = 0.5 * w;
+    const ny = 1.02 * h;
+    const th = (fx - 0.5) * 1.9;
+    const reach = 1 - fy * 0.8;
+    // elliptical fan: the width budget caps the sideways swing so the
+    // tip stays on a portrait screen; straight ahead at full reach hits
+    // the same top line the classic mapping uses
+    aimScreen = [
+      nx + Math.sin(th) * w * 0.47 * reach,
+      ny - Math.cos(th) * (ny - h * 0.08) * reach,
+    ];
+  } else {
+    aimScreen = [r.left + fx * r.width, h * (0.08 + fy * 0.52)];
+  }
   thumbEl.style.left = `${fx * r.width}px`;
   thumbEl.style.top = `${fy * r.height}px`;
+}
+function applyLaserMode() {
+  // the wand wants a smaller strip of screen (founder): the pad drops
+  // to 22vh in wand mode, back to 33vh in classic
+  pad.classList.toggle('short', cfg.laser === 'wand');
 }
 for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointerup', false], ['pointercancel', false]]) {
   pad.addEventListener(ev, (e) => {
@@ -3164,6 +3191,20 @@ aoEl.addEventListener('change', () => {
   applyAO();
 });
 applyAO();
+bindSlider('shstr', 'shadowStrength', (v) => v.toFixed(2), (v) => {
+  sun.shadow.intensity = v;
+});
+bindSlider('aostr', 'aoStrength', (v) => v.toFixed(1), (v) => {
+  if (n8ao) n8ao.configuration.intensity = v;
+});
+const laserEl = document.getElementById('s-laser');
+laserEl.value = cfg.laser;
+laserEl.addEventListener('change', () => {
+  cfg.laser = laserEl.value;
+  saveCfg();
+  applyLaserMode();
+});
+applyLaserMode();
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
 // follow view intent (right arrow reveals what's to the right), which

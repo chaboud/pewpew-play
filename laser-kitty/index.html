@@ -14,8 +14,10 @@
   #meter { width: 120px; height: 5px; margin: 4px auto 0; background: #333; border-radius: 3px; overflow: hidden; }
   #meter > div { height: 100%; width: 0%; background: #6ecb63; }
   #pad { position: fixed; left: 0; right: 0; bottom: 0; height: 33vh;
+         transition: height 0.25s;
          background: linear-gradient(to top, rgba(255,60,60,0.10), rgba(255,60,60,0.02));
          border-top: 1px solid rgba(255,90,90,0.35); }
+  #pad.short { height: 22vh; }
   #thumb { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 2px solid #ff5a5a;
            background: rgba(255,90,90,0.25); transform: translate(-50%,-50%); left: 50%; top: 50%; pointer-events: none; }
   #pops { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
@@ -101,6 +103,15 @@
     <option value="on">On</option>
     <option value="off">Off</option>
   </select></div>
+  <label>Shadow strength</label>
+  <div class="row"><input type="range" id="s-shstr" min="0.2" max="1" step="0.05"><span class="val" id="v-shstr"></span></div>
+  <label>SSAO strength</label>
+  <div class="row"><input type="range" id="s-aostr" min="0" max="8" step="0.5"><span class="val" id="v-aostr"></span></div>
+  <label style="margin-top:10px">Laser mode</label>
+  <div class="row"><select id="s-laser" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;">
+    <option value="pad">Pad &middot; direct (classic)</option>
+    <option value="wand">Wand &middot; from the hip</option>
+  </select></div>
   <label class="row"><input type="checkbox" id="s-sound"> Sound</label>
   <label class="row"><input type="checkbox" id="s-pops"> Score pop-ups</label>
   <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live</div>
@@ -121,6 +132,6 @@
   "postprocessing": "./vendor/pp-stub.js"
 }}
 </script>
-<script type="module" src="main.js?v=k13"></script>
+<script type="module" src="main.js?v=k14"></script>
 </body>
 </html>
