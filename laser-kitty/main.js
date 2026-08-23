@@ -1,6 +1,11 @@
 // Grey-box viewer: a thin adapter over the sim core's C ABI (ADR-0001
 // thin-frontend discipline — no game logic lives here).
 import * as THREE from './vendor/three.module.min.js';
+// AO stack: three's EffectComposer + the vendored N8AO pass (an import
+// map in index.html resolves their bare 'three' / 'postprocessing'
+// specifiers to local vendor files — everything stays self-hosted)
+import { EffectComposer } from './vendor/EffectComposer.js';
+import { N8AOPass } from './vendor/N8AO.js';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -8,11 +13,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k9'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k10'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', ao: 'auto', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -64,8 +69,8 @@ function applyShadowMode() {
       sun.shadow.map = null;
     }
   }
-  sun.shadow.radius = lite ? 4 : 6;
-  sun.shadow.blurSamples = lite ? 6 : 12;
+  sun.shadow.radius = lite ? 5 : 9; // founder: "didn't end up very soft"
+  sun.shadow.blurSamples = lite ? 8 : 16;
   scene.traverse((o) => {
     if (o.isMesh && o.material) o.material.needsUpdate = true;
   });
@@ -85,6 +90,46 @@ scene.add(sun);
 const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
 lampGlow.position.set(2.2, 1.35, -1.6);
 scene.add(lampGlow);
+
+// --- ambient occlusion (founder: the VSM pass reads "real" more than
+// soft, and does nothing for contact darkening — "a screen-space
+// ambient occlusion pass would probably really richen the diorama
+// look"). N8AO renders the scene itself, so the composer chain is just
+// [N8AOPass]; gammaCorrection on the pass stands in for OutputPass.
+// Auto = on for fine-pointer devices, off for phones and ?lite=1; the
+// gear menu can force it either way (forced-on phones take the Low/
+// half-res path).
+let composer = null;
+let n8ao = null;
+let aoActive = false;
+function aoWanted() {
+  if (cfg.ao === 'on') return true;
+  if (cfg.ao === 'off') return false;
+  return !matchMedia('(pointer: coarse)').matches && !new URLSearchParams(location.search).has('lite');
+}
+function applyAO() {
+  if (aoWanted() && !composer) {
+    const pr = renderer.getPixelRatio();
+    const { w, h } = viewSize();
+    composer = new EffectComposer(renderer);
+    composer.setPixelRatio(pr);
+    composer.setSize(w, h);
+    n8ao = new N8AOPass(scene, camera, w * pr, h * pr);
+    n8ao.configuration.gammaCorrection = true;
+    // room-scale reach: props are centimeters, the room is meters
+    n8ao.configuration.aoRadius = 0.45;
+    n8ao.configuration.distanceFalloff = 0.45;
+    n8ao.configuration.intensity = 4;
+    // occlusion tinted toward the fog purple, not dead black — keeps
+    // the toon palette warm in the corners
+    n8ao.configuration.color = new THREE.Color(0x181226);
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    n8ao.setQualityMode(coarse ? 'Low' : 'Medium');
+    n8ao.configuration.halfRes = coarse;
+    composer.addPass(n8ao);
+  }
+  aoActive = aoWanted() && !!composer;
+}
 
 // --- toon look: shared band ramp + material factory ------------------------
 const ramp = new THREE.DataTexture(new Uint8Array([96, 160, 222, 255]), 4, 1, THREE.RedFormat);
@@ -2487,6 +2532,7 @@ function viewSize() {
 function resize() {
   const { w, h } = viewSize();
   renderer.setSize(w, h, false);
+  if (composer) composer.setSize(w, h);
   const aspect = w / h;
   camera.aspect = aspect;
   // zoom applies AFTER the aspect adaptation and its cap — otherwise tall
@@ -3082,9 +3128,14 @@ bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
 bindSlider('strength', 'strength', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('gravity', 'gravity', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('destruct', 'destruct', (v) => (v === 0 ? 'OFF' : `${v.toFixed(1)}x`), retune);
-bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) =>
-  renderer.setPixelRatio(Math.min(devicePixelRatio, v))
-);
+bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) => {
+  renderer.setPixelRatio(Math.min(devicePixelRatio, v));
+  if (composer) {
+    composer.setPixelRatio(renderer.getPixelRatio());
+    const { w, h } = viewSize();
+    composer.setSize(w, h);
+  }
+});
 const soundEl = document.getElementById('s-sound');
 soundEl.checked = cfg.sound;
 soundEl.addEventListener('change', () => {
@@ -3105,6 +3156,14 @@ shadowsEl.addEventListener('change', () => {
   saveCfg();
   applyShadowMode();
 });
+const aoEl = document.getElementById('s-ao');
+aoEl.value = cfg.ao;
+aoEl.addEventListener('change', () => {
+  cfg.ao = aoEl.value;
+  saveCfg();
+  applyAO();
+});
+applyAO();
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
 // follow view intent (right arrow reveals what's to the right), which
@@ -3460,7 +3519,8 @@ function frame(now) {
 
   updateCloths(data);
   updateRings(data);
-  renderer.render(scene, camera);
+  if (aoActive) composer.render();
+  else renderer.render(scene, camera);
 
   // floating per-cat state tags — projected AFTER render so the camera
   // matrices match the drawn frame exactly, with a view-space front test
