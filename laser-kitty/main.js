@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k7'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k8'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -293,6 +293,61 @@ function artTex(i) {
     g.strokeRect(0, 0, 128, 96);
   });
 }
+
+// keyboard key grid: shared by laptops and the desk keyboard
+const keyTex = makeCanvas(96, 40, (g) => {
+  g.fillStyle = '#23212b';
+  g.fillRect(0, 0, 96, 40);
+  for (let r = 0; r < 4; r++) {
+    for (let k = 0; k < 12; k++) {
+      g.fillStyle = '#3d3a48';
+      g.fillRect(3 + k * 7.7 + (r % 2) * 2, 3 + r * 8, 6, 6);
+    }
+  }
+  g.fillStyle = '#3d3a48';
+  g.fillRect(28, 33, 40, 5); // spacebar
+});
+// a "someone was working" screen: dark editor, colored code lines
+const codeTex = makeCanvas(128, 96, (g) => {
+  g.fillStyle = '#141824';
+  g.fillRect(0, 0, 128, 96);
+  let s = 77777;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const cols = ['#7aa2f7', '#9ece6a', '#e0af68', '#bb9af7', '#7dcfff'];
+  for (let y = 6; y < 92; y += 7) {
+    let x = 6 + Math.floor(rnd() * 3) * 8;
+    const segs = 1 + Math.floor(rnd() * 3);
+    for (let k = 0; k < segs; k++) {
+      const w = 10 + rnd() * 30;
+      g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+      g.fillRect(x, y, w, 3);
+      x += w + 6;
+    }
+  }
+});
+// grandfather-clock dial: cream face, brass ring, hands at ten past ten
+const dialTex = makeCanvas(96, 96, (g) => {
+  g.fillStyle = '#2c2018';
+  g.fillRect(0, 0, 96, 96);
+  g.fillStyle = '#b08d3e';
+  g.beginPath(); g.arc(48, 48, 40, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#f2ead6';
+  g.beginPath(); g.arc(48, 48, 35, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#3a2c20';
+  g.lineWidth = 2;
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(48 + Math.cos(a) * 30, 48 + Math.sin(a) * 30);
+    g.lineTo(48 + Math.cos(a) * 34, 48 + Math.sin(a) * 34);
+    g.stroke();
+  }
+  g.lineWidth = 3;
+  g.beginPath(); g.moveTo(48, 48); g.lineTo(48 + 16, 48 - 12); g.stroke();
+  g.beginPath(); g.moveTo(48, 48); g.lineTo(48 - 20, 48 - 15); g.stroke();
+  g.fillStyle = '#3a2c20';
+  g.beginPath(); g.arc(48, 48, 3, 0, Math.PI * 2); g.fill();
+});
 
 // recognition meshes can register locally-animated children (fan
 // blades, oscillating heads); the frame loop drives them while the
@@ -1217,6 +1272,414 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     reel.rotation.z = Math.PI / 2;
     reel.position.set(0.015, -b * 0.62, 0);
     m.add(reel);
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.31) < 0.012 && Math.abs(b - 0.27) < 0.012 && c < 0.02 && gloss > 0.85) {
+    // window behind the mini blinds: frame, warm daylight pane, muntins
+    m = new THREE.Group();
+    const wframe = new THREE.Mesh(new THREE.BoxGeometry(a * 2 + 0.03, b * 2 + 0.03, 0.02), toonMat(0x3a2c20));
+    m.add(wframe);
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.9, b * 1.9), new THREE.MeshBasicMaterial({ color: 0xffe7c2 }));
+    pane.rotation.y = Math.PI;
+    pane.position.z = -0.011;
+    m.add(pane);
+    for (const mx of [-a * 0.63, 0, a * 0.63]) {
+      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.014, b * 1.9, 0.01), toonMat(0x3a2c20));
+      mull.position.set(mx, 0, -0.012);
+      m.add(mull);
+    }
+    m.userData.noShadow = true;
+  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.28) < 0.012 && Math.abs(b - 0.012) < 0.004 && Math.abs(c - 0.02) < 0.006) {
+    // blind headrail: plain valance, not a painting
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xe8e2d2)));
+  } else if (cls === 2 && shape === 0 && Math.abs(b - 0.004) < 0.0015 && Math.abs(a - 0.26) < 0.012 && Math.abs(c - 0.032) < 0.004) {
+    // mini blind slat: ivory with a soft sheen and lift-cord dots
+    m = new THREE.Group();
+    const slat = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      new THREE.MeshPhongMaterial({ color: 0xece6d6, shininess: 40, specular: 0x999080 })
+    );
+    m.add(slat);
+    for (const ex of [-a * 0.85, a * 0.85]) {
+      const cord = new THREE.Mesh(new THREE.BoxGeometry(0.004, b * 2 + 0.002, 0.004), toonMat(0xc9c2b0));
+      cord.position.set(ex, 0, 0);
+      m.add(cord);
+    }
+    m.userData.noShadow = true; // ten slats of VSM shadow = noise
+  } else if (cls === 1 && Math.abs(gloss - 0.32) < 0.01 && Math.max(a, b, c) <= 0.1) {
+    // terracotta planter pieces — gloss 0.32 is reserved as the clay
+    // signature (material-signature-as-identity, like cardboard)
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xb26644)));
+  } else if (cls === 2 && shape === 1 && a > 0.021 && a < 0.027 && gloss <= 0.1) {
+    // dirt clod out of a planter
+    m = new THREE.Group();
+    const dg = new THREE.SphereGeometry(a, 8, 6);
+    roughen(dg, 0.3);
+    m.add(new THREE.Mesh(dg, toonMat(0x4a3626)));
+  } else if (cls === 2 && shape === 1 && a > 0.024 && a < 0.028 && gloss > 0.1 && gloss < 0.25) {
+    // crumpled paper out of the trash
+    m = new THREE.Group();
+    const pg = new THREE.SphereGeometry(a, 8, 6);
+    roughen(pg, 0.45);
+    m.add(new THREE.Mesh(pg, toonMat(0xe4ddca)));
+  } else if (cls === 2 && shape === 1 && a > 0.026 && a < 0.03 && Math.abs(gloss - 0.35) < 0.03 && tint !== undefined && tint < 0.7) {
+    // fruit: apple / orange / lime by index, with a stem
+    m = new THREE.Group();
+    const fcol = [0xc23b2e, 0xe08a2e, 0x8fba3c, 0xd8b13a][i % 4];
+    m.add(new THREE.Mesh(new THREE.SphereGeometry(a, 12, 10), toonMat(fcol)));
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0035, 0.012, 5), toonMat(0x4a3626));
+    stem.position.y = a + 0.004;
+    m.add(stem);
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.038) < 0.002 && gloss > 0.9) {
+    // snow globe: glass dome, white base, tiny tree inside
+    m = new THREE.Group();
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(a, 14, 12), crystalMat());
+    m.add(dome);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.014, 12), toonMat(0x8a4a3a));
+    base.position.y = -a + 0.009;
+    m.add(base);
+    const snow = new THREE.Mesh(new THREE.CircleGeometry(0.024, 10), toonMat(0xf4f4f8));
+    snow.rotation.x = -Math.PI / 2;
+    snow.position.y = -a + 0.017;
+    m.add(snow);
+    const tree = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 7), toonMat(0x2e6b3a));
+    tree.position.y = -a + 0.032;
+    m.add(tree);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.014) < 0.0025 && Math.abs(b - 0.11) < 0.005 && Math.abs(c - 0.014) < 0.0025) {
+    // the plant standing in a planter: trunk + leafy crown
+    m = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.015, b * 2, 7), toonMat(0x5a4330));
+    m.add(trunk);
+    const leaf = toonMat(0x3e7a3a);
+    for (const [lx, ly, lz, r] of [[0, b + 0.06, 0, 0.085], [0.06, b + 0.01, 0.02, 0.06], [-0.05, b + 0.03, -0.04, 0.065]]) {
+      const fol = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 7), leaf);
+      fol.position.set(lx, ly, lz);
+      m.add(fol);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.06) < 0.003 && Math.abs(b - 0.045) < 0.0035 && Math.abs(c - 0.06) < 0.003 && gloss < 0.5) {
+    // hanging plant basket: pot, foliage dome, trailing vines
+    m = new THREE.Group();
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.045, b * 2, 12), toonMat(0x8a4a3a));
+    m.add(pot);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), toonMat(0x3e7a3a));
+    dome.scale.y = 0.65;
+    dome.position.y = b + 0.02;
+    m.add(dome);
+    const vine = toonMat(0x35683a, { side: THREE.DoubleSide });
+    for (let k = 0; k < 5; k++) {
+      const ang = (k / 5) * Math.PI * 2 + 0.4;
+      const v = new THREE.Mesh(new THREE.PlaneGeometry(0.02, 0.11), vine);
+      v.position.set(Math.cos(ang) * 0.055, -0.02, Math.sin(ang) * 0.055);
+      v.rotation.y = -ang;
+      v.rotation.x = 0.35;
+      m.add(v);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.155) < 0.004 && Math.abs(b - 0.78) < 0.012) {
+    // grandfather clock case: walnut cabinet, glass door, brass columns
+    m = new THREE.Group();
+    const wood = new THREE.MeshPhongMaterial({ color: 0x5e4028, shininess: 55, specular: 0xc9a86a });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), wood));
+    const glass = new THREE.Mesh(
+      new THREE.PlaneGeometry(a * 1.5, b * 1.7),
+      new THREE.MeshPhongMaterial({ color: 0x1c1a22, shininess: 150, specular: 0xaabbcc, transparent: true, opacity: 0.5 })
+    );
+    glass.rotation.y = Math.PI;
+    glass.position.z = -c - 0.002;
+    m.add(glass);
+    const brassCol = new THREE.MeshPhongMaterial({ color: 0xb08d3e, shininess: 90, specular: 0xffe8b0 });
+    for (const ex of [-a + 0.012, a - 0.012]) {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, b * 2, 8), brassCol);
+      col.position.set(ex, 0, -c - 0.004);
+      m.add(col);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.175) < 0.004 && Math.abs(b - 0.125) < 0.005 && Math.abs(c - 0.115) < 0.005) {
+    // clock hood: dial face forward, carved crown
+    m = new THREE.Group();
+    const wood = new THREE.MeshPhongMaterial({ color: 0x5e4028, shininess: 55, specular: 0xc9a86a });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), wood));
+    const dial = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), toonMat(0xffffff, { map: dialTex }));
+    dial.rotation.y = Math.PI;
+    dial.position.z = -c - 0.002;
+    m.add(dial);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(a * 2.15, 0.02, c * 2.15), wood);
+    crown.position.y = b + 0.01;
+    m.add(crown);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.012) < 0.002 && Math.abs(b - 0.1) < 0.005 && Math.abs(c - 0.012) < 0.002 && gloss > 0.7) {
+    // clock pendulum: brass rod + bob, with a gentle visual sway (the
+    // body itself is honest physics on its joint)
+    m = new THREE.Group();
+    const brassP = new THREE.MeshPhongMaterial({ color: 0xc9a542, shininess: 110, specular: 0xfff0c0 });
+    const sway = new THREE.Group();
+    sway.position.y = b; // pivot at the hanger point
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, b * 1.7, 6), brassP);
+    rod.position.y = -b * 0.85;
+    sway.add(rod);
+    const bob = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.008, 14), brassP);
+    bob.rotation.x = Math.PI / 2;
+    bob.position.y = -b * 1.75;
+    sway.add(bob);
+    m.add(sway);
+    animParts.push({ node: sway, mode: 'pend' });
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.08) < 0.003 && Math.abs(c - 0.05) < 0.003 && Math.abs(gloss - 0.6) < 0.12) {
+    // marble bust: plinth, shoulders, head
+    m = new THREE.Group();
+    const marble = new THREE.MeshPhongMaterial({ color: 0xdcd8d0, shininess: 55, specular: 0xbbc4cc });
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(a * 1.9, 0.02, c * 1.9), marble);
+    plinth.position.y = -b + 0.01;
+    m.add(plinth);
+    const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.014, a * 0.95, 0.06, 10), marble);
+    chest.position.y = -b + 0.05;
+    m.add(chest);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 9), marble);
+    head.scale.set(0.85, 1.1, 0.9);
+    head.position.y = b - 0.038;
+    m.add(head);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.006, 0.014, 5), marble);
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.set(0, b - 0.036, -0.03);
+    m.add(nose);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.14) < 0.004 && Math.abs(c - 0.04) < 0.003) {
+    // standing statue torso: a robed figure
+    m = new THREE.Group();
+    const marble = new THREE.MeshPhongMaterial({ color: 0xdcd8d0, shininess: 55, specular: 0xbbc4cc });
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.052, b * 2, 10), marble);
+    m.add(robe);
+    for (const ex of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.07, 3, 6), marble);
+      arm.position.set(ex * 0.042, 0.03, 0);
+      arm.rotation.z = ex * 0.35;
+      m.add(arm);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.028) < 0.0025 && Math.abs(b - 0.032) < 0.0025 && Math.abs(c - 0.024) < 0.0025) {
+    // statue head
+    m = new THREE.Group();
+    const marble = new THREE.MeshPhongMaterial({ color: 0xdcd8d0, shininess: 55, specular: 0xbbc4cc });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 9), marble);
+    head.scale.set(0.9, 1.08, 0.85);
+    m.add(head);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.14) < 0.004 && Math.abs(b - 0.008) < 0.0025 && Math.abs(c - 0.1) < 0.004) {
+    // TV tray top: faux-wood with a raised lip
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x8a5c38, { map: woodTex })));
+    const lipM = toonMat(0x6e4426);
+    for (const [w, d, x, z] of [[a * 2, 0.008, 0, c], [a * 2, 0.008, 0, -c], [0.008, c * 2, a, 0], [0.008, c * 2, -a, 0]]) {
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(w, 0.01, d), lipM);
+      lip.position.set(x, b + 0.005, z);
+      m.add(lip);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.012) < 0.002 && Math.abs(b - 0.205) < 0.005 && Math.abs(c - 0.09) < 0.004) {
+    // TV tray legs: crossed folding tubes inside the panel volume
+    m = new THREE.Group();
+    const tube = new THREE.MeshPhongMaterial({ color: 0x8a8f98, shininess: 80, specular: 0xdde4ee });
+    for (const s of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, b * 2.15, 8), tube);
+      leg.rotation.x = s * 0.42;
+      m.add(leg);
+    }
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.115) < 0.004 && Math.abs(b - 0.009) < 0.003 && Math.abs(c - 0.078) < 0.004) {
+    // open laptop base: aluminum deck, key grid, trackpad
+    m = new THREE.Group();
+    const alu = new THREE.MeshPhongMaterial({ color: 0x9aa0a8, shininess: 70, specular: 0xdde4ee });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), alu));
+    const keys = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.7, c * 1.05), toonMat(0xffffff, { map: keyTex }));
+    keys.rotation.x = -Math.PI / 2;
+    keys.position.set(0, b + 0.001, 0.012);
+    m.add(keys);
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.032), toonMat(0x83888f));
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(0, b + 0.001, -c + 0.022);
+    m.add(pad);
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.115) < 0.004 && Math.abs(b - 0.072) < 0.004 && Math.abs(c - 0.007) < 0.003) {
+    // open laptop screen: dark bezel, glowing code
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2a2732)));
+    const scr = new THREE.Mesh(
+      new THREE.PlaneGeometry(a * 1.85, b * 1.8),
+      new THREE.MeshBasicMaterial({ map: codeTex })
+    );
+    scr.rotation.y = Math.PI;
+    scr.position.z = -c - 0.001;
+    m.add(scr);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.09) < 0.003 && Math.abs(b - 0.008) < 0.0025 && Math.abs(c - 0.07) < 0.003 && gloss > 0.7) {
+    // closed laptop on the home desk: slim slab, glowing logo
+    m = new THREE.Group();
+    const alu = new THREE.MeshPhongMaterial({ color: 0x9aa0a8, shininess: 70, specular: 0xdde4ee });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), alu));
+    const logo = new THREE.Mesh(new THREE.CircleGeometry(0.012, 12), new THREE.MeshBasicMaterial({ color: 0xcfe8ff }));
+    logo.rotation.x = -Math.PI / 2;
+    logo.position.y = b + 0.001;
+    m.add(logo);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.025) < 0.003 && Math.abs(b - 0.115) < 0.005 && Math.abs(c - 0.165) < 0.005) {
+    // desktop monitor: thin panel, code glow, facing into the room (+x)
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2a2732)));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(c * 1.85, b * 1.8), new THREE.MeshBasicMaterial({ map: codeTex }));
+    scr.rotation.y = Math.PI / 2;
+    scr.position.x = a + 0.001;
+    m.add(scr);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.055) < 0.003 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.14) < 0.005 && gloss < 0.6) {
+    // PC tower: dark case, vent slots, power LED
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x24222c)));
+    for (let k = 0; k < 4; k++) {
+      const vent = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.004), toonMat(0x3a3742));
+      vent.rotation.y = Math.PI;
+      vent.position.set(0, -0.02 - k * 0.014, -c - 0.001);
+      m.add(vent);
+    }
+    const led = new THREE.Mesh(new THREE.CircleGeometry(0.004, 8), new THREE.MeshBasicMaterial({ color: 0x7fd4ff }));
+    led.rotation.y = Math.PI;
+    led.position.set(0.03, b - 0.03, -c - 0.001);
+    m.add(led);
+  } else if (cls === 2 && shape === 0 && Math.abs(b - 0.006) < 0.0015 && Math.abs(Math.max(a, c) - 0.085) < 0.004 && Math.abs(Math.min(a, c) - 0.032) < 0.004) {
+    // desk keyboard
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x2c2a34)));
+    const keys = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(a, c) * 1.85, Math.max(a, c) * 1.9), toonMat(0xffffff, { map: keyTex }));
+    keys.rotation.x = -Math.PI / 2;
+    keys.rotation.z = a > c ? 0 : Math.PI / 2;
+    keys.position.y = b + 0.001;
+    m.add(keys);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.016) < 0.002 && Math.abs(b - 0.011) < 0.0025 && Math.abs(c - 0.026) < 0.003) {
+    // mouse: rounded shell + scroll wheel
+    m = new THREE.Group();
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 8), toonMat(0x34323e));
+    shell.scale.set(0.68, 0.5, 1.1);
+    m.add(shell);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.004, 8), toonMat(0x83888f));
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(0, 0.009, -0.012);
+    m.add(wheel);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.003 && b < 0.005 && Math.abs(c - 0.038) < 0.003) {
+    // loose paper
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, 0.002, c * 2), toonMat(0xf0ecdd)));
+    for (let k = 0; k < 4; k++) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.5, 0.003), toonMat(0xb9b2a0));
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(0, 0.002, -c * 0.55 + k * 0.018);
+      m.add(line);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.019) < 0.0018 && Math.abs(b - 0.038) < 0.003 && Math.abs(c - 0.019) < 0.0018 && gloss < 0.6) {
+    // pen cup with pens leaning out
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.016, b * 2, 10), toonMat(0x4a5a8a)));
+    for (const [pa, col] of [[-0.18, 0xd8534f], [0.12, 0x3a3742], [0.3, 0xd8b04f]]) {
+      const pen = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.055, 5), toonMat(col));
+      pen.rotation.z = pa;
+      pen.position.y = b + 0.012;
+      m.add(pen);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.042) < 0.003 && Math.abs(b - 0.018) < 0.0025 && Math.abs(c - 0.058) < 0.003) {
+    // corded phone base: wedge body, keypad, cradle rails
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x8a2f2a)));
+    for (let r = 0; r < 4; r++) {
+      for (let k = 0; k < 3; k++) {
+        const btn = new THREE.Mesh(new THREE.BoxGeometry(0.007, 0.003, 0.007), toonMat(0xe8e2d2));
+        btn.position.set(-0.02 + k * 0.014, b, 0.014 + r * 0.011);
+        m.add(btn);
+      }
+    }
+    for (const ex of [-0.026, 0.026]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.008, 0.03), toonMat(0x6e2521));
+      rail.position.set(ex, b + 0.004, -0.03);
+      m.add(rail);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.062) < 0.003 && Math.abs(b - 0.013) < 0.0022 && Math.abs(c - 0.02) < 0.003) {
+    // phone handset: bar with rounded ear and mouth pieces
+    m = new THREE.Group();
+    const red = toonMat(0x8a2f2a);
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 1.4, b * 1.6, c * 1.6), red));
+    for (const ex of [-1, 1]) {
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.016, 9, 7), red);
+      cup.scale.y = 0.8;
+      cup.position.set(ex * a * 0.78, -0.002, 0);
+      m.add(cup);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.033) < 0.0025 && b < 0.006 && Math.abs(c - 0.068) < 0.003 && gloss > 0.8) {
+    // mobile phone, face up and still glowing
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x1c1a22)));
+    const scr = new THREE.Mesh(
+      new THREE.PlaneGeometry(a * 1.8, c * 1.8),
+      new THREE.MeshBasicMaterial({ color: 0x3a5a8f })
+    );
+    scr.rotation.x = -Math.PI / 2;
+    scr.position.y = b + 0.001;
+    m.add(scr);
+    const cam = new THREE.Mesh(new THREE.CircleGeometry(0.004, 8), toonMat(0x101018));
+    cam.rotation.x = -Math.PI / 2;
+    cam.position.set(0.018, b + 0.0015, -c + 0.012);
+    m.add(cam);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.007) < 0.0015 && Math.abs(b - 0.007) < 0.0015 && Math.abs(c - 0.007) < 0.0015) {
+    // phone cord link
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 5), toonMat(0x5e2521)));
+  } else if (cls === 2 && shape === 0 && Math.abs(b - 0.0035) < 0.0012 && Math.abs(a - 0.009) < 0.002 && Math.abs(c - 0.048) < 0.004) {
+    // silverware: fork / knife / spoon by index
+    m = new THREE.Group();
+    const steel = new THREE.MeshPhongMaterial({ color: 0xb9bfc8, shininess: 120, specular: 0xf0f4fa });
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.005, 0.055), steel);
+    handle.position.z = 0.015;
+    m.add(handle);
+    const kind3 = i % 3;
+    if (kind3 === 0) {
+      for (const tx3 of [-0.006, 0, 0.006]) {
+        const tine = new THREE.Mesh(new THREE.BoxGeometry(0.0028, 0.004, 0.03), steel);
+        tine.position.set(tx3, 0, -0.032);
+        m.add(tine);
+      }
+    } else if (kind3 === 1) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.003, 0.042), steel);
+      blade.position.z = -0.026;
+      m.add(blade);
+    } else {
+      const bowl2 = new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), steel);
+      bowl2.scale.set(1, 0.32, 1.35);
+      bowl2.position.z = -0.033;
+      m.add(bowl2);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.019) < 0.0018 && Math.abs(b - 0.052) < 0.003 && Math.abs(c - 0.019) < 0.0018 && gloss > 0.9) {
+    // stemware: foot, stem, tulip bowl
+    m = new THREE.Group();
+    const glassM = new THREE.MeshPhongMaterial({
+      color: 0xdfe8ee, shininess: 150, specular: 0xffffff, transparent: true, opacity: 0.45,
+    });
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.004, 12), glassM);
+    foot.position.y = -b + 0.002;
+    m.add(foot);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0035, 0.045, 8), glassM);
+    stem.position.y = -b + 0.026;
+    m.add(stem);
+    const bowl3 = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.009, 0.05, 12), glassM);
+    bowl3.position.y = b - 0.026;
+    m.add(bowl3);
+    const wine2 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.008, 0.02, 10), toonMat(0x6e1830));
+    wine2.position.y = b - 0.04;
+    m.add(wine2);
+    m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.035) < 0.0025 && Math.abs(b - 0.045) < 0.002 && Math.abs(c - 0.035) < 0.0025 && gloss >= 0.5) {
+    // mug: cylinder + handle — every mug in every room upgrades at once
+    m = new THREE.Group();
+    const mcol = new THREE.Color().setHSL(((i * 2654435761) >>> 0) / 4294967296, 0.45, 0.55);
+    const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.03, b * 2, 12), toonMat(mcol));
+    m.add(cup2);
+    const hnd = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.005, 6, 10, Math.PI), toonMat(mcol));
+    hnd.position.set(0.036, 0.004, 0);
+    hnd.rotation.z = -Math.PI / 2;
+    m.add(hnd);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - c) < 0.002 && a >= 0.04 && a <= 0.085 && b >= 0.006 && b <= 0.016 && gloss >= 0.6) {
+    // the plate family: any squat square ceramic/steel reads as a disc
+    // with a rim (kitchen stacks, TV-tray dinner, the trash-can lid)
+    m = new THREE.Group();
+    const pcol = tint !== undefined && tint < 0.7 ? 0xb9bfc8 : 0xeceae4;
+    const pmat = new THREE.MeshPhongMaterial({ color: pcol, shininess: 85, specular: 0xccd6dd });
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(a, a * 0.7, b * 2, 18), pmat);
+    m.add(disc);
+    const well = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.62, a * 0.62, 0.002, 16), toonMat(0xd8d4c8));
+    well.position.y = b;
+    m.add(well);
   } else if (cls === 2 && shape === 1 && Math.abs(a - 0.09) < 0.004) {
     // r 0.09 spheres split by gloss: the mansion globe vs the beach ball
     m = new THREE.Group();
@@ -2769,6 +3232,7 @@ function frame(now) {
   }
   for (const p of animParts) {
     if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
+    else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0021) * 0.22;
     else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
   applyLook(Math.sin(now * 0.0006) * 0.012);
