@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k18'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k19'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -396,6 +396,60 @@ const dialTex = makeCanvas(96, 96, (g) => {
   g.fillStyle = '#3a2c20';
   g.beginPath(); g.arc(48, 48, 3, 0, Math.PI * 2); g.fill();
 });
+
+// neon sign faces: glowing strokes on near-black, by design index
+function neonTex(kind) {
+  return makeCanvas(256, 128, (g) => {
+    g.fillStyle = 'rgba(10,8,16,0.92)';
+    g.fillRect(0, 0, 256, 128);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    const stroke = (col, w, draw) => {
+      g.strokeStyle = col;
+      g.lineWidth = w;
+      g.shadowColor = col;
+      g.shadowBlur = 18;
+      g.beginPath();
+      draw();
+      g.stroke();
+    };
+    if (kind === 0) {
+      // BAR in hot pink script
+      g.font = 'italic 700 72px Georgia, serif';
+      g.shadowColor = '#ff4fa0';
+      g.shadowBlur = 22;
+      g.strokeStyle = '#ff9fce';
+      g.lineWidth = 3;
+      g.strokeText('BAR', 52, 88);
+      g.shadowBlur = 0;
+      g.fillStyle = '#ffd9ec';
+      g.fillText('BAR', 52, 88);
+    } else if (kind === 1) {
+      // martini glass, cyan, with an olive
+      stroke('#5ff0ff', 5, () => {
+        g.moveTo(78, 30); g.lineTo(178, 30); g.lineTo(128, 78);
+        g.lineTo(128, 104); g.moveTo(104, 108); g.lineTo(152, 108);
+      });
+      g.shadowColor = '#9fff5f';
+      g.shadowBlur = 14;
+      g.fillStyle = '#c8ff9a';
+      g.beginPath();
+      g.arc(112, 44, 7, 0, Math.PI * 2);
+      g.fill();
+    } else {
+      // OPEN in warm amber block letters
+      g.font = '700 56px system-ui, sans-serif';
+      g.shadowColor = '#ffb84f';
+      g.shadowBlur = 20;
+      g.strokeStyle = '#ffd08a';
+      g.lineWidth = 3;
+      g.strokeText('OPEN', 44, 82);
+      g.shadowBlur = 0;
+      g.fillStyle = '#fff2d8';
+      g.fillText('OPEN', 44, 82);
+    }
+  });
+}
 
 // recognition meshes can register locally-animated children (fan
 // blades, oscillating heads); the frame loop drives them while the
@@ -1347,39 +1401,90 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     reel.rotation.z = Math.PI / 2;
     reel.position.set(0.015, -b * 0.62, 0);
     m.add(reel);
-  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.31) < 0.012 && Math.abs(b - 0.27) < 0.012 && c < 0.02 && gloss > 0.85) {
-    // window behind the mini blinds: frame, warm daylight pane, muntins
+  } else if (cls === 0 && shape === 0 && gloss > 0.95 && Math.min(a, c) < 0.02 && b >= 0.1 && b <= 0.2 && Math.max(a, c) <= 0.45) {
+    // NEON: glowing sign face on a near-black backing; tint picks the
+    // design. DoubleSide so it reads from any camera angle.
     m = new THREE.Group();
-    const wframe = new THREE.Mesh(new THREE.BoxGeometry(a * 2 + 0.03, b * 2 + 0.03, 0.02), toonMat(0x3a2c20));
+    const along = Math.max(a, c);
+    const kind2 = tint < 0.3 ? 0 : tint < 0.7 ? 1 : 2;
+    const face = new THREE.Mesh(
+      new THREE.PlaneGeometry(along * 2, b * 2),
+      new THREE.MeshBasicMaterial({ map: neonTex(kind2), transparent: true, side: THREE.DoubleSide })
+    );
+    // face INTO the room or the text reads mirrored (screenshot-caught):
+    // far wall looks -z; the right-wall sign looks -x
+    face.rotation.y = c > a ? -Math.PI / 2 : Math.PI;
+    m.add(face);
+    m.userData.noShadow = true;
+  } else if (cls === 0 && shape === 0 && gloss > 0.85 && Math.min(a, c) < 0.02 && b >= 0.14 && b <= 0.5 && Math.max(a, c) >= 0.14 && Math.max(a, c) <= 0.6) {
+    // window: frame, warm daylight pane, muntins — thin axis picks the
+    // wall (far wall = thin z, side wall = thin x); pane is DoubleSide
+    // and centered so either side of the wall reads
+    m = new THREE.Group();
+    const along = Math.max(a, c);
+    const side2 = c > a; // thin x = side-wall window
+    const wframe = new THREE.Mesh(
+      side2 ? new THREE.BoxGeometry(0.02, b * 2 + 0.03, along * 2 + 0.03) : new THREE.BoxGeometry(along * 2 + 0.03, b * 2 + 0.03, 0.02),
+      toonMat(0x3a2c20)
+    );
     m.add(wframe);
-    const pane = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.9, b * 1.9), new THREE.MeshBasicMaterial({ color: 0xffe7c2 }));
-    pane.rotation.y = Math.PI;
-    pane.position.z = -0.011;
-    m.add(pane);
-    for (const mx of [-a * 0.63, 0, a * 0.63]) {
-      const mull = new THREE.Mesh(new THREE.BoxGeometry(0.014, b * 1.9, 0.01), toonMat(0x3a2c20));
-      mull.position.set(mx, 0, -0.012);
-      m.add(mull);
+    // panes sit just OUTSIDE the frame slab on both faces — centered
+    // inside it they vanish and the window reads as a dark board
+    // (screenshot-caught)
+    for (const pd of [-0.014, 0.014]) {
+      const pane = new THREE.Mesh(
+        new THREE.PlaneGeometry(along * 1.9, b * 1.9),
+        new THREE.MeshBasicMaterial({ color: 0xffe7c2, side: THREE.DoubleSide })
+      );
+      if (side2) pane.rotation.y = Math.PI / 2;
+      pane.position.set(side2 ? pd : 0, 0, side2 ? 0 : pd);
+      m.add(pane);
+    }
+    for (const mf of [-0.63, 0, 0.63]) {
+      for (const md of [-0.016, 0.016]) {
+        const mull = new THREE.Mesh(
+          side2 ? new THREE.BoxGeometry(0.006, b * 1.9, 0.014) : new THREE.BoxGeometry(0.014, b * 1.9, 0.006),
+          toonMat(0x3a2c20)
+        );
+        mull.position.set(side2 ? md : mf * along, 0, side2 ? mf * along : md);
+        m.add(mull);
+      }
     }
     m.userData.noShadow = true;
-  } else if (cls === 0 && shape === 0 && Math.abs(a - 0.28) < 0.012 && Math.abs(b - 0.012) < 0.004 && Math.abs(c - 0.02) < 0.006) {
+  } else if (cls === 0 && shape === 0 && Math.abs(b - 0.012) < 0.004 && Math.max(a, c) >= 0.2 && Math.max(a, c) <= 0.36 && Math.min(a, c) <= 0.025) {
     // blind headrail: plain valance, not a painting
     m = new THREE.Group();
     m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xe8e2d2)));
-  } else if (cls === 2 && shape === 0 && Math.abs(b - 0.004) < 0.0015 && Math.abs(a - 0.26) < 0.012 && Math.abs(c - 0.032) < 0.004) {
-    // mini blind slat: ivory with a soft sheen and lift-cord dots
+  } else if (cls === 2 && shape === 0 && Math.abs(b - 0.004) < 0.0015 && Math.abs(Math.min(a, c) - 0.032) < 0.004 && Math.max(a, c) >= 0.2 && Math.max(a, c) <= 0.36) {
+    // mini blind slat (either wall orientation): ivory with a soft
+    // sheen and lift-cord dots at the ends of the long axis
     m = new THREE.Group();
     const slat = new THREE.Mesh(
       new THREE.BoxGeometry(a * 2, b * 2, c * 2),
       new THREE.MeshPhongMaterial({ color: 0xece6d6, shininess: 40, specular: 0x999080 })
     );
     m.add(slat);
-    for (const ex of [-a * 0.85, a * 0.85]) {
+    const along3 = Math.max(a, c);
+    for (const ex of [-along3 * 0.85, along3 * 0.85]) {
       const cord = new THREE.Mesh(new THREE.BoxGeometry(0.004, b * 2 + 0.002, 0.004), toonMat(0xc9c2b0));
-      cord.position.set(ex, 0, 0);
+      cord.position.set(a > c ? ex : 0, 0, a > c ? 0 : ex);
       m.add(cord);
     }
     m.userData.noShadow = true; // ten slats of VSM shadow = noise
+  } else if (cls === 0 && shape === 0 && b < 0.02 && Math.min(a, c) < 0.022 && Math.max(a, c) >= 0.36 && Math.max(a, c) <= 0.7) {
+    // curtain rod / long towel rail: a brass cylinder along the long axis
+    m = new THREE.Group();
+    const rlen = Math.max(a, c);
+    const rod2 = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, rlen * 2, 8), ringMat);
+    rod2.rotation.z = a > c ? Math.PI / 2 : 0;
+    if (c > a) rod2.rotation.x = Math.PI / 2;
+    m.add(rod2);
+    for (const ex of [-rlen, rlen]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), ringMat);
+      cap.position.set(a > c ? ex : 0, 0, a > c ? 0 : ex);
+      m.add(cap);
+    }
+    m.userData.noShadow = true;
   } else if (cls === 1 && Math.abs(gloss - 0.32) < 0.01 && Math.max(a, b, c) <= 0.1) {
     // terracotta planter pieces — gloss 0.32 is reserved as the clay
     // signature (material-signature-as-identity, like cardboard)
