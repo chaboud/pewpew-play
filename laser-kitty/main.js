@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k17'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k18'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -2750,10 +2750,21 @@ function padPoint(e) {
   const fy = Math.max(0, Math.min(1, (t.clientY - r.top) / r.height));
   const { w, h } = viewSize();
   if (cfg.laser === 'compact') {
-    // classic aim math, but fx/fy come from a smaller pad — the whole
-    // screen band stays addressable from less thumb travel (the pad's
-    // size is the influence dial; see the Pad size slider)
-    aimScreen = [fx * w, h * (0.08 + fy * 0.52)];
+    // classic aim math from a smaller pad, but the NEAR boundary is an
+    // arc (founder): thumb at pad-bottom-middle puts the dot at the top
+    // of the pad; thumb at a bottom corner reaches the screen's bottom
+    // corner — the near range bows down toward the sides like a fan
+    // swept from the belly button
+    const u = (fx - 0.5) * 2;
+    // the arc's middle is "the top of the pad" — clamped to the stage
+    // front's screen line, else near-middle aims pass under the diorama
+    // and hit nothing (probe-caught): the nearest USEFUL aim straight
+    // ahead is the floor's front lip
+    const lip = new THREE.Vector3(0, 0, -roomHZ).project(camera);
+    const lipY = ((-lip.y + 1) / 2) * h + 24;
+    const midY = Math.min(r.top, lipY);
+    const nearY = midY + (h - midY) * u * u;
+    aimScreen = [fx * w, h * 0.08 + (nearY - h * 0.08) * fy];
   } else if (cfg.laser === 'wand') {
     // wand mode (founder): the tail of the laser is tied to the belly
     // button and the hand steers the head — the belt's screen
