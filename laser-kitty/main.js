@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k19'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k20'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -43,7 +43,8 @@ scene.background = new THREE.Color(0x272138);
 // first pass started fog at 9 and drowned the back half on phone OLEDs.
 scene.fog = new THREE.Fog(0x272138, 13, 26);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
-scene.add(new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.45));
+const hemi = new THREE.HemisphereLight(0xfff1de, 0x51436a, 1.45);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffe3b8, 1.35);
 sun.position.set(-2.5, 5.5, -2.0);
 sun.castShadow = true;
@@ -88,9 +89,8 @@ scene.add(sun);
 // that lamp — left global once, it followed us into every room as a
 // mystery orb roasting the nearest wall (both founder "coplanar
 // shimmer" reports were this light at grazing incidence)
-const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
-lampGlow.position.set(2.2, 1.35, -1.6);
-scene.add(lampGlow);
+// (the old single hard-coded lampGlow is gone: lit fixtures register
+// real point lights against a device budget — see registerLight)
 
 // --- ambient occlusion (founder: the VSM pass reads "real" more than
 // soft, and does nothing for contact darkening — "a screen-space
@@ -455,6 +455,29 @@ function neonTex(kind) {
 // blades, oscillating heads); the frame loop drives them while the
 // sim keeps owning the body transform
 const animParts = [];
+// lit-fixture light registry (founder: lamps/sconces/chandeliers ON and
+// contributing): recognition branches register candidates; the budget
+// pass lights the strongest K for this device, parenting each light to
+// its mesh — a toppled lamp carries its glow with it.
+const pendingLights = [];
+let litLights = [];
+let lightsDirty = true;
+function registerLight(node, color, intensity, distance) {
+  if ((cfg.room | 0) === 7) return; // the tower runs its own per-floor lights
+  pendingLights.push({ node, color, intensity, distance });
+}
+function applyLightBudget() {
+  for (const l of litLights) l.parent?.remove(l);
+  litLights = [];
+  const lite = new URLSearchParams(location.search).has('lite');
+  const budget = lite ? 2 : matchMedia('(pointer: coarse)').matches ? 4 : 8;
+  const picks = [...pendingLights].sort((a2, b2) => b2.intensity - a2.intensity).slice(0, budget);
+  for (const pk of picks) {
+    const pl = new THREE.PointLight(pk.color, pk.intensity, pk.distance, 2);
+    pk.node.add(pl);
+    litLights.push(pl);
+  }
+}
 // deterministic per-body color variety within each class palette
 function bodyColor(i, cls, dims, py) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
@@ -633,6 +656,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
       drop.position.set(ax, -0.06, az);
       m.add(drop);
     }
+    registerLight(m, 0xffd9a0, 8, 7);
   } else if (cls === 1 && shape === 0 && Math.abs(a - 0.148) < 0.003 && Math.abs(b - 0.019) < 0.003 && Math.abs(c - 0.118) < 0.004) {
     // turntable plinth: brushed-silver deck, pitch strip, start button
     m = new THREE.Group();
@@ -709,6 +733,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     );
     glow.position.y = b - 0.06;
     m.add(glow);
+    registerLight(m, 0xffc98a, 3.5, 3.2);
   } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.0025 && Math.abs(b - 0.014) < 0.0025) {
     // game controller: body, angled grips, four face buttons, d-pad
     m = new THREE.Group();
@@ -1485,6 +1510,79 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
       m.add(cap);
     }
     m.userData.noShadow = true;
+  } else if (cls === 0 && shape === 0 && Math.abs(gloss - 0.86) < 0.015) {
+    // LIT FIXTURES (reserved gloss 0.86): dims pick the style, and each
+    // registers a real point light against the device budget
+    m = new THREE.Group();
+    const warm = 0xffd9a0;
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xfff2d8 });
+    if (Math.abs(b - 0.02) < 0.008 && Math.abs(a - 0.09) < 0.01 && Math.abs(c - 0.09) < 0.01) {
+      // flush ceiling dome
+      const canopy = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.095, 0.018, 14), toonMat(0xcfc8ba));
+      m.add(canopy);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), glowMat);
+      dome.position.y = -0.005;
+      m.add(dome);
+      registerLight(m, warm, 6, 5.5);
+    } else if (Math.abs(b - 0.045) < 0.008 && Math.abs(Math.max(a, c) - 0.055) < 0.01) {
+      // pendant: cord, cone shade, glowing bulb
+      const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.5, 6), toonMat(0x3a3644));
+      cord.position.y = 0.29;
+      m.add(cord);
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.062, 0.075, 14, 1, true), new THREE.MeshPhongMaterial({ color: 0x9a4a3a, side: THREE.DoubleSide, shininess: 60 }));
+      shade.position.y = 0.02;
+      m.add(shade);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), glowMat);
+      bulb.position.y = -0.02;
+      m.add(bulb);
+      registerLight(m, warm, 5, 5);
+    } else if (Math.max(a, c) > 0.3) {
+      // fluorescent shop tube
+      m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x8a8f98)));
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, Math.max(a, c) * 1.9, 8), new THREE.MeshBasicMaterial({ color: 0xeef4ff }));
+      tube.rotation.z = a > c ? Math.PI / 2 : 0;
+      if (c > a) tube.rotation.x = Math.PI / 2;
+      tube.position.y = -b - 0.012;
+      m.add(tube);
+      registerLight(m, 0xdfe8ff, 5.5, 5.5);
+    } else {
+      // wall sconce: back plate + up-shade + glow
+      m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x6e5230)));
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.018, 0.05, 10, 1, true), new THREE.MeshPhongMaterial({ color: 0xd9c9a8, side: THREE.DoubleSide, shininess: 40 }));
+      cup.position.y = 0.045;
+      m.add(cup);
+      const gl2 = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), glowMat);
+      gl2.position.y = 0.055;
+      m.add(gl2);
+      registerLight(m, warm, 3, 3.5);
+    }
+    m.userData.noShadow = true;
+  } else if (cls === 1 && shape === 0 && Math.abs(b - 0.1) < 0.014 && Math.abs(a - c) < 0.005 && a >= 0.1 && a <= 0.13) {
+    // floor-lamp shade (both sizes): cone shade over a glowing core
+    m = new THREE.Group();
+    const shade2 = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.55, a * 1.05, b * 2.1, 14, 1, true), new THREE.MeshPhongMaterial({ color: 0xe8ddc4, side: THREE.DoubleSide, shininess: 30 }));
+    m.add(shade2);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2d8 }));
+    core.position.y = -0.02;
+    m.add(core);
+    registerLight(m, 0xffd9a0, 5, 4.5);
+    m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.0025 && Math.abs(b - 0.09) < 0.0035 && Math.abs(c - 0.05) < 0.0025 && gloss < 0.6) {
+    // table lamp: base, stem, small shade, and its own pool of light
+    m = new THREE.Group();
+    const base2 = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.034, 0.02, 10), toonMat(0x6e5230));
+    base2.position.y = -b + 0.01;
+    m.add(base2);
+    const stem2 = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.009, 0.08, 8), toonMat(0x6e5230));
+    stem2.position.y = -0.02;
+    m.add(stem2);
+    const shade3 = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.046, 0.065, 12, 1, true), new THREE.MeshPhongMaterial({ color: 0xe8ddc4, side: THREE.DoubleSide, shininess: 30 }));
+    shade3.position.y = b - 0.04;
+    m.add(shade3);
+    const core2 = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2d8 }));
+    core2.position.y = b - 0.05;
+    m.add(core2);
+    registerLight(m, 0xffd9a0, 3, 3.5);
   } else if (cls === 1 && Math.abs(gloss - 0.32) < 0.01 && Math.max(a, b, c) <= 0.1) {
     // terracotta planter pieces — gloss 0.32 is reserved as the clay
     // signature (material-signature-as-identity, like cardboard)
@@ -2807,7 +2905,9 @@ function layoutRoom() {
   // the sun stays inside the room's x-span and out past the open front:
   // a thin side wall backlit from outside bleeds through the VSM blur
   sun.position.set(-Math.min(roomHX * 0.55, 2.5), 5.5, -(roomHZ + 2.0));
-  lampGlow.intensity = r <= 1 ? 6 : 0; // only where that lamp exists
+  // interior rooms dim the ambient so the fixture pools read; the
+  // tower keeps its brighter hemi (its per-floor lights are sparser)
+  hemi.intensity = r === 7 ? 1.45 : 1.2;
   panX = panXT = 0;
   panY = panYT = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -3255,6 +3355,9 @@ function rebuildSim() {
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
   animParts.length = 0; // registered by recognition branches per build
+  pendingLights.length = 0;
+  litLights = []; // their parents just left the scene with the meshes
+  lightsDirty = true;
   rebuildCloths();
   rebuildRings();
   for (const v of catViews.values()) {
@@ -3747,6 +3850,10 @@ function frame(now) {
   stateEl.textContent = debugLook ? `${stName} · vis ${(L[9] ?? 0).toFixed(2)}` : stName;
   meterEl.style.width = `${(hudInterest * 100).toFixed(0)}%`;
 
+  if (lightsDirty && count > 0) {
+    applyLightBudget(); // every mesh for this room now exists
+    lightsDirty = false;
+  }
   updateCloths(data);
   updateRings(data);
   if (aoActive) composer.render();
