@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k21'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k22'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -1209,24 +1209,35 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     frameM.position.z = 0.002;
     glassM.position.z = -0.006;
     m.add(frameM);
-  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.07) < 0.004 && Math.abs(b - 0.07) < 0.004 && Math.abs(c - 0.05) < 0.004) {
-    // oscillating fan head: cage, hub, spinning blades, slow yaw
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.21) < 0.008 && Math.abs(b - 0.21) < 0.008 && Math.abs(c - 0.06) < 0.005) {
+    // oscillating fan head, full size (founder: 3-5x the old diameter):
+    // double cage ring, radial guard bars, five blades, slow yaw
     m = new THREE.Group();
     const face = new THREE.Group();
-    const cage = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.004, 6, 20), toonMat(0x8a8f9e));
-    face.add(cage);
+    const cageMat = toonMat(0x8a8f9e);
+    for (const cr of [0.195, 0.1]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(cr, 0.005, 6, 24), cageMat);
+      face.add(ring);
+    }
+    for (let k3 = 0; k3 < 6; k3++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.39, 0.004), cageMat);
+      bar.rotation.z = (k3 * Math.PI) / 6;
+      bar.position.z = 0.004;
+      face.add(bar);
+    }
     const spinner = new THREE.Group();
-    for (let k2 = 0; k2 < 4; k2++) {
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.022, 0.004), toonMat(0xb8bcc4));
-      blade.position.set(Math.cos((k2 * Math.PI) / 2) * 0.032, Math.sin((k2 * Math.PI) / 2) * 0.032, 0);
-      blade.rotation.z = (k2 * Math.PI) / 2;
+    for (let k2 = 0; k2 < 5; k2++) {
+      const ang = (k2 * Math.PI * 2) / 5;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.07, 0.005), toonMat(0xb8bcc4));
+      blade.position.set(Math.cos(ang) * 0.105, Math.sin(ang) * 0.105, 0);
+      blade.rotation.z = ang;
       spinner.add(blade);
     }
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.03, 8), toonMat(0x2a2732));
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.07, 10), toonMat(0x2a2732));
     hub.rotation.x = Math.PI / 2;
     face.add(hub);
     face.add(spinner);
-    face.position.z = -0.03;
+    face.position.z = -0.035;
     m.add(face);
     animParts.push({ node: spinner, mode: 'spin' });
     animParts.push({ node: face, mode: 'yaw' });
@@ -1689,7 +1700,19 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     const crown = new THREE.Mesh(new THREE.BoxGeometry(a * 2.15, 0.02, c * 2.15), wood);
     crown.position.y = b + 0.01;
     m.add(crown);
-  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.012) < 0.002 && Math.abs(b - 0.1) < 0.005 && Math.abs(c - 0.012) < 0.002 && gloss > 0.7) {
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.014) < 0.0018 && Math.abs(b - 0.05) < 0.004 && Math.abs(c - 0.014) < 0.0018 && gloss > 0.8) {
+    // grandfather-clock weight: brass cylinder on a long cable
+    m = new THREE.Group();
+    const brassW = new THREE.MeshPhongMaterial({ color: 0xc9a542, shininess: 110, specular: 0xfff0c0 });
+    const body3 = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, b * 1.9, 10), brassW);
+    m.add(body3);
+    const capW = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), brassW);
+    capW.position.y = b * 0.95;
+    m.add(capW);
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0018, 0.26, 4), toonMat(0x3a3644));
+    cable.position.y = b + 0.13;
+    m.add(cable);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.012) < 0.002 && Math.abs(b - 0.19) < 0.01 && Math.abs(c - 0.012) < 0.002 && gloss > 0.7) {
     // clock pendulum: brass rod + bob, with a gentle visual sway (the
     // body itself is honest physics on its joint)
     m = new THREE.Group();
@@ -1699,7 +1722,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, b * 1.7, 6), brassP);
     rod.position.y = -b * 0.85;
     sway.add(rod);
-    const bob = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.008, 14), brassP);
+    const bob = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.01, 16), brassP);
     bob.rotation.x = Math.PI / 2;
     bob.position.y = -b * 1.75;
     sway.add(bob);
@@ -3777,7 +3800,7 @@ function frame(now) {
   }
   for (const p of animParts) {
     if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
-    else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0021) * 0.22;
+    else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0015) * 0.16;
     else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
   applyLook(Math.sin(now * 0.0006) * 0.012);
