@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k8'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k9'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -145,14 +145,16 @@ const concreteTex = makeCanvas(512, 512, (g) => {
   }
 });
 concreteTex.wrapS = concreteTex.wrapT = THREE.RepeatWrapping;
-// cafe checkerboard: cream and charcoal marble checks
+// cafe checkerboard — v2 (founder: the b/w version was "too high
+// frequency spatially"): bigger tiles, neutral grey and off-white,
+// gentle contrast
 const checkerTex = makeCanvas(256, 256, (g) => {
-  for (let r = 0; r < 8; r++) {
-    for (let c2 = 0; c2 < 8; c2++) {
-      g.fillStyle = (r + c2) % 2 ? '#2e2b33' : '#e8e2d4';
-      g.fillRect(c2 * 32, r * 32, 32, 32);
-      g.fillStyle = (r + c2) % 2 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-      g.fillRect(c2 * 32 + 4 * ((r * 7 + c2) % 5), r * 32 + 6, 10, 5);
+  for (let r = 0; r < 4; r++) {
+    for (let c2 = 0; c2 < 4; c2++) {
+      g.fillStyle = (r + c2) % 2 ? '#9a958c' : '#ddd8cc';
+      g.fillRect(c2 * 64, r * 64, 64, 64);
+      g.fillStyle = (r + c2) % 2 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+      g.fillRect(c2 * 64 + 8 * ((r * 7 + c2) % 5), r * 64 + 12, 20, 9);
     }
   }
 });
@@ -406,6 +408,33 @@ function rebuildCloths() {
   }
 }
 rebuildCloths();
+// shower-curtain rings: brass tori threaded on the curtain's top edge.
+// The sim slides them on the rod (prismatic) and pops them off under
+// tension; either way the ring rides its particle, so the viewer just
+// parks a torus slightly above each ringed particle every frame.
+let ringMeshes = [];
+const ringMat = new THREE.MeshPhongMaterial({ color: 0xc9a542, shininess: 110, specular: 0xfff0c0 });
+function rebuildRings() {
+  for (const r of ringMeshes) scene.remove(r.mesh);
+  ringMeshes = [];
+  const n = lk.lk_ring_count(sim);
+  for (let i = 0; i < n; i++) {
+    const info = lk.lk_ring_info(sim, i) >>> 0;
+    const rec = info & 0x7fffffff;
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.0045, 6, 12), ringMat);
+    mesh.rotation.y = Math.PI / 2; // ring plane wraps the x-axis rod
+    mesh.castShadow = false;
+    scene.add(mesh);
+    ringMeshes.push({ mesh, rec });
+  }
+}
+rebuildRings();
+function updateRings(data) {
+  for (const r of ringMeshes) {
+    const o = r.rec * 15;
+    r.mesh.position.set(data[o + 5], data[o + 6] + 0.032, data[o + 7]);
+  }
+}
 function updateCloths(data) {
   for (const cp of clothPatches) {
     if (!cp.tinted) {
@@ -1659,6 +1688,122 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     wine2.position.y = b - 0.04;
     m.add(wine2);
     m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.032) < 0.003 && Math.abs(b - 0.05) < 0.004 && Math.abs(c - 0.024) < 0.003 && gloss < 0.7) {
+    // hair dryer: body barrel + nozzle + handle
+    m = new THREE.Group();
+    const shell = toonMat(0x8a4a8f);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.055, 10), shell);
+    barrel.rotation.z = Math.PI / 2;
+    barrel.position.y = 0.02;
+    m.add(barrel);
+    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.017, 0.025, 10), toonMat(0x3a3742));
+    nozzle.rotation.z = Math.PI / 2;
+    nozzle.position.set(-0.038, 0.02, 0);
+    m.add(nozzle);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.05, 8), shell);
+    grip.rotation.x = 0.25;
+    grip.position.set(0.012, -0.022, 0.004);
+    m.add(grip);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.014) < 0.0018 && Math.abs(b - 0.026) < 0.0025 && Math.abs(c - 0.014) < 0.0018 && gloss > 0.8) {
+    // perfume bottle: tinted glass + gold cap + atomizer bulb
+    m = new THREE.Group();
+    const scent = new THREE.MeshPhongMaterial({
+      color: [0xd8a0b8, 0xa8c8e0, 0xd8cc90][i % 3], shininess: 140, specular: 0xffffff, transparent: true, opacity: 0.7,
+    });
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 1.6, c * 2), scent));
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.012, 8), ringMat);
+    cap.position.y = b - 0.005;
+    m.add(cap);
+    if (i % 2 === 0) {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.007, 7, 6), toonMat(0xc45a6a));
+      bulb.position.set(0.014, b - 0.004, 0);
+      m.add(bulb);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.045) < 0.003 && Math.abs(b - 0.028) < 0.0025 && Math.abs(c - 0.032) < 0.003 && gloss < 0.6) {
+    // tissue box with a tissue puffing out
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x7aa8b8)));
+    const slot = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.014), toonMat(0x4a7484));
+    slot.rotation.x = -Math.PI / 2;
+    slot.position.y = b + 0.001;
+    m.add(slot);
+    const puff = new THREE.Mesh(new THREE.PlaneGeometry(0.034, 0.028), toonMat(0xf4f2ea, { side: THREE.DoubleSide }));
+    puff.rotation.x = -0.5;
+    puff.rotation.y = 0.4;
+    puff.position.y = b + 0.016;
+    m.add(puff);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.006) < 0.0015 && Math.abs(c - 0.032) < 0.003 && gloss > 0.8) {
+    // hand mirror: glass disc in a frame, stub handle
+    m = new THREE.Group();
+    const frame = toonMat(0x8a6a4a);
+    const back = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 14), frame);
+    back.position.x = -0.012;
+    m.add(back);
+    const glass = new THREE.Mesh(
+      new THREE.CircleGeometry(0.025, 14),
+      new THREE.MeshPhongMaterial({ color: 0xc8d4dc, shininess: 160, specular: 0xffffff })
+    );
+    glass.rotation.x = -Math.PI / 2;
+    glass.position.set(-0.012, 0.006, 0);
+    m.add(glass);
+    const hndl = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.008, 0.04, 8), frame);
+    hndl.rotation.z = Math.PI / 2;
+    hndl.position.x = 0.032;
+    m.add(hndl);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.014) < 0.0018 && Math.abs(b - 0.012) < 0.0025 && Math.abs(c - 0.045) < 0.003 && gloss < 0.6) {
+    // hairbrush: paddle + bristle pad + handle
+    m = new THREE.Group();
+    const body2 = toonMat(0x6a4a8f);
+    const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.01, 0.05), body2);
+    paddle.position.z = -0.014;
+    m.add(paddle);
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.008, 0.044), toonMat(0x2c2a34));
+    pad.position.set(0, 0.008, -0.014);
+    m.add(pad);
+    const hndl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.007, 0.036, 8), body2);
+    hndl2.rotation.x = Math.PI / 2;
+    hndl2.position.z = 0.026;
+    m.add(hndl2);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.018) < 0.0015 && Math.abs(b - 0.038) < 0.003 && Math.abs(c - 0.018) < 0.0015 && gloss > 0.8) {
+    // mouthwash: blue liquid bottle, white cap
+    m = new THREE.Group();
+    const liquid = new THREE.MeshPhongMaterial({ color: 0x3a9ac8, shininess: 130, specular: 0xdff4ff, transparent: true, opacity: 0.85 });
+    m.add(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.018, b * 1.7, 10), liquid));
+    const cap2 = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.014, 8), toonMat(0xf0ece0));
+    cap2.position.y = b - 0.007;
+    m.add(cap2);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.026) < 0.0025 && Math.abs(b - 0.008) < 0.002 && Math.abs(c - 0.011) < 0.002) {
+    // toothpaste tube: white body, colored cap, crimped end
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 1.8, b * 1.6, c * 1.8), toonMat(0xf0ece0)));
+    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.6, 0.006), toonMat(0xc0392b));
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.y = b * 0.82;
+    m.add(stripe);
+    const cap3 = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.01, 8), toonMat(0x3a7ac8));
+    cap3.rotation.z = Math.PI / 2;
+    cap3.position.x = a - 0.002;
+    m.add(cap3);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.05) < 0.003 && Math.abs(b - 0.004) < 0.0012 && Math.abs(c - 0.065) < 0.003) {
+    // magazine: glossy cover art
+    m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xe8e2d4)));
+    const cover = new THREE.Mesh(new THREE.PlaneGeometry(a * 1.9, c * 1.9), new THREE.MeshPhongMaterial({ map: artTex(i), shininess: 90, specular: 0x888888 }));
+    cover.rotation.x = -Math.PI / 2;
+    cover.position.y = b + 0.001;
+    m.add(cover);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.032) < 0.0025 && Math.abs(b - 0.032) < 0.0025 && Math.abs(c - 0.06) < 0.004 && gloss <= 0.1) {
+    // rolled towel: cylinder along z with a visible roll seam
+    m = new THREE.Group();
+    const tcol = new THREE.Color().setHSL(((tint ?? 0.9) * 2.83) % 1, 0.4, 0.6);
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(a, a, c * 2, 12), toonMat(tcol));
+    roll.rotation.x = Math.PI / 2;
+    m.add(roll);
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(0.008, c * 2), toonMat(tcol.clone().multiplyScalar(0.8)));
+    seam.rotation.x = Math.PI / 2;
+    seam.position.set(0.006, a + 0.0005, 0);
+    seam.rotation.z = 0.2;
+    m.add(seam);
   } else if (cls === 2 && shape === 0 && Math.abs(a - 0.035) < 0.0025 && Math.abs(b - 0.045) < 0.002 && Math.abs(c - 0.035) < 0.0025 && gloss >= 0.5) {
     // mug: cylinder + handle — every mug in every room upgrades at once
     m = new THREE.Group();
@@ -2881,6 +3026,7 @@ function rebuildSim() {
   meshes = [];
   animParts.length = 0; // registered by recognition branches per build
   rebuildCloths();
+  rebuildRings();
   for (const v of catViews.values()) {
     if (v.stars) scene.remove(v.stars);
     scene.remove(v.los);
@@ -3313,6 +3459,7 @@ function frame(now) {
   meterEl.style.width = `${(lk.lk_interest(sim) * 100).toFixed(0)}%`;
 
   updateCloths(data);
+  updateRings(data);
   renderer.render(scene, camera);
 
   // floating per-cat state tags — projected AFTER render so the camera
