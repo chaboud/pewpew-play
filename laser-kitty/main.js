@@ -8,7 +8,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k4'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k5'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -78,8 +78,12 @@ sun.shadow.camera.bottom = -4;
 sun.shadow.camera.far = 14;
 sun.shadow.bias = -0.0004; // VSM wants a much smaller bias
 scene.add(sun);
+// the living room's floor lamp is "on". Scoped to the rooms that have
+// that lamp — left global once, it followed us into every room as a
+// mystery orb roasting the nearest wall (both founder "coplanar
+// shimmer" reports were this light at grazing incidence)
 const lampGlow = new THREE.PointLight(0xffd9a0, 6, 6, 2);
-lampGlow.position.set(2.2, 1.35, -1.6); // the floor lamp is "on"
+lampGlow.position.set(2.2, 1.35, -1.6);
 scene.add(lampGlow);
 
 // --- toon look: shared band ramp + material factory ------------------------
@@ -890,6 +894,32 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
       new THREE.BoxGeometry(a * 2, b * 2, c * 2),
       toonMat(new THREE.Color().setHSL((0.04 + h * 0.96) % 1, 0.26, 0.64))
     );
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.085) < 0.004 && Math.abs(b - 0.11) < 0.006 && Math.abs(c - 0.006) < 0.0025) {
+    // shower curtain strip: translucent cloth
+    m = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, c * 2),
+      new THREE.MeshPhongMaterial({ color: 0xe8eef2, shininess: 40, specular: 0xccddee, transparent: true, opacity: 0.72 })
+    );
+    m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.035) < 0.003 && Math.abs(b - 0.04) < 0.004 && Math.abs(c - 0.035) < 0.003) {
+    // toilet paper roll: white cylinder with a core
+    m = new THREE.Group();
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(a, a, b * 2, 12), toonMat(0xf2f0ea));
+    m.add(roll);
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.4, a * 0.4, b * 2.02, 10), toonMat(0xb8a888));
+    m.add(core);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.14) < 0.005 && Math.abs(b - 0.18) < 0.006 && Math.abs(c - 0.01) < 0.004 && gloss > 0.85) {
+    // the hanging mirror: silvered glass in a gold frame, breakable
+    m = new THREE.Group();
+    const glassM = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 1.85, b * 1.85, 0.006),
+      new THREE.MeshPhongMaterial({ color: 0xcfdde6, shininess: 200, specular: 0xffffff })
+    );
+    m.add(glassM);
+    const frameM = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, 0.014), new THREE.MeshPhongMaterial({ color: 0xb08d3e, shininess: 90, specular: 0xffe8b0 }));
+    frameM.position.z = 0.002;
+    glassM.position.z = -0.006;
+    m.add(frameM);
   } else if (cls === 2 && shape === 0 && Math.abs(gloss - 0.12) < 0.005) {
     // cardboard: every box the sim marks with the 0.12-gloss signature
     // reads as kraft brown with a packing-tape seam, not party pastel
@@ -1088,7 +1118,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     // soft furniture reads its hue from the sim tint: one upholstery
     // library, thirty-six differently dressed apartments (and every
     // older couch inherits a color too)
-    const fabCol = cls === 1 && tint !== undefined
+    const fabCol = tint !== undefined
       ? new THREE.Color().setHSL((tint * 2.83) % 1, 0.42, 0.46)
       : color;
     mat = fuzzy ? toonMat(fabCol) : toonMat(fabCol, { map: fabricTex });
@@ -1099,7 +1129,10 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
   }
   m = new THREE.Mesh(geo, mat);
   m.castShadow = cls !== 0;
-  m.receiveShadow = true;
+  // tall thin statics (walls, partitions) neither cast nor receive:
+  // VSM at grazing incidence paints variance blobs on big flat walls
+  // (founder's bathroom shimmer), and nothing casts onto them anyway
+  m.receiveShadow = !(cls === 0 && b >= 0.8 && Math.min(a, c) <= 0.35);
   scene.add(m);
   return m;
 }
@@ -1838,6 +1871,10 @@ function layoutRoom() {
   // lights wired to the switch zones carry the interior instead
   applyShadowMode();
   sun.intensity = r === 7 ? 0.9 : 1.35;
+  // the sun stays inside the room's x-span and out past the open front:
+  // a thin side wall backlit from outside bleeds through the VSM blur
+  sun.position.set(-Math.min(roomHX * 0.55, 2.5), 5.5, -(roomHZ + 2.0));
+  lampGlow.intensity = r <= 1 ? 6 : 0; // only where that lamp exists
   panX = panXT = 0;
   panY = panYT = 0;
   const b = Math.max(roomHX, roomHZ) + 1.2;
