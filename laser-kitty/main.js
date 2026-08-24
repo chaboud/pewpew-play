@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k23'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k24'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -1242,8 +1242,8 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     face.add(spinner);
     face.position.z = -0.035;
     m.add(face);
-    animParts.push({ node: spinner, mode: 'spin' });
-    animParts.push({ node: face, mode: 'yaw' });
+    animParts.push({ node: spinner, mode: 'spin', host: m });
+    animParts.push({ node: face, mode: 'yaw', host: m });
   } else if (cls === 2 && shape === 0 && Math.abs(a - 0.11) < 0.005 && Math.abs(b - 0.33) < 0.015 && Math.abs(c - 0.03) < 0.006) {
     // guitar: waisted body, neck, headstock, strings
     m = new THREE.Group();
@@ -3803,11 +3803,6 @@ function frame(now) {
       resize();
     }
   }
-  for (const p of animParts) {
-    if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
-    else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0015) * 0.16;
-    else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
-  }
   applyLook(Math.sin(now * 0.0006) * 0.012);
 
   const L = new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10);
@@ -3895,6 +3890,18 @@ function frame(now) {
     const bcls = data[bi * 15];
     const broken = bcls === 4 || (l.userData.wasClass === 1 && bcls === 2);
     l.intensity = broken ? 0 : l.userData.base;
+  }
+  for (const p of animParts) {
+    // a severed or shattered host stops its make-believe motion — the
+    // sim's real inertia owns it now (the fan head spins off for real)
+    if (p.host) {
+      const hb = p.host.userData.bodyIndex;
+      const hc = data[hb * 15];
+      if (p.host.userData.cls === 1 && hc !== 1) continue;
+    }
+    if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
+    else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0015) * 0.16;
+    else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
   updateCloths(data);
   updateRings(data);
