@@ -13,7 +13,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k24'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k25'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -1022,6 +1022,23 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
       const bull = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), toonMat(0x62e08a));
       bull.position.z = 0.004;
       face.add(bull);
+      // a game in progress: three darts stuck in the board
+      for (const [dpx, dpy, tilt] of [[0.06, 0.03, 0.2], [-0.05, 0.09, -0.25], [0.015, -0.09, 0.1]]) {
+        const dart = new THREE.Group();
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.035, 6), ringMat);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.z = 0.022;
+        dart.add(barrel);
+        for (let k7 = 0; k7 < 3; k7++) {
+          const fl3 = new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.016), toonMat(k7 === 1 ? 0xe8e2d2 : 0xc94f3f, { side: THREE.DoubleSide }));
+          fl3.position.z = 0.042;
+          fl3.rotation.z = (k7 * Math.PI) / 3;
+          dart.add(fl3);
+        }
+        dart.position.set(dpx, dpy, 0.004);
+        dart.rotation.y = tilt;
+        face.add(dart);
+      }
       face.rotation.y = fx > 0 ? Math.PI / 2 : -Math.PI / 2;
       face.position.x = fx;
       m.add(face);
@@ -2107,6 +2124,48 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     const well = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.62, a * 0.62, 0.002, 16), toonMat(0xd8d4c8));
     well.position.y = b;
     m.add(well);
+  } else if (cls === 2 && shape === 1 && Math.abs(a - 0.035) < 0.002 && gloss > 0.8) {
+    // billiard ball: white cue ball or a solid color with a rack dot
+    m = new THREE.Group();
+    const isCue = tint > 0.93;
+    const bcol = isCue ? 0xf2efe6 : new THREE.Color().setHSL((tint * 2.83) % 1, 0.75, 0.42);
+    m.add(new THREE.Mesh(new THREE.SphereGeometry(a, 14, 12), new THREE.MeshPhongMaterial({ color: bcol, shininess: 140, specular: 0xffffff })));
+    if (!isCue) {
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.009, 8), toonMat(0xf2efe6));
+      dot.position.z = a + 0.001;
+      m.add(dot);
+    }
+  } else if (cls === 2 && shape === 0 && Math.abs(Math.max(a, b, c) - 0.22) < 0.01 && Math.abs(Math.min(a, b, c) - 0.015) < 0.003 && [a, b, c].filter((d5) => Math.abs(d5 - 0.015) < 0.003).length === 2) {
+    // pool cue: tapered shaft, dark butt wrap, white ferrule and tip
+    m = new THREE.Group();
+    const clen = Math.max(a, b, c);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.013, clen * 2, 8), toonMat(0xb5854a, { map: woodTex }));
+    const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.014, clen * 0.55, 8), toonMat(0x3a3644));
+    wrap.position.y = -clen * 0.7;
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.006, 0.014, 8), toonMat(0xe8e2d2));
+    tip.position.y = clen - 0.005;
+    const grp = new THREE.Group();
+    grp.add(shaft); grp.add(wrap); grp.add(tip);
+    if (c >= Math.max(a, b)) grp.rotation.x = Math.PI / 2;
+    else if (a >= Math.max(b, c)) grp.rotation.z = Math.PI / 2;
+    m.add(grp);
+  } else if (cls === 2 && shape === 0 && Math.abs(Math.max(a, b, c) - 0.045) < 0.004 && Math.min(a, b, c) < 0.009) {
+    // dart: needle, brass barrel, three flights
+    m = new THREE.Group();
+    const dgrp = new THREE.Group();
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.04, 8), ringMat);
+    dgrp.add(barrel);
+    const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.001, 0.0022, 0.03, 6), new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 130, specular: 0xffffff }));
+    needle.position.y = 0.034;
+    dgrp.add(needle);
+    for (let k6 = 0; k6 < 3; k6++) {
+      const fl2 = new THREE.Mesh(new THREE.PlaneGeometry(0.014, 0.02), toonMat([0xc94f3f, 0xe8e2d2, 0xc94f3f][k6], { side: THREE.DoubleSide }));
+      fl2.position.y = -0.026;
+      fl2.rotation.y = (k6 * Math.PI) / 3;
+      dgrp.add(fl2);
+    }
+    dgrp.rotation.x = Math.PI / 2; // long axis = z in the sim body
+    m.add(dgrp);
   } else if (cls === 2 && shape === 1 && Math.abs(a - 0.09) < 0.004) {
     // r 0.09 spheres split by gloss: the mansion globe vs the beach ball
     m = new THREE.Group();
