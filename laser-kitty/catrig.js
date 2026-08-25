@@ -99,7 +99,7 @@ export const POSES = {
     legupperfl: [-0.9, 0, 0.2], leglowerfl: [-0.6, 0, 0],
     legupperfr: [-0.3, 0, 0], leglowerfr: [0.15, 0, 0],
     spine01: [-0.1, 0, 0], spine02: [-0.05, 0, 0],
-    neck: [0.3, 0, -0.2], head: [0.25, 0, -0.15],
+    neck: [0.3, 0, -0.1], head: [0.25, 0, -0.08],
     tail: [0.8, 0, 0.5], tail01: [0.35, 0, 0.4],
     _pitch: -0.15,
   },
@@ -386,8 +386,10 @@ export class CatRig {
       const yaw = Math.atan2(this._look.x, this._look.z);
       const flat = Math.hypot(this._look.x, this._look.z);
       const pitch = Math.atan2(this._look.y - 0.12, flat);
-      const cy = Math.max(-0.9, Math.min(0.9, yaw));
-      const cp = Math.max(-0.6, Math.min(0.8, pitch));
+      // clamps halved from +/-0.9 / -0.6..0.8 — the founder met the
+      // Exorcist cat ("head turn distances way too extreme")
+      const cy = Math.max(-0.45, Math.min(0.45, yaw));
+      const cp = Math.max(-0.3, Math.min(0.4, pitch));
       for (const [key, share] of [['neck', 0.45], ['head', 0.55]]) {
         const bone = this.bones[key];
         if (!bone) continue;
