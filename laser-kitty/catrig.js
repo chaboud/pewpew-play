@@ -196,15 +196,20 @@ export const POSES = {
     tail: [0.8, 0, 0.5], tail01: [0.4, 0, 0.4], tail02: [0.3, 0, 0.3],
     _pitch: -0.1,
   },
-  // loaf: everything tucked, low, chin slightly in
+  // loaf: the bread pose (founder: "butt on the floor, not floating").
+  // Paws fold FLAT to the belly line (lab-swept: leglowerf +1.55 presses
+  // the paw against the chest underside; the old -1.2 left it dangling
+  // 8cm below and the cat sat on paw-stilts), so the contact clamp rests
+  // the whole underside — haunches measured at 0.000 above the floor.
   loaf: {
-    thighbl: [-1.1, 0, 0], thighbr: [-1.1, 0, 0],
-    legupperbl: [1.3, 0, 0], legupperbr: [1.3, 0, 0],
-    leglowerbl: [-0.7, 0, 0], leglowerbr: [-0.7, 0, 0],
-    legupperfl: [1.0, 0, 0], legupperfr: [1.0, 0, 0],
-    leglowerfl: [-1.2, 0, 0], leglowerfr: [-1.2, 0, 0],
-    spine01: [0.1, 0, 0], neck: [-0.15, 0, 0], head: [0.12, 0, 0],
+    thighbl: [-1.3, 0, 0], thighbr: [-1.3, 0, 0],
+    legupperbl: [1.5, 0, 0], legupperbr: [1.5, 0, 0],
+    leglowerbl: [-0.85, 0, 0], leglowerbr: [-0.85, 0, 0],
+    legupperfl: [1.35, 0, 0], legupperfr: [1.35, 0, 0],
+    leglowerfl: [1.55, 0, 0], leglowerfr: [1.55, 0, 0],
+    spine01: [0.08, 0, 0], neck: [-0.08, 0, 0], head: [0.22, 0, 0],
     tail: [0.6, 0, 0.9], tail01: [0.25, 0, 0.7], tail02: [0.15, 0, 0.4],
+    _pitch: -0.12,
   },
   // groom: sitting, one front paw raised, head bowed to it (lick cycle
   // animates head pitch + paw height in update())
@@ -420,12 +425,15 @@ export class CatRig {
     const wantAlpha = table ? 1 : 0;
     this.alpha += (wantAlpha - this.alpha) * Math.min(1, dt * 7);
 
-    // locomotion: walk clip weight and rate ride real ground speed.
-    // The clip's stride reads right at ~1.4x rate per m/s (lab-measured
-    // against the 0.83s cycle); pose blend suppresses it.
-    const locoW = Math.min(1, (s.speed || 0) / 0.5) * (1 - this.alpha);
+    // locomotion: walk clip weight and rate ride real ground speed. Full
+    // gait by stroll speed (0.25 m/s) — the old 0.5 threshold left ambient
+    // wandering at half-weight, a mushy glide (founder: wander looked
+    // broken). Rate is stride-matched: the clip covers ~0.48 m/s of
+    // ground at 1x, so rate = speed/0.48 keeps feet planting instead of
+    // sliding, clamped so chases don't become a blender.
+    const locoW = Math.min(1, (s.speed || 0) / 0.25) * (1 - this.alpha);
     this.walk.setEffectiveWeight(locoW);
-    this.walk.timeScale = 0.6 + (s.speed || 0) * 1.1;
+    this.walk.timeScale = Math.min(2.3, Math.max(0.45, (s.speed || 0) / 0.48));
     // stand layer fills whatever locomotion doesn't claim; pose deltas
     // then ride on top of a fully planted cat instead of the bind pose
     this.stand.setEffectiveWeight(1 - locoW);
