@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>laser-kitty · cat lab</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14121a; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #ui { position: fixed; top: 10px; left: 10px; z-index: 5; width: 210px;
+        background: rgba(24,21,32,0.94); border: 1px solid #3a3644; border-radius: 12px;
+        padding: 12px 14px; color: #cfd4e6; font: 500 12px system-ui, sans-serif; }
+  #ui h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.14em; color: #9ad; }
+  #ui label { display: block; margin: 8px 0 2px; }
+  #ui .row { display: flex; align-items: center; gap: 8px; }
+  #ui input[type=range] { flex: 1; accent-color: #ff5a5a; }
+  #ui select, #ui button { background: #241f31; color: #cfd4e6; border: 1px solid #3a3644;
+        border-radius: 6px; padding: 4px 8px; font: inherit; }
+  #ui .val { width: 38px; text-align: right; color: #ffe86b; font-variant-numeric: tabular-nums; }
+  #credit { position: fixed; bottom: 8px; left: 10px; color: #6f6a7d; font: 400 10px system-ui, sans-serif; }
+  #credit a { color: #8a9fd4; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="ui">
+  <h3>CAT LAB · V2 RIG</h3>
+  <label>Pose</label>
+  <div class="row"><select id="c-pose" style="flex:1">
+    <option value="">stand / locomote</option>
+    <option value="crouch">crouch (stalk low)</option>
+    <option value="sit">sit</option>
+    <option value="loaf">loaf</option>
+    <option value="groom">groom (paw lick)</option>
+    <option value="stretch">stretch (reach up)</option>
+    <option value="swat">swat flurry</option>
+    <option value="windup">windup (butt wiggle)</option>
+    <option value="pounce">pounce (airborne)</option>
+  </select></div>
+  <label>Speed (m/s)</label>
+  <div class="row"><input type="range" id="c-speed" min="0" max="2.5" step="0.05" value="0"><span class="val" id="v-speed">0</span></div>
+  <label>Turntable</label>
+  <div class="row"><input type="range" id="c-yaw" min="-3.14" max="3.14" step="0.01" value="0.6"><span class="val" id="v-yaw">0.6</span></div>
+  <label class="row"><input type="checkbox" id="c-dot" checked> laser dot orbits (head tracks)</label>
+  <label class="row"><input type="checkbox" id="c-skel"> show skeleton</label>
+  <label class="row"><input type="checkbox" id="c-blob" checked> v1 blob alongside</label>
+</div>
+<div id="credit">"Toon Cat FREE" by Omabuarts Studio · CC-BY-4.0 · sim drives the real one</div>
+<script type="importmap">
+{"imports":{
+  "three": "./vendor/three.module.min.js",
+  "three/examples/jsm/postprocessing/Pass.js": "./vendor/Pass.js",
+  "postprocessing": "./vendor/pp-stub.js"
+}}
+</script>
+<script type="module" src="catlab.js?v=k26"></script>
+</body>
+</html>

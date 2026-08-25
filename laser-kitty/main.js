@@ -6,6 +6,9 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
+// cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
+// tuned in catlab.html). The glb only loads when the version is selected.
+import { CatRig } from './catrig.js';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -13,11 +16,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k25'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k26'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'auto', aoStrength: 4, laser: 'pad', padScale: 0.5, sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'auto', aoStrength: 4, laser: 'pad', padScale: 0.5, catver: 'v1', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -2549,6 +2552,25 @@ function buildDecor(hx, hz, kind) {
 
 // --- the cats: render-side bodies (physics stays capsules) -----------------
 const catViews = new Map(); // body index -> {group, legs, tailSegs, mats, prev, facing}
+// cat v2: the shared glb loads once, on demand; each cat gets a skinned
+// clone that replaces its blob while the setting says v2
+let catRigGltf = null;
+let catRigRequested = false;
+function requestCatRig() {
+  if (catRigRequested) return;
+  catRigRequested = true;
+  CatRig.load().then((g) => { catRigGltf = g; }).catch((e) => console.error('cat v2 load failed', e));
+}
+// sim brain state (+ ambient act) -> v2 pose table name; null = locomote
+function v2Pose(st, act, crouch) {
+  if (st === 3) return 'windup';
+  if (st === 4) return 'pounce';
+  if (st === 9) return 'swat';
+  if (st === 6) return 'sit';
+  if (crouch) return 'crouch';
+  if (st === 0) return [null, 'groom', 'loaf', null, 'stretch'][act] ?? (act === 0 ? 'sit' : null);
+  return null;
+}
 const CAT_COATS = [0xff9d45, 0x8a8f9e, 0xf5f0e6, 0x3d3a45]; // orange, grey, cream, black
 const CAT_DARKS = [0xd97f2e, 0x6b7080, 0xd8cfc0, 0x2a2830];
 function buildCat(k) {
@@ -3456,6 +3478,7 @@ function rebuildSim() {
   rebuildRings();
   for (const v of catViews.values()) {
     if (v.stars) scene.remove(v.stars);
+    if (v.rig) v.rig.dispose();
     scene.remove(v.los);
     v.tag.remove();
     scene.remove(v.group);
@@ -3560,6 +3583,14 @@ laserEl.addEventListener('change', () => {
 });
 bindSlider('padscale', 'padScale', (v) => `${(v * 100).toFixed(0)}%`, () => applyLaserMode());
 applyLaserMode();
+const catverEl = document.getElementById('s-catver');
+catverEl.value = cfg.catver;
+catverEl.addEventListener('change', () => {
+  cfg.catver = catverEl.value;
+  saveCfg();
+  if (cfg.catver === 'v2') requestCatRig();
+});
+if (cfg.catver === 'v2') requestCatRig();
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
 // follow view intent (right arrow reveals what's to the right), which
@@ -3818,6 +3849,28 @@ function frame(now) {
       // debug: tint each cat by its own state so attention reads at a glance
       const tint = debugLook ? STATE_TINT[st] ?? 0xffffff : view.coat;
       view.mats[0].color.setHex(tint);
+      // cat v2: the skinned rig replaces the blob but consumes the same
+      // computed story — position, facing, lean, tumble, state pose, speed
+      if (cfg.catver === 'v2') {
+        if (!view.rig && catRigGltf) view.rig = new CatRig(catRigGltf, scene, view.coat);
+        if (view.rig) {
+          view.group.visible = false;
+          const rg = view.rig.group;
+          rg.position.set(x, y, z);
+          rg.rotation.y = view.group.rotation.y;
+          rg.rotation.z = view.lean ?? 0;
+          view.rig.setVisible(true);
+          view.rig.update(frameDt / 1000, {
+            speed: spd,
+            pose: v2Pose(st, act, crouch),
+            dot: dot.visible ? dot.position : null,
+            tumble01: view.tumbleT,
+          });
+        }
+      } else if (view.rig) {
+        view.rig.setVisible(false);
+        view.group.visible = true;
+      }
       continue;
     }
     if (data[o] === 4) {
