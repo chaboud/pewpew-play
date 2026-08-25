@@ -8,7 +8,7 @@
 // window.__catlab = {ready, setPose, setSpeed, setYaw}
 
 import * as THREE from 'three';
-import { CatRig, POSES } from './catrig.js?v=k29';
+import { CatRig, POSES } from './catrig.js?v=k30';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('scene');
@@ -98,8 +98,19 @@ function buildBlob() {
   return g;
 }
 
+let rigGltf = null;
+function buildRig(coat) {
+  if (rig) { rig.dispose(); if (skelHelper) scene.remove(skelHelper); }
+  rig = new CatRig(rigGltf, scene, coat);
+  rig.group.position.set(0.1, 0.19, 0);
+  skelHelper = new THREE.SkeletonHelper(rig.inner);
+  skelHelper.visible = document.getElementById('c-skel').checked;
+  scene.add(skelHelper);
+  window.__catlab.rig = rig;
+}
 CatRig.load().then((gltf) => {
-  rig = new CatRig(gltf, scene, null);
+  rigGltf = gltf;
+  rig = new CatRig(gltf, scene, parseInt(params.get('coat') || '0', 10));
   rig.group.position.set(0.1, 0.19, 0); // group origin = capsule center height
   rig.group.updateMatrixWorld(true);
   const bb = new THREE.Box3().setFromObject(rig.inner);
@@ -129,6 +140,7 @@ $('c-yaw').oninput = (e) => {
   state.yaw = parseFloat(e.target.value);
   $('v-yaw').textContent = state.yaw.toFixed(1);
 };
+$('c-coat').onchange = (e) => { if (rigGltf) buildRig(parseInt(e.target.value, 10)); };
 $('c-dot').onchange = (e) => (state.dotOn = e.target.checked);
 $('c-skel').onchange = (e) => { if (skelHelper) skelHelper.visible = e.target.checked; };
 $('c-blob').onchange = (e) => { if (blob) blob.visible = e.target.checked; };

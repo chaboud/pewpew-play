@@ -26,6 +26,122 @@ const YAW_OFFSET = 0;
 
 let gltfPromise = null;
 
+// --- coats (founder: "tabby, Siamese, tuxedo, white, tortie") -----------
+// Patterns are baked ONCE per coat as vertex colors from the bind-pose
+// geometry (probe-verified axes: +z is the face, ny<0.1 is paws, nz<0.13
+// at height is the tail) and multiply a grayscale version of the model's
+// texture — the shipped map is orange, and multiplication only darkens,
+// so hue moves to the vertex colors while the map keeps eyes and ear
+// shading. Zero per-frame cost; geometry+material cached per coat.
+export const COAT_NAMES = ['orange tabby', 'grey tabby', 'siamese', 'tuxedo', 'white', 'tortie'];
+const coatGeoCache = new Map();
+const coatMatCache = new Map();
+let grayMap = null;
+
+function hash3(x, y, z) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return s - Math.floor(s);
+}
+function smooth01(t) {
+  return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+}
+
+// per-vertex color for coat c at normalized body coords
+function coatColor(c, nx, ny, nz, x, y, z) {
+  const paw = smooth01((0.13 - ny) / 0.06);
+  const face = smooth01((nz - 0.8) / 0.08);
+  const lowFace = face * smooth01((0.72 - ny) / 0.12);
+  const bib = smooth01((nz - 0.56) / 0.1) * smooth01((0.58 - ny) / 0.14) * (1 - face);
+  const ear = smooth01((ny - 0.8) / 0.08);
+  const tail = smooth01((0.15 - nz) / 0.05) * smooth01((ny - 0.32) / 0.1);
+  const n = hash3(Math.round(x * 3) / 3, Math.round(y * 3) / 3, Math.round(z * 3) / 3);
+  if (c === 0 || c === 1) {
+    // tabbies: bands around the barrel, cream bib/paws/muzzle
+    // ~5 bands: 1810 verts can't sample more (a 30x frequency vanished)
+    const sv = Math.sin(nz * 21 + Math.sin(ny * 5) * 0.9) * 0.5 + 0.5;
+    const stripe = sv > 0.55 && ny > 0.16 && face < 0.3 ? smooth01((sv - 0.55) / 0.1) : 0;
+    const base = c === 0 ? [0.95, 0.58, 0.26] : [0.66, 0.67, 0.72];
+    const dark = c === 0 ? [0.45, 0.24, 0.09] : [0.3, 0.31, 0.37];
+    const cream = c === 0 ? [0.97, 0.91, 0.78] : [0.93, 0.93, 0.95];
+    const w = Math.max(paw, bib, lowFace);
+    return mix3(mix3(base, dark, stripe * 0.9), cream, w);
+  }
+  if (c === 2) {
+    // siamese: cream body, seal points on paws/face/ears/tail
+    const pt = Math.max(smooth01((0.16 - ny) / 0.07), face * 0.95, ear, tail);
+    return mix3([0.95, 0.89, 0.77], [0.3, 0.21, 0.15], smooth01(pt * 1.15));
+  }
+  if (c === 3) {
+    // tuxedo: black coat, white bib + paws + muzzle
+    const w = Math.max(paw, bib, lowFace * 0.9);
+    return mix3([0.14, 0.14, 0.18], [0.96, 0.94, 0.9], smooth01(w * 1.2));
+  }
+  if (c === 4) {
+    // white: warm white with the faintest cream mottle
+    return mix3([0.97, 0.95, 0.9], [0.92, 0.88, 0.8], n * 0.3);
+  }
+  // tortie: brindled black/orange patches, small cream bib
+  const patch = hash3(Math.round(x * 2.2) / 2.2, Math.round(y * 2.2) / 2.2, Math.round(z * 2.2) / 2.2);
+  const base = mix3([0.17, 0.13, 0.11], [0.86, 0.49, 0.2], patch > 0.52 ? 1 : 0);
+  return mix3(base, [0.95, 0.9, 0.8], bib * 0.8);
+}
+function mix3(a, b, t) {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function coatGeometry(baseGeo, c) {
+  if (coatGeoCache.has(c)) return coatGeoCache.get(c);
+  const geo = baseGeo.clone();
+  const pos = geo.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  // bind-pose bounds (probe-measured): x +-0.9, y 0..3.7, z -3.4..2.4
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const v = coatColor(c, x / 0.9, y / 3.7, (z + 3.4) / 5.8, x, y, z);
+    // colors are authored as sRGB intents; vertex colors feed the shader
+    // linearly, so convert or every dark reads washed out (gamma lifted
+    // a 0.45 stripe to 0.70 — invisible against the 0.95 base)
+    col.set([v[0] ** 2.2, v[1] ** 2.2, v[2] ** 2.2], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  coatGeoCache.set(c, geo);
+  return geo;
+}
+
+function coatMaterial(srcMat, c) {
+  if (coatMatCache.has(c)) return coatMatCache.get(c);
+  if (!grayMap && srcMat.map && srcMat.map.image) {
+    const img = srcMat.map.image;
+    const cv = document.createElement('canvas');
+    cv.width = img.width;
+    cv.height = img.height;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, cv.width, cv.height);
+    // normalize: body pixels land near white so vertex colors own the hue,
+    // dark features (eyes) stay dark
+    let peak = 1;
+    for (let i = 0; i < d.data.length; i += 4) {
+      const l = 0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2];
+      if (l > peak) peak = l;
+    }
+    for (let i = 0; i < d.data.length; i += 4) {
+      const l = Math.min(255, (0.299 * d.data[i] + 0.587 * d.data[i + 1] + 0.114 * d.data[i + 2]) * (255 / peak) * 1.15);
+      d.data[i] = d.data[i + 1] = d.data[i + 2] = l;
+    }
+    ctx.putImageData(d, 0, 0);
+    grayMap = new THREE.CanvasTexture(cv);
+    grayMap.flipY = srcMat.map.flipY;
+    grayMap.colorSpace = srcMat.map.colorSpace;
+  }
+  const m = srcMat.clone();
+  if (grayMap) m.map = grayMap;
+  m.vertexColors = true;
+  m.color.set(0xffffff);
+  coatMatCache.set(c, m);
+  return m;
+}
+
 // contact points for the measured-ground pass: bone -> how far the skin
 // hangs below that bone (lab-measured at stand: ankles ride 0.009 above
 // the paw pads; the torso bone sits 0.178 over the floor with the belly
@@ -153,7 +269,8 @@ export class CatRig {
     return gltfPromise;
   }
 
-  constructor(gltf, parent, coatHex) {
+  // coat: index into COAT_NAMES (null = the model's own orange)
+  constructor(gltf, parent, coat) {
     this.group = new THREE.Group(); // world placement (game sets pos/yaw)
     this.inner = skClone(gltf.scene); // scaled model, feet on GROUND_Y
     this.inner.scale.setScalar(SCALE);
@@ -176,9 +293,9 @@ export class CatRig {
         o.castShadow = true;
         o.receiveShadow = true;
         o.frustumCulled = false; // skinned bounds lag the pose
-        if (coatHex != null && o.material && o.material.color) {
-          o.material = o.material.clone();
-          o.material.color.multiply(new THREE.Color(coatHex));
+        if (coat != null && o.isSkinnedMesh) {
+          o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
+          o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
         }
       }
     });

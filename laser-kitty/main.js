@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k29';
+import { CatRig } from './catrig.js?v=k30';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k29'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k30'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3856,7 +3856,7 @@ function frame(now) {
       // cat v2: the skinned rig replaces the blob but consumes the same
       // computed story — position, facing, lean, tumble, state pose, speed
       if (cfg.catver === 'v2') {
-        if (!view.rig && catRigGltf) view.rig = new CatRig(catRigGltf, scene, view.coat);
+        if (!view.rig && catRigGltf) view.rig = new CatRig(catRigGltf, scene, view.k); // coat by ordinal
         if (view.rig) {
           view.group.visible = false;
           const rg = view.rig.group;
