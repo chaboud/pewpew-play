@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js';
+import { CatRig } from './catrig.js?v=k27';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k26'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k27'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3865,6 +3865,9 @@ function frame(now) {
             pose: v2Pose(st, act, crouch),
             dot: dot.visible ? dot.position : null,
             tumble01: view.tumbleT,
+            // real vertical motion = the sim owns the height; the rig's
+            // measured-contact pass must not fight a jump or a fall
+            airborne: st === 4 || Math.abs(vy) > 0.8,
           });
         }
       } else if (view.rig) {
