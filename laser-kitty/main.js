@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k27';
+import { CatRig } from './catrig.js?v=k28';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k27'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k28'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -4079,6 +4079,24 @@ window.__lk = {
   score: () => lk.lk_score(sim),
   sfx,
   setPurr,
+  // facing audit (the moonwalk bug): for each v2 cat, the heading of its
+  // head-minus-tail bone vector vs its velocity heading — aligned means
+  // the cat runs nose-first
+  catFacing: () => {
+    const out = [];
+    for (const view of catViews.values()) {
+      if (!view.rig || !view.prev) continue;
+      const hv = new THREE.Vector3(), tv = new THREE.Vector3();
+      view.rig.bones.head.getWorldPosition(hv);
+      view.rig.bones.tail.getWorldPosition(tv);
+      out.push({
+        bodyYaw: Math.atan2(hv.x - tv.x, hv.z - tv.z),
+        facing: view.facing,
+        pos: [...view.prev],
+      });
+    }
+    return out;
+  },
   pan: () => [panX, panY],
   zoom: () => zoom,
   laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
