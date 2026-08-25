@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k33';
+import { CatRig } from './catrig.js?v=k34';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k33'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k34'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3838,7 +3838,23 @@ function frame(now) {
       view.lastSt = st;
       view.lastVy = vy;
       view.prev = [x, y, z];
-      view.group.position.set(x, y, z);
+      // temporal smoothing (founder: "a tiny amount, within 80ms"): the
+      // sim ticks at 60Hz but frames don't, so raw tick positions judder,
+      // and impulse pops (separation shoves, motor kicks) read as
+      // discontinuities. dt-aware exponential filter, tau 28ms — settles
+      // ~95% inside 80ms. Real teleports (toss rescue, reset) snap.
+      if (
+        !view.smooth ||
+        Math.hypot(x - view.smooth[0], y - view.smooth[1], z - view.smooth[2]) > 0.5
+      ) {
+        view.smooth = [x, y, z];
+      } else {
+        const sa = 1 - Math.exp(-frameDt / 28);
+        view.smooth[0] += (x - view.smooth[0]) * sa;
+        view.smooth[1] += (y - view.smooth[1]) * sa;
+        view.smooth[2] += (z - view.smooth[2]) * sa;
+      }
+      view.group.position.set(view.smooth[0], view.smooth[1], view.smooth[2]);
       view.group.rotation.x =
         view.tumbleT != null
           ? -Math.PI * 2 * view.tumbleT // full forward roll on a botched landing
@@ -3860,7 +3876,7 @@ function frame(now) {
         if (view.rig) {
           view.group.visible = false;
           const rg = view.rig.group;
-          rg.position.set(x, y, z);
+          rg.position.set(view.smooth[0], view.smooth[1], view.smooth[2]);
           rg.rotation.y = view.group.rotation.y;
           rg.rotation.z = view.lean ?? 0;
           view.rig.setVisible(true);
