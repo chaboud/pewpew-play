@@ -327,7 +327,13 @@ export class CatRig {
     standClip.name = 'stand';
     this.stand = this.mixer.clipAction(standClip);
     this.stand.play();
-    this.stand.paused = true;
+    // near-frozen, NOT paused and NOT timeScale 0: three.js skips bone
+    // writes for an action whose clip time doesn't advance (scribble-
+    // tested — both variants leave bones stale, which let the look
+    // tracking compound into the strange head turns). A 1e-4 creep is
+    // imperceptible (wraps the 0.83s clip in ~2 hours) and re-stamps the
+    // planted frame every update.
+    this.stand.timeScale = 1e-4;
     this.stand.time = 0.21; // lab-picked planted frame of the 0.83s cycle
     this.stand.setEffectiveWeight(1);
 
@@ -506,21 +512,38 @@ export class CatRig {
 
     // head tracking: neck+head chain yaws/pitches toward the dot, always
     // post-mix so the cat watches the laser through every pose but pounce
+    // The neck has a top speed. Two whips lived here (founder x2 —
+    // "Exorcist", then "strange head turn during Alert or wind-up"):
+    // the ±180° atan2 wrap flipped the clamped target sign as the dot
+    // crossed the tail, and a dot sweeping close under the nose turns the
+    // look direction 90°+ in one frame — the old per-frame slerp chased
+    // both with no speed cap (measured 19°/frame). Now the head pursues a
+    // smoothed look state, slew-limited to 5 rad/s, and the track FADES
+    // OUT for rearward dots instead of clamping — a real cat turns its
+    // body for those.
+    let ty = 0;
+    let tp = 0;
     if (s.dot && s.pose !== 'pounce') {
       this.group.worldToLocal(this._look.copy(s.dot));
       const yaw = Math.atan2(this._look.x, this._look.z);
       const flat = Math.hypot(this._look.x, this._look.z);
       const pitch = Math.atan2(this._look.y - 0.12, flat);
-      // clamps halved from +/-0.9 / -0.6..0.8 — the founder met the
-      // Exorcist cat ("head turn distances way too extreme")
-      const cy = Math.max(-0.45, Math.min(0.45, yaw));
-      const cp = Math.max(-0.3, Math.min(0.4, pitch));
+      let w = Math.max(0, Math.min(1, (2.6 - Math.abs(yaw)) / 0.8));
+      if (s.pose === 'windup') w *= 0.4; // the butt-wiggle fights the tracker
+      ty = Math.max(-0.45, Math.min(0.45, yaw)) * w;
+      tp = Math.max(-0.3, Math.min(0.4, pitch)) * w;
+    }
+    const cap = 5 * dt;
+    const ease = Math.min(1, dt * 9);
+    this.lookY = (this.lookY ?? 0) + Math.max(-cap, Math.min(cap, (ty - (this.lookY ?? 0)) * ease));
+    this.lookP = (this.lookP ?? 0) + Math.max(-cap, Math.min(cap, (tp - (this.lookP ?? 0)) * ease));
+    if (Math.abs(this.lookY) + Math.abs(this.lookP) > 0.004) {
       for (const [key, share] of [['neck', 0.45], ['head', 0.55]]) {
         const bone = this.bones[key];
         if (!bone) continue;
-        this._q.setFromEuler(this._e.set(-cp * share, cy * share, 0));
+        this._q.setFromEuler(this._e.set(-this.lookP * share, this.lookY * share, 0));
         this._q.premultiply(bone.quaternion);
-        bone.quaternion.slerp(this._q, Math.min(1, dt * 10));
+        bone.quaternion.copy(this._q);
       }
     }
 
