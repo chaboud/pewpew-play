@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k38';
+import { CatRig } from './catrig.js?v=k39';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k38'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k39'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -442,6 +442,34 @@ function neonTex(kind) {
       g.beginPath();
       g.arc(112, 44, 7, 0, Math.PI * 2);
       g.fill();
+    } else if (kind === 3) {
+      // COLD BEER: icy block letters over a tilted mug
+      g.font = '700 34px system-ui, sans-serif';
+      g.shadowColor = '#5fd0ff';
+      g.shadowBlur = 18;
+      g.strokeStyle = '#a8e6ff';
+      g.lineWidth = 2.5;
+      g.strokeText('COLD', 24, 50);
+      g.strokeText('BEER', 24, 96);
+      stroke('#ffd24f', 4, () => {
+        g.moveTo(158, 34); g.lineTo(158, 100); g.lineTo(216, 100);
+        g.lineTo(216, 34); g.moveTo(216, 48); g.lineTo(238, 54);
+        g.lineTo(238, 84); g.lineTo(216, 90);
+      });
+    } else if (kind === 4) {
+      // LIVE CATS: hot red letters with a little neon cat face
+      g.font = '700 34px system-ui, sans-serif';
+      g.shadowColor = '#ff5f5f';
+      g.shadowBlur = 18;
+      g.strokeStyle = '#ffb0a8';
+      g.lineWidth = 2.5;
+      g.strokeText('LIVE', 20, 50);
+      g.strokeText('CATS', 20, 96);
+      stroke('#ffd24f', 3.5, () => {
+        g.arc(196, 66, 26, 0, Math.PI * 2);
+        g.moveTo(176, 48); g.lineTo(170, 26); g.lineTo(190, 40);
+        g.moveTo(216, 48); g.lineTo(222, 26); g.lineTo(202, 40);
+      });
     } else {
       // OPEN in warm amber block letters
       g.font = '700 56px system-ui, sans-serif';
@@ -468,6 +496,37 @@ const animParts = [];
 const pendingLights = [];
 let litLights = [];
 let lightsDirty = true;
+// screen-space glow (founder): a soft additive billboard at every
+// emitter — lights, neon, sparks. Cheap enough for phones; no bloom pass.
+let glowTexCache = null;
+function glowTex() {
+  if (!glowTexCache) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const g = cv.getContext('2d');
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.32)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    glowTexCache = new THREE.CanvasTexture(cv);
+  }
+  return glowTexCache;
+}
+function glowSprite(color, scale) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex(),
+    color,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0.85,
+  }));
+  sp.scale.set(scale, scale, 1);
+  return sp;
+}
+const glowSprites = []; // fixture glows that die with their fixture
 function registerLight(node, color, intensity, distance) {
   if ((cfg.room | 0) === 7) return; // the tower runs its own per-floor lights
   pendingLights.push({ node, color, intensity, distance });
@@ -475,6 +534,16 @@ function registerLight(node, color, intensity, distance) {
 function applyLightBudget() {
   for (const l of litLights) l.parent?.remove(l);
   litLights = [];
+  for (const pk of pendingLights) {
+    if (!pk.node.userData.hasGlow) {
+      pk.node.userData.hasGlow = true;
+      const gs = glowSprite(pk.color, 0.22 + Math.min(0.25, pk.intensity * 0.06));
+      gs.userData.bodyIndex = pk.node.userData.bodyIndex;
+      gs.userData.wasClass = pk.node.userData.cls;
+      pk.node.add(gs);
+      glowSprites.push(gs);
+    }
+  }
   const lite = new URLSearchParams(location.search).has('lite');
   const budget = lite ? 2 : matchMedia('(pointer: coarse)').matches ? 4 : 8;
   const picks = [...pendingLights].sort((a2, b2) => b2.intensity - a2.intensity).slice(0, budget);
@@ -615,13 +684,25 @@ function eachMat(m, fn) {
 // Materials derive from the sim's optics: gloss (the value the laser's
 // spill/glint math uses) picks the family — shiny phong, matte fabric, or
 // toon wood/plastic. One source of truth for how surfaces behave.
-function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
+function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   const color = bodyColor(i, cls, [a, b, c], py);
   let m = null;
   // decorated bodies: recognized by their sim dims, built as Groups (the
   // render loop drives position/quaternion the same way)
-  if (cls === 0 && shape === 0 && b < 0.004 && gloss > 0.7) {
+  if (cls === 2 && shape === 1 && a < 0.011 && gloss > 0.985) {
+    // welder spark: white-hot core in an additive glow (electric gear
+    // death throes; the sim bounces them, we just shine)
+    m = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.009, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xfff3c4 })
+    );
+    m.add(core);
+    m.add(glowSprite(0xffb45f, 0.11));
+    m.userData.spark = true;
+    m.userData.noShadow = true;
+  } else if (cls === 0 && shape === 0 && b < 0.004 && gloss > 0.7) {
     // paint decals: each sits on its own sim-assigned micro-layer so no
     // two are ever coplanar (founder-caught tearing). Small ones are paw
     // prints; big ones are puddles the sim floods via stream dims.
@@ -1565,15 +1646,18 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
     // design. DoubleSide so it reads from any camera angle.
     m = new THREE.Group();
     const along = Math.max(a, c);
-    const kind2 = tint < 0.3 ? 0 : tint < 0.7 ? 1 : 2;
+    const kind2 = tint < 0.25 ? 0 : tint < 0.45 ? 3 : tint < 0.6 ? 1 : tint < 0.75 ? 4 : 2;
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(along * 2, b * 2),
       new THREE.MeshBasicMaterial({ map: neonTex(kind2), transparent: true, side: THREE.DoubleSide })
     );
     // face INTO the room or the text reads mirrored (screenshot-caught):
     // far wall looks -z; the right-wall sign looks -x
-    face.rotation.y = c > a ? -Math.PI / 2 : Math.PI;
+    face.rotation.y = c > a ? (px < 0 ? Math.PI / 2 : -Math.PI / 2) : Math.PI;
     m.add(face);
+    const glowCols = [0xff4fa0, 0x5ff0ff, 0xffb84f, 0xffd24f, 0xff6f5f];
+    const ng = glowSprite(glowCols[kind2] ?? 0xffb84f, Math.max(along * 2.6, b * 3.2));
+    m.add(ng);
     m.userData.noShadow = true;
   } else if (cls === 0 && shape === 0 && gloss > 0.85 && Math.min(a, c) < 0.02 && b >= 0.14 && b <= 0.5 && Math.max(a, c) >= 0.14 && Math.max(a, c) <= 0.6) {
     // window: frame, warm daylight pane, muntins — thin axis picks the
@@ -3566,6 +3650,7 @@ function rebuildSim() {
   animParts.length = 0; // registered by recognition branches per build
   pendingLights.length = 0;
   litLights = []; // their parents just left the scene with the meshes
+  glowSprites.length = 0; // ditto the fixture glows
   lightsDirty = true;
   rebuildCloths();
   rebuildRings();
@@ -3995,7 +4080,24 @@ function frame(now) {
       if (clothSet.has(i)) {
         meshes[i] = clothDummy; // skinned by its patch, not per-particle
       } else {
-        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14]);
+        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5]);
+        // spawned pieces (flag carries parent rec + 1) inherit the parent
+        // mesh's color — TV shards look like the TV, not a fresh rainbow
+        if (data[o] === 2 && !meshes[i].userData.spark) {
+          const parent = (data[o + 12] | 0) >> 1;
+          if (parent > 0 && meshes[parent - 1]) {
+            let pc = null;
+            meshes[parent - 1].traverse((n) => {
+              if (!pc && n.material && n.material.color && !n.isSprite) pc = n.material.color;
+            });
+            if (pc) {
+              eachMat(meshes[i], (mat) => {
+                if (mat.color) mat.color.copy(pc);
+              });
+              meshes[i].userData.parentColored = true;
+            }
+          }
+        }
         eachMat(meshes[i], (mat) => (mat.wireframe = debugLook));
       }
     }
@@ -4007,7 +4109,7 @@ function frame(now) {
       const s = data[o + 2] / m.userData.puddle.a0;
       m.scale.set(s, 1, s);
     }
-    if (data[o] === 2 && data[o + 12] && m.material) m.material.emissive?.setHex(0x551111);
+    if (data[o] === 2 && (data[o + 12] & 1) && m.material && !m.userData.parentColored) m.material.emissive?.setHex(0x551111);
     if (data[o] === 1 && m.material) {
       // scratch wear: each stage mats and darkens the fabric a little
       const wear = data[o + 12] | 0;
@@ -4121,6 +4223,12 @@ function frame(now) {
     const broken = bcls === 4 || (l.userData.wasClass === 1 && bcls === 2);
     l.intensity = broken ? 0 : l.userData.base;
   }
+  for (const gs of glowSprites) {
+    const bi = gs.userData.bodyIndex;
+    if (bi === undefined) continue;
+    const bcls = data[bi * 15];
+    gs.visible = !(bcls === 4 || (gs.userData.wasClass === 1 && bcls === 2));
+  }
   for (const p of animParts) {
     // a severed or shattered host stops its make-believe motion — the
     // sim's real inertia owns it now (the fan head spins off for real)
@@ -4223,6 +4331,11 @@ window.__lk = {
     }));
   },
   fling: (rec, x, y, z) => lk.lk_fling(sim, rec, x, y, z),
+  row: (rec) => {
+    const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
+    return Array.from(d.slice(rec * FLOATS_PER_BODY, rec * FLOATS_PER_BODY + FLOATS_PER_BODY));
+  },
+  count: () => lk.lk_body_count(sim),
   body: (rec) => {
     const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
     const o = rec * FLOATS_PER_BODY;
