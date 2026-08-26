@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k37';
+import { CatRig } from './catrig.js?v=k38';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k37'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k38'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -621,18 +621,31 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
   let m = null;
   // decorated bodies: recognized by their sim dims, built as Groups (the
   // render loop drives position/quaternion the same way)
-  if (cls === 0 && shape === 0 && Math.abs(b - 0.004) < 0.001 && gloss > 0.7) {
-    // spilled paint: a wet blob of overlapping flat discs in the can's
-    // color; the sim grows the stream dims and the frame loop scales us
+  if (cls === 0 && shape === 0 && b < 0.004 && gloss > 0.7) {
+    // paint decals: each sits on its own sim-assigned micro-layer so no
+    // two are ever coplanar (founder-caught tearing). Small ones are paw
+    // prints; big ones are puddles the sim floods via stream dims.
     m = new THREE.Group();
     const paint = new THREE.MeshPhongMaterial({ shininess: 140, specular: 0x99bbcc });
     paint.color.setHSL((tint * 2.83) % 1, 0.8, 0.42);
-    for (const [r, ox, oz, oy] of [[1, 0, 0, 0], [0.62, 0.55, 0.35, -0.001], [0.5, -0.5, -0.45, -0.001], [0.34, 0.2, -0.75, -0.002]]) {
-      const d = new THREE.Mesh(new THREE.CylinderGeometry(r * a, r * a, 0.006, 14), paint);
-      d.position.set(ox * a, oy, oz * a);
-      m.add(d);
+    if (a <= 0.026) {
+      // paw print: pad + three toes, +z pointing along the stride
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.001, 10), paint);
+      pad.scale.set(0.012, 1, 0.009);
+      m.add(pad);
+      for (const tx of [-0.0085, 0, 0.0085]) {
+        const toe = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.001, 8), paint);
+        toe.position.set(tx, 0.0002, 0.013 + (tx === 0 ? 0.003 : 0));
+        m.add(toe);
+      }
+    } else {
+      for (const [r, ox, oz, oy] of [[1, 0, 0, 0.0004], [0.62, 0.55, 0.35, 0.0002], [0.5, -0.5, -0.45, 0], [0.34, 0.2, -0.75, -0.0002]]) {
+        const d = new THREE.Mesh(new THREE.CylinderGeometry(r * a, r * a, 0.001, 14), paint);
+        d.position.set(ox * a, oy, oz * a);
+        m.add(d);
+      }
+      m.userData.puddle = { a0: a };
     }
-    m.userData.puddle = { a0: a };
   } else if (shape === 0 && Math.abs(a - 0.06) < 0.005 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.16) < 0.005) {
     // car wheel: real tire + hub + cap instead of a Duplo brick
     m = new THREE.Group();
