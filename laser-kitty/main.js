@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k40';
+import { CatRig } from './catrig.js?v=k41';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k40'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k41'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -704,12 +704,16 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     m.userData.noShadow = true;
   } else if (cls === 0 && shape === 0 && b < 0.004 && gloss > 0.7) {
     // paint decals: each sits on its own sim-assigned micro-layer so no
-    // two are ever coplanar (founder-caught tearing). Small ones are paw
-    // prints; big ones are puddles the sim floods via stream dims.
+    // two are ever coplanar (founder-caught tearing). Thickness is the
+    // identity — prints stamp at hy 0.0012, puddles at 0.0015. (Keying
+    // on width regressed: a puddle SPAWNS at the same 0.02 a print
+    // stamps at and only floods afterward, so every puddle was built as
+    // a print-sized mesh and never grew — founder-caught, invisible
+    // spills.)
     m = new THREE.Group();
     const paint = new THREE.MeshPhongMaterial({ shininess: 140, specular: 0x99bbcc });
     paint.color.setHSL((tint * 2.83) % 1, 0.8, 0.42);
-    if (a <= 0.026) {
+    if (b < 0.0014) {
       // paw print: pad + three toes, +z pointing along the stride
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.001, 10), paint);
       pad.scale.set(0.012, 1, 0.009);

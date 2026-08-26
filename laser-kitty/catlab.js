@@ -8,7 +8,7 @@
 // window.__catlab = {ready, setPose, setSpeed, setYaw}
 
 import * as THREE from 'three';
-import { CatRig, POSES } from './catrig.js?v=k40';
+import { CatRig, POSES } from './catrig.js?v=k41';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('scene');
