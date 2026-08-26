@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k36';
+import { CatRig } from './catrig.js?v=k37';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k36'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k37'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -621,7 +621,84 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint) {
   let m = null;
   // decorated bodies: recognized by their sim dims, built as Groups (the
   // render loop drives position/quaternion the same way)
-  if (cls === 2 && shape === 0 && Math.abs(a - 0.09) < 0.005 && Math.abs(b - 0.16) < 0.005) {
+  if (cls === 0 && shape === 0 && Math.abs(b - 0.004) < 0.001 && gloss > 0.7) {
+    // spilled paint: a wet blob of overlapping flat discs in the can's
+    // color; the sim grows the stream dims and the frame loop scales us
+    m = new THREE.Group();
+    const paint = new THREE.MeshPhongMaterial({ shininess: 140, specular: 0x99bbcc });
+    paint.color.setHSL((tint * 2.83) % 1, 0.8, 0.42);
+    for (const [r, ox, oz, oy] of [[1, 0, 0, 0], [0.62, 0.55, 0.35, -0.001], [0.5, -0.5, -0.45, -0.001], [0.34, 0.2, -0.75, -0.002]]) {
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(r * a, r * a, 0.006, 14), paint);
+      d.position.set(ox * a, oy, oz * a);
+      m.add(d);
+    }
+    m.userData.puddle = { a0: a };
+  } else if (shape === 0 && Math.abs(a - 0.06) < 0.005 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.16) < 0.005) {
+    // car wheel: real tire + hub + cap instead of a Duplo brick
+    m = new THREE.Group();
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.105, 18), toonMat(0x24222a));
+    tire.rotation.z = Math.PI / 2;
+    m.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.11, 14), toonMat(0x9aa0ab));
+    hub.rotation.z = Math.PI / 2;
+    m.add(hub);
+    for (const sx of [-1, 1]) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.115, 10), toonMat(0xd6dae2));
+      cap.rotation.z = Math.PI / 2;
+      cap.position.x = sx * 0.001;
+      m.add(cap);
+    }
+  } else if (shape === 0 && Math.abs(a - 0.72) < 0.005 && Math.abs(b - 0.2) < 0.005 && Math.abs(c - 1.0) < 0.005) {
+    // car body: tapered cherry shell, chrome bumpers, lights — the sim
+    // collider stays the slab; this is pure viewer bodywork
+    m = new THREE.Group();
+    const cherry = new THREE.MeshPhongMaterial({ color: 0xc23028, shininess: 120, specular: 0xffd9cc });
+    const shellGeo = new THREE.BoxGeometry(1.44, 0.4, 2.0);
+    const pos = shellGeo.attributes.position;
+    for (let vi = 0; vi < pos.count; vi++) {
+      if (pos.getY(vi) > 0) {
+        pos.setX(vi, pos.getX(vi) * 0.9);
+        pos.setZ(vi, pos.getZ(vi) * 0.94);
+      }
+    }
+    shellGeo.computeVertexNormals();
+    m.add(new THREE.Mesh(shellGeo, cherry));
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(1.46, 0.1, 1.7), toonMat(0x2c2a33));
+    skirt.position.y = -0.17;
+    m.add(skirt);
+    const chrome = new THREE.MeshPhongMaterial({ color: 0xcfd6de, shininess: 160, specular: 0xffffff });
+    for (const sz of [-1, 1]) {
+      const bump = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.32, 10), chrome);
+      bump.rotation.z = Math.PI / 2;
+      bump.position.set(0, -0.1, sz * 1.0);
+      m.add(bump);
+      for (const sx of [-0.45, 0.45]) {
+        const lite = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.045, 0.045, 0.03, 10),
+          new THREE.MeshBasicMaterial({ color: sz > 0 ? 0xffe9a8 : 0xd8322a })
+        );
+        lite.rotation.x = Math.PI / 2;
+        lite.position.set(sx, 0.02, sz * 1.005);
+        m.add(lite);
+      }
+    }
+  } else if (shape === 0 && Math.abs(a - 0.55) < 0.005 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.45) < 0.005) {
+    // car cabin: raked glass greenhouse under a body-color roof
+    m = new THREE.Group();
+    const glassGeo = new THREE.BoxGeometry(1.08, 0.3, 0.9);
+    const gp = glassGeo.attributes.position;
+    for (let vi = 0; vi < gp.count; vi++) {
+      if (gp.getY(vi) > 0) {
+        gp.setX(vi, gp.getX(vi) * 0.74);
+        gp.setZ(vi, gp.getZ(vi) * 0.72);
+      }
+    }
+    glassGeo.computeVertexNormals();
+    m.add(new THREE.Mesh(glassGeo, new THREE.MeshPhongMaterial({ color: 0x1b2733, shininess: 150, specular: 0xbcd6e8 })));
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.035, 0.68), new THREE.MeshPhongMaterial({ color: 0xc23028, shininess: 120, specular: 0xffd9cc }));
+    roof.position.y = 0.16;
+    m.add(roof);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.09) < 0.005 && Math.abs(b - 0.16) < 0.005) {
     // floor speaker: cabinet + woofer/tweeter cones on the front face
     m = new THREE.Group();
     const cab = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0x3a3540));
@@ -3912,6 +3989,11 @@ function frame(now) {
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
+    if (m.userData.puddle) {
+      // the sim floods the puddle by growing its stream dims
+      const s = data[o + 2] / m.userData.puddle.a0;
+      m.scale.set(s, 1, s);
+    }
     if (data[o] === 2 && data[o + 12] && m.material) m.material.emissive?.setHex(0x551111);
     if (data[o] === 1 && m.material) {
       // scratch wear: each stage mats and darkens the fabric a little
@@ -4127,6 +4209,7 @@ window.__lk = {
       attached: !!(v >>> 31),
     }));
   },
+  fling: (rec, x, y, z) => lk.lk_fling(sim, rec, x, y, z),
   body: (rec) => {
     const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
     const o = rec * FLOATS_PER_BODY;
