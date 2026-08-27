@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k42';
+import { CatRig } from './catrig.js?v=k43';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k42'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k43'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -684,6 +684,23 @@ function eachMat(m, fn) {
 // Materials derive from the sim's optics: gloss (the value the laser's
 // spill/glint math uses) picks the family — shiny phong, matte fabric, or
 // toon wood/plastic. One source of truth for how surfaces behave.
+// Liquid color bands (sim contract): tint >= 0.975 is milk-white,
+// 0.94..0.975 is clear (water, gin — pale and translucent), anything
+// else rides the paint hue wheel (coffee ~0.0265, wine 0.346, liquor
+// bottles pour their glass tint).
+function liquidStyle(mat, tint) {
+  if (tint >= 0.975) {
+    mat.color.set(0xf2efe6);
+  } else if (tint >= 0.94) {
+    mat.color.set(0xc3dde4);
+    mat.transparent = true;
+    mat.opacity = 0.55;
+    mat.shininess = 220;
+  } else {
+    mat.color.setHSL((tint * 2.83) % 1, 0.8, tint < 0.05 ? 0.3 : 0.42);
+  }
+}
+
 function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   const color = bodyColor(i, cls, [a, b, c], py);
@@ -702,6 +719,28 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     m.add(glowSprite(0xffb45f, 0.11));
     m.userData.spark = true;
     m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 1 && a < 0.011 && gloss > 0.85 && gloss < 0.95) {
+    // runoff droplet: a falling bead of whatever's spilling. No glow —
+    // liquid, not fire.
+    m = new THREE.Group();
+    const bead = new THREE.Mesh(
+      new THREE.SphereGeometry(0.009, 6, 5),
+      new THREE.MeshPhongMaterial({ shininess: 180, specular: 0xdde8ee })
+    );
+    liquidStyle(bead.material, tint);
+    m.add(bead);
+    m.userData.noShadow = true;
+  } else if (cls === 0 && shape === 0 && c < 0.004 && b > 0.01 && gloss > 0.845 && gloss < 0.875) {
+    // dribble stripe: the wet run down a surface's side face, from the
+    // overflow edge to wherever it lands
+    m = new THREE.Group();
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(a * 2, b * 2, 0.002),
+      new THREE.MeshPhongMaterial({ shininess: 160, specular: 0x99bbcc })
+    );
+    liquidStyle(stripe.material, tint);
+    m.add(stripe);
+    m.userData.noShadow = true;
   } else if (cls === 0 && shape === 0 && b < 0.004 && gloss > 0.7) {
     // paint decals: each sits on its own sim-assigned micro-layer so no
     // two are ever coplanar (founder-caught tearing). Puddles (0.82) and
@@ -712,7 +751,7 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     // — founder-caught twice).
     m = new THREE.Group();
     const paint = new THREE.MeshPhongMaterial({ shininess: 140, specular: 0x99bbcc });
-    paint.color.setHSL((tint * 2.83) % 1, 0.8, 0.42);
+    liquidStyle(paint, tint);
     if (gloss < 0.78) {
       // paw print: pad + three toes, +z pointing along the stride
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.001, 10), paint);
@@ -731,6 +770,52 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
       }
       m.userData.puddle = { a0: a };
     }
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.03) < 0.002 && Math.abs(b - 0.055) < 0.003 && Math.abs(c - 0.03) < 0.002) {
+    // martini glass: cone bowl on a stem, with a clear pour inside
+    m = new THREE.Group();
+    const glass = new THREE.MeshPhongMaterial({
+      color: 0xdfeaf0, shininess: 200, specular: 0xffffff, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+    });
+    const bowl = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.045, 12, 1, true), glass);
+    bowl.rotation.x = Math.PI;
+    bowl.position.y = 0.033;
+    m.add(bowl);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.045, 6), glass);
+    stem.position.y = -0.022;
+    m.add(stem);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.006, 12), glass);
+    base.position.y = -0.052;
+    m.add(base);
+    const pour = new THREE.Mesh(
+      new THREE.CircleGeometry(0.026, 12),
+      new THREE.MeshPhongMaterial({ color: 0xd8ecef, shininess: 220, transparent: true, opacity: 0.7 })
+    );
+    pour.rotation.x = -Math.PI / 2;
+    pour.position.y = 0.048;
+    m.add(pour);
+    m.userData.noShadow = true;
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.045) < 0.003 && Math.abs(b - 0.09) < 0.004 && Math.abs(c - 0.045) < 0.003) {
+    // milk carton: white body, gabled top, a blue band
+    m = new THREE.Group();
+    const carton = new THREE.MeshPhongMaterial({ color: 0xf4f2ec, shininess: 30, specular: 0x445566 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.088, 0.14, 0.088), carton);
+    body.position.y = -0.018;
+    m.add(body);
+    const gableGeo = new THREE.BoxGeometry(0.088, 0.05, 0.088);
+    const gp = gableGeo.attributes.position;
+    for (let vi = 0; vi < gp.count; vi++) {
+      if (gp.getY(vi) > 0) gp.setZ(vi, 0);
+    }
+    gableGeo.computeVertexNormals();
+    const gable = new THREE.Mesh(gableGeo, carton);
+    gable.position.y = 0.077;
+    m.add(gable);
+    const band = new THREE.Mesh(
+      new THREE.BoxGeometry(0.0885, 0.036, 0.0885),
+      new THREE.MeshPhongMaterial({ color: 0x4a78b8, shininess: 30 })
+    );
+    band.position.y = -0.052;
+    m.add(band);
   } else if (shape === 0 && Math.abs(a - 0.06) < 0.005 && Math.abs(b - 0.16) < 0.005 && Math.abs(c - 0.16) < 0.005) {
     // car wheel: real tire + hub + cap instead of a Duplo brick
     m = new THREE.Group();
@@ -3714,6 +3799,12 @@ bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
 bindSlider('strength', 'strength', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('gravity', 'gravity', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('destruct', 'destruct', (v) => (v === 0 ? 'OFF' : `${v.toFixed(1)}x`), retune);
+// Reset to defaults: wipe the stored settings and reboot clean — every
+// subsystem reads cfg at boot, so a reload is the honest reset
+document.getElementById('s-defaults').onclick = () => {
+  try { localStorage.removeItem('lk-settings'); } catch {}
+  location.reload();
+};
 bindSlider('quality', 'quality', (v) => v.toFixed(2), (v) => {
   renderer.setPixelRatio(Math.min(devicePixelRatio, v));
   if (composer) {
@@ -4340,6 +4431,7 @@ window.__lk = {
     }));
   },
   fling: (rec, x, y, z) => lk.lk_fling(sim, rec, x, y, z),
+  spin: (rec, x, y, z) => lk.lk_spin(sim, rec, x, y, z),
   row: (rec) => {
     const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
     return Array.from(d.slice(rec * FLOATS_PER_BODY, rec * FLOATS_PER_BODY + FLOATS_PER_BODY));
