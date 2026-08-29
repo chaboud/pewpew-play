@@ -8,7 +8,7 @@
 // window.__catlab = {ready, setPose, setSpeed, setYaw}
 
 import * as THREE from 'three';
-import { CatRig, POSES } from './catrig.js?v=k45';
+import { CatRig, POSES } from './catrig.js?v=k46';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('scene');
@@ -99,16 +99,20 @@ function buildBlob() {
 }
 
 let rigGltf = null;
+let modelVariant = parseInt(params.get('model') || '2', 10);
 function buildRig(coat) {
-  if (rig) { rig.dispose(); if (skelHelper) scene.remove(skelHelper); }
-  rig = new CatRig(rigGltf, scene, coat);
-  rig.group.position.set(0.1, 0.19, 0);
-  skelHelper = new THREE.SkeletonHelper(rig.inner);
-  skelHelper.visible = document.getElementById('c-skel').checked;
-  scene.add(skelHelper);
-  window.__catlab.rig = rig;
+  CatRig.source(modelVariant).then((src) => {
+    if (rig) { rig.dispose(); if (skelHelper) scene.remove(skelHelper); }
+    rig = new CatRig(src, scene, coat);
+    rig.group.position.set(0.1, 0.19, 0);
+    skelHelper = new THREE.SkeletonHelper(rig.inner);
+    skelHelper.visible = document.getElementById('c-skel').checked;
+    scene.add(skelHelper);
+    window.__catlab.rig = rig;
+    window.__catlab.ready = true;
+  });
 }
-CatRig.load().then((gltf) => {
+CatRig.source(modelVariant).then((gltf) => {
   rigGltf = gltf;
   rig = new CatRig(gltf, scene, parseInt(params.get('coat') || '0', 10));
   rig.group.position.set(0.1, 0.19, 0); // group origin = capsule center height
@@ -141,6 +145,11 @@ $('c-yaw').oninput = (e) => {
   $('v-yaw').textContent = state.yaw.toFixed(1);
 };
 $('c-coat').onchange = (e) => { if (rigGltf) buildRig(parseInt(e.target.value, 10)); };
+$('c-model').value = String(modelVariant);
+$('c-model').onchange = (e) => {
+  modelVariant = parseInt(e.target.value, 10);
+  buildRig(parseInt($('c-coat').value, 10));
+};
 $('c-dot').onchange = (e) => (state.dotOn = e.target.checked);
 $('c-skel').onchange = (e) => { if (skelHelper) skelHelper.visible = e.target.checked; };
 $('c-blob').onchange = (e) => { if (blob) blob.visible = e.target.checked; };

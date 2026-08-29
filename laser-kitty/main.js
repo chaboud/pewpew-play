@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k45';
+import { CatRig } from './catrig.js?v=k46';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k45'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k46'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -2821,11 +2821,13 @@ const catViews = new Map(); // body index -> {group, legs, tailSegs, mats, prev,
 // cat v2: the shared glb loads once, on demand; each cat gets a skinned
 // clone that replaces its blob while the setting says v2
 let catRigGltf = null;
-let catRigRequested = false;
+let catRigRequested = '';
 function requestCatRig() {
-  if (catRigRequested) return;
-  catRigRequested = true;
-  CatRig.load().then((g) => { catRigGltf = g; }).catch((e) => console.error('cat v2 load failed', e));
+  if (catRigRequested === cfg.catver) return;
+  catRigRequested = cfg.catver;
+  catRigGltf = null; // rigs already built keep their model; new cats get the new one
+  const variant = parseInt(cfg.catver.slice(1), 10) || 2;
+  CatRig.source(variant).then((g) => { catRigGltf = g; }).catch((e) => console.error('cat rig load failed', e));
 }
 // sim brain state (+ ambient act) -> v2 pose table name; null = locomote
 function v2Pose(st, act, crouch) {
@@ -3862,9 +3864,10 @@ catverEl.addEventListener('change', () => {
   cfg.catver = catverEl.value;
   cfg.catverPick = 1; // an explicit choice survives future default flips
   saveCfg();
-  if (cfg.catver === 'v2') requestCatRig();
+  if (cfg.catver !== 'v1') requestCatRig();
+  rebuildSim(); // new cat bodies pick up the newly selected rig
 });
-if (cfg.catver === 'v2') requestCatRig();
+if (cfg.catver !== 'v1') requestCatRig();
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
 // follow view intent (right arrow reveals what's to the right), which
@@ -4146,7 +4149,7 @@ function frame(now) {
       view.mats[0].color.setHex(tint);
       // cat v2: the skinned rig replaces the blob but consumes the same
       // computed story — position, facing, lean, tumble, state pose, speed
-      if (cfg.catver === 'v2') {
+      if (cfg.catver !== 'v1') {
         if (!view.rig && catRigGltf) view.rig = new CatRig(catRigGltf, scene, view.k); // coat by ordinal
         if (view.rig) {
           view.group.visible = false;

@@ -274,6 +274,15 @@ export class CatRig {
     return gltfPromise;
   }
 
+  // v2 loads the CC-BY glb; v3+ are house-built in code (catgen) and mimic
+  // the loaded shape, so the rest of this class doesn't know the difference
+  static source(variant) {
+    if (variant >= 3) {
+      return import('./catgen.js?v=k46').then((m) => m.buildCatSource(variant));
+    }
+    return CatRig.load();
+  }
+
   // coat: index into COAT_NAMES (null = the model's own orange)
   constructor(gltf, parent, coat) {
     this.group = new THREE.Group(); // world placement (game sets pos/yaw)
