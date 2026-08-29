@@ -8,7 +8,7 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k44';
+import { CatRig } from './catrig.js?v=k45';
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +16,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k44'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k45'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -4337,7 +4337,11 @@ function frame(now) {
       const hc = data[hb * 15];
       if (p.host.userData.cls === 1 && hc !== 1) continue;
     }
-    if (p.mode === 'spin') p.node.rotation.z = now * 0.03;
+    // 10 rad/s (founder: 1/3 the old rate). 30 rad/s put the 5-blade
+    // passing frequency at ~24Hz — right in the wagon-wheel strobe zone
+    // for 30/60fps displays with no motion blur, so the fan phase-locked
+    // and looked parked. Oscillation rates unchanged.
+    if (p.mode === 'spin') p.node.rotation.z = now * 0.01;
     else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0015) * 0.16;
     else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
