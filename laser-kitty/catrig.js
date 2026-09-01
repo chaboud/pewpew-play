@@ -278,7 +278,7 @@ export class CatRig {
   // the loaded shape, so the rest of this class doesn't know the difference
   static source(variant) {
     if (variant >= 3) {
-      return import('./catgen.js?v=k46').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k47').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }

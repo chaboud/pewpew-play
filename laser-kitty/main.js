@@ -8,7 +8,13 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k46';
+import { CatRig } from './catrig.js?v=k47';
+import { Career } from './career.js?v=k47';
+
+// career mode (?play=1): the locked-down "actual game" over the same
+// engine. null in Free Play — every hook below is a cheap no-op then.
+let career = null;
+const ckCodes = [];
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
 const AMB_NAMES = ['SIT', 'GROOM', 'LOAF', 'WANDER', 'STRETCH'];
@@ -16,7 +22,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k46'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k47'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3869,6 +3875,21 @@ catverEl.addEventListener('change', () => {
 });
 if (cfg.catver !== 'v1') requestCatRig();
 
+if (new URLSearchParams(location.search).has('play')) {
+  career = new Career({
+    setRoom: (room, cats) => {
+      cfg.room = room;
+      cfg.cats = cats;
+      cfg.destruct = 1.0; // career tuning is fixed; never saved to lk-settings
+      cfg.strength = 1;
+      cfg.gravity = 1;
+      rebuildSim();
+      retune();
+    },
+    score: () => lk.lk_score(sim),
+  });
+}
+
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
 // follow view intent (right arrow reveals what's to the right), which
 // is the opposite of the drag gestures' content-follows-finger signs
@@ -3930,6 +3951,7 @@ function frame(now) {
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
+      if (career) ckCodes.push(code);
       const ev = code >>> 28; // type moved up when prop grew to 13 bits
       if (ev === 1) {
         // cat vocals ride the brain's state changes
@@ -3985,6 +4007,7 @@ function frame(now) {
   // the single HUD meter follows the MOST ENGAGED cat (founder), not
   // cat 0: rank states by how engaged they read, break ties on interest
   const CAT_PRIORITY = [0, 6, 7, 8, 9, 4, 1, 3, 5, 9]; // idx = state
+  let ckCats = 0, ckLoaf = 0, ckPuddles = 0;
   let hudEng = -1;
   let hudSt = 0;
   let hudAct = -1;
@@ -4147,6 +4170,8 @@ function frame(now) {
       // debug: tint each cat by its own state so attention reads at a glance
       const tint = debugLook ? STATE_TINT[st] ?? 0xffffff : view.coat;
       view.mats[0].color.setHex(tint);
+      ckCats++;
+      if (st === 0 && act === 2) ckLoaf++;
       // cat v2: the skinned rig replaces the blob but consumes the same
       // computed story — position, facing, lean, tumble, state pose, speed
       if (cfg.catver !== 'v1') {
@@ -4207,6 +4232,7 @@ function frame(now) {
     const m = meshes[i];
     m.position.set(data[o + 5], data[o + 6], data[o + 7]);
     m.quaternion.set(data[o + 8], data[o + 9], data[o + 10], data[o + 11]);
+    if (data[o] === 0 && data[o + 13] > 0.8 && data[o + 3] < 0.004 && data[o + 6] < 0.1) ckPuddles++;
     if (m.userData.puddle) {
       // the sim floods the puddle by growing its stream dims
       const s = data[o + 2] / m.userData.puddle.a0;
@@ -4350,6 +4376,16 @@ function frame(now) {
   }
   updateCloths(data);
   updateRings(data);
+  if (career) {
+    for (const c of ckCodes) {
+      let dims = null;
+      const p = (c >>> 12) & 0x1fff;
+      if ((c >>> 28) === 4 && p < count) dims = [data[p * 15 + 2], data[p * 15 + 3], data[p * 15 + 4]];
+      career.event(c, dims);
+    }
+    ckCodes.length = 0;
+    career.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
+  }
   if (aoActive) composer.render();
   else renderer.render(scene, camera);
 
