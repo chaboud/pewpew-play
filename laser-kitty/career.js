@@ -174,7 +174,8 @@ export class Career {
     ov.innerHTML = `<h1>LASER KITTY</h1>
       <div class="sub">CAREER &middot; ${got}/${MEDALS.length} MEDALS &middot; LIFETIME ${this.save.total.toLocaleString()}</div>
       ${rows}
-      <button class="ck-btn dim" id="ck-free">Free Play &amp; the Lab &rarr;</button>`;
+      <div style="display:flex;gap:8px"><button class="ck-btn dim" id="ck-free">Free Play</button>
+      <button class="ck-btn dim" id="ck-lab">Cat Lab</button></div>`;
     ov.querySelectorAll('.ck-card').forEach((el) => {
       el.onclick = () => {
         const i = parseInt(el.dataset.i, 10);
@@ -182,6 +183,7 @@ export class Career {
       };
     });
     ov.querySelector('#ck-free').onclick = () => { location.href = 'index.html'; };
+    ov.querySelector('#ck-lab').onclick = () => { location.href = 'catlab.html'; };
   }
 
   startRun(idx) {

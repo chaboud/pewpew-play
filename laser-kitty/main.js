@@ -8,8 +8,9 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k48';
-import { Career } from './career.js?v=k48';
+import { CatRig } from './catrig.js?v=k49';
+import { Career } from './career.js?v=k49';
+import { mountNav } from './nav.js?v=k49';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -22,7 +23,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k48'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k49'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -725,6 +726,18 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     m.add(glowSprite(0xffb45f, 0.11));
     m.userData.spark = true;
     m.userData.noShadow = true;
+  } else if (cls === 1 && shape === 0 && Math.abs(a - 0.2) < 0.005 && Math.abs(b - 0.2) < 0.005 && Math.abs(c - 0.2) < 0.005 && gloss < 0.08) {
+    // ficus canopy tier: the sim's leafy cube renders as a lumpy green
+    // sphere (dims+gloss key from add_ficus)
+    m = new THREE.Group();
+    const leaf = toonMat(0x3f8f45);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), leaf);
+    m.add(core);
+    for (const [dx, dy, dz] of [[0.14, 0.08, 0.1], [-0.13, 0.1, -0.09], [0.05, -0.12, -0.14], [-0.08, -0.06, 0.15]]) {
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(0.13, 9, 8), leaf);
+      lump.position.set(dx, dy, dz);
+      m.add(lump);
+    }
   } else if (cls === 2 && shape === 1 && a < 0.011 && gloss > 0.85 && gloss < 0.95) {
     // runoff droplet: a falling bead of whatever's spilling. No glow —
     // liquid, not fire.
@@ -3875,7 +3888,9 @@ catverEl.addEventListener('change', () => {
 });
 if (cfg.catver !== 'v1') requestCatRig();
 
-if (new URLSearchParams(location.search).has('play')) {
+if (!new URLSearchParams(location.search).has('play')) {
+  mountNav({ left: '114px' }); // after reset + toss
+} else {
   career = new Career({
     setRoom: (room, cats) => {
       cfg.room = room;
