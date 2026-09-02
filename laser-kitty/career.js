@@ -16,7 +16,7 @@
 
 const ROOMS = [
   { room: 0, name: 'Living Room', cats: 1, stars: [2000, 5000, 10000],
-    blurb: 'One cat. A clock, a TV, and a lot of regret waiting to happen.' },
+    blurb: 'One cat. A TV, a bookcase, and a lot of regret waiting to happen.' },
   { room: 2, name: 'Bathroom', cats: 2, stars: [1500, 4000, 8000],
     blurb: 'Two cats. Porcelain, perfume, and a very grabbable shower curtain.' },
   { room: 3, name: 'Kitchen', cats: 2, stars: [2500, 6000, 12000],
@@ -50,6 +50,7 @@ const MEDALS = [
 ];
 
 const css = `
+#panel.open { z-index: 45; }
 #ck-overlay { position: fixed; inset: 0; z-index: 40; display: flex;
   align-items: center; justify-content: center; flex-direction: column;
   background: rgba(14,12,20,0.86); color: #e6e2f0;
@@ -109,6 +110,25 @@ export class Career {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     }
+    // the settings panel doubles as career's graphics menu: gameplay
+    // tuning rows are hidden, render rows stay (founder: "a menu that
+    // allows for graphics settings change and a return to main menu")
+    for (const id of ['s-room', 's-cats', 's-weight', 's-strength', 's-gravity', 's-destruct']) {
+      const el = document.getElementById(id);
+      const row = el && el.closest('.row');
+      if (row) {
+        row.style.display = 'none';
+        if (row.previousElementSibling && row.previousElementSibling.tagName === 'LABEL') row.previousElementSibling.style.display = 'none';
+      }
+    }
+    this.menuBtn = document.createElement('button');
+    this.menuBtn.id = 'ck-menu';
+    this.menuBtn.className = 'ctl';
+    this.menuBtn.innerHTML = '&#9776;';
+    this.menuBtn.style.left = '10px';
+    this.menuBtn.style.display = 'none';
+    this.menuBtn.onclick = () => this.showMenu();
+    document.body.appendChild(this.menuBtn);
     this.showMap();
     window.__career = this; // test hook (skip(), state)
   }
@@ -170,7 +190,36 @@ export class Career {
     this.timeLeft = RUN_SECONDS;
     this.state = 'run';
     this.ov.style.display = 'none';
+    this.menuBtn.style.display = '';
     this.api.setRoom(ROOMS[idx].room, ROOMS[idx].cats);
+  }
+
+  // in-run menu: pauses the clock (the overlay also blocks the pad)
+  showMenu() {
+    if (this.state !== 'run') return;
+    this.state = 'paused';
+    const panel = document.getElementById('panel');
+    const ov = this.overlay();
+    ov.innerHTML = `<h1>PAUSED</h1>
+      <div class="sub">${ROOMS[this.runIdx].name} &middot; ${this.timerEl.textContent} left</div>
+      <div style="display:flex;flex-direction:column;gap:8px;width:min(300px,80vw)">
+        <button class="ck-btn" id="ck-resume">Resume</button>
+        <button class="ck-btn dim" id="ck-gfx">Graphics settings</button>
+        <button class="ck-btn dim" id="ck-quit">Return to main menu</button>
+      </div>`;
+    ov.querySelector('#ck-resume').onclick = () => {
+      if (panel) panel.classList.remove('open');
+      ov.style.display = 'none';
+      this.state = 'run';
+    };
+    ov.querySelector('#ck-gfx').onclick = () => {
+      if (panel) panel.classList.toggle('open');
+    };
+    ov.querySelector('#ck-quit').onclick = () => {
+      if (panel) panel.classList.remove('open');
+      this.menuBtn.style.display = 'none';
+      this.showMap();
+    };
   }
 
   // -- feeds from main.js ------------------------------------------------
@@ -225,6 +274,7 @@ export class Career {
 
   endRun() {
     this.state = 'end';
+    this.menuBtn.style.display = 'none';
     const idx = this.runIdx;
     const score = this.stats.score;
     const stars = this.starsFor(idx, score);
