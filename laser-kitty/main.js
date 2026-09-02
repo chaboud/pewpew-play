@@ -8,9 +8,9 @@ import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k49';
-import { Career } from './career.js?v=k49';
-import { mountNav } from './nav.js?v=k49';
+import { CatRig } from './catrig.js?v=k50';
+import { Career } from './career.js?v=k50';
+import { mountNav } from './nav.js?v=k50';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -23,7 +23,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k49'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k50'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -1502,8 +1502,8 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     m.add(roll);
     const core = new THREE.Mesh(new THREE.CylinderGeometry(a * 0.4, a * 0.4, b * 2.02, 10), toonMat(0xb8a888));
     m.add(core);
-  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.14) < 0.005 && Math.abs(b - 0.18) < 0.006 && Math.abs(c - 0.01) < 0.004 && gloss > 0.85) {
-    // the hanging mirror: silvered glass in a gold frame, breakable
+  } else if (cls === 2 && shape === 0 && ((Math.abs(a - 0.14) < 0.005 && Math.abs(b - 0.18) < 0.006) || (Math.abs(a - 0.16) < 0.005 && Math.abs(b - 0.5) < 0.01)) && Math.abs(c - 0.01) < 0.004 && gloss > 0.85) {
+    // the hanging mirror (and the cheval glass, 0.16x0.5): silvered glass in a gold frame, breakable
     m = new THREE.Group();
     const glassM = new THREE.Mesh(
       new THREE.BoxGeometry(a * 1.85, b * 1.85, 0.006),
