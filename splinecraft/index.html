@@ -22,10 +22,13 @@
     .slot .name { position: absolute; left: 0; right: 0; bottom: 2px; font-size: 10px; text-align: center; opacity: .9; text-shadow: 0 1px 2px #000; }
     .slot.sel { border-color: #ffe08a; box-shadow: 0 0 0 2px rgba(255,224,138,.35), 0 0 14px rgba(255,224,138,.35); }
     #status { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 13px; padding: 4px 10px; border-radius: 6px; background: rgba(10,14,20,.5); text-shadow: 0 1px 2px #000; }
+    #error-strip { position: fixed; left: 0; right: 0; top: 0; z-index: 50; padding: 6px 10px; font: 12px ui-monospace, Menlo, monospace; background: rgba(160,20,20,.92); color: #fff; white-space: pre-wrap; word-break: break-all; pointer-events: auto; }
+    #error-strip[hidden] { display: none; }
     #time-box { position: absolute; right: 16px; top: 40px; display: flex; gap: 6px; align-items: center; pointer-events: auto; }
     #time-box input { width: 140px; accent-color: #ffe08a; }
     #time-box button { font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; cursor: pointer; }
-    body.touch #time-box { top: 96px; }
+    body.touch #time-box { top: auto; bottom: 150px; left: 12px; right: auto; }
+    body.touch #time-box input { width: 120px; }
     #clock { position: absolute; right: 16px; top: 14px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
     #debug { position: absolute; left: 16px; top: 14px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
     #toast { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 18px; padding: 6px 14px; border-radius: 8px; background: rgba(10,14,20,.6); opacity: 0; transition: opacity .25s; }
@@ -63,7 +66,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DIsexgyL.js"></script>
+  <script type="module" crossorigin src="./assets/index-Bu9kbCRg.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -85,6 +88,7 @@
       <button id="tb-undo" class="tb">undo</button>
     </div>
   </div>
+  <div id="error-strip" hidden></div>
   <div id="hud">
     <div id="debug"></div>
     <div id="clock"></div>
@@ -117,6 +121,7 @@
         <input id="seed-input" placeholder="new world seed (blank = random)" />
         <button id="btn-new" class="secondary">New world</button>
         <button id="btn-reset" class="secondary">Reset edits</button>
+        <button id="btn-copy" class="secondary" title="copy a link with this exact view, time and settings">Copy link</button>
       </div>
     </div>
   </div>
