@@ -4308,17 +4308,6 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         uniform sampler3D uSh0;
         uniform sampler3D uSh1;
         uniform sampler3D uSh2;`,Gc=`
-        // Irradiance for normal n from L1 SH radiance: E = pi*Y00*c0 + (2pi/3)*Y1*(c1.n)
-        float shIrradiance(vec4 c, vec3 n) { return max(0.886227 * c.x + 1.023326 * (c.y * n.y + c.z * n.z + c.w * n.x), 0.0); }
-        vec3 giIrradianceSH(vec3 p, vec3 n) {
-          vec3 uvw = (p + n * uGiTexel * 0.75) / uGiSize;
-          vec3 skyE = skyRadiance(n) * PI * (0.5 + 0.5 * n.y);
-          if (any(lessThan(uvw, vec3(0.0))) || any(greaterThan(uvw, vec3(1.0)))) return skyE;
-          vec3 e = vec3(shIrradiance(texture(uSh0, uvw), n), shIrradiance(texture(uSh1, uvw), n), shIrradiance(texture(uSh2, uvw), n));
-          // fade to the analytic sky near the top so the volume's ceiling isn't a visible seam
-          float top = smoothstep(0.9, 1.0, uvw.y);
-          return mix(e, skyE, top);
-        }
         vec3 skyRadiance(vec3 d) {
           float t = clamp(d.y, 0.0, 1.0);
           vec3 sky = mix(uSkyHorizon, uSkyZenith, pow(t, 0.55));
@@ -4383,6 +4372,17 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
           sum += traceCone(origin, d3, ht, 28.0) * 0.22;
           return sum;
           #endif
+        }
+        // Irradiance for normal n from L1 SH radiance: E = pi*Y00*c0 + (2pi/3)*Y1*(c1.n)
+        float shIrradiance(vec4 c, vec3 n) { return max(0.886227 * c.x + 1.023326 * (c.y * n.y + c.z * n.z + c.w * n.x), 0.0); }
+        vec3 giIrradianceSH(vec3 p, vec3 n) {
+          vec3 uvw = (p + n * uGiTexel * 0.75) / uGiSize;
+          vec3 skyE = skyRadiance(n) * PI * (0.5 + 0.5 * n.y);
+          if (any(lessThan(uvw, vec3(0.0))) || any(greaterThan(uvw, vec3(1.0)))) return skyE;
+          vec3 e = vec3(shIrradiance(texture(uSh0, uvw), n), shIrradiance(texture(uSh1, uvw), n), shIrradiance(texture(uSh2, uvw), n));
+          // fade to the analytic sky near the top so the volume's ceiling isn't a visible seam
+          float top = smoothstep(0.9, 1.0, uvw.y);
+          return mix(e, skyE, top);
         }
 `;function x0(n){return{uGi:n.uGi,uGiSize:n.uGiSize,uGiTexel:n.uGiTexel,uGiDecode:n.uGiDecode,uGiStrength:n.uGiStrength,uSkyZenith:n.uSkyZenith,uSkyHorizon:n.uSkyHorizon,uSkySunColor:n.uSkySunColor,uSunDir:n.uSunDir,uDaylight:n.uDaylight,uSh0:n.uSh0,uSh1:n.uSh1,uSh2:n.uSh2}}const Hc=(n,e)=>({SC_CONES:n?4:6,SC_STEPS:n?14:28,SC_SPEC:n?0:1,SC_GI_SH:e==="sh"?1:0});function A0(n,e,t=!1,i="sh"){const s=new Float32Array(na),r=new Float32Array(na*3);for(const l of sn)s[l.id]=l.scale,l.emissive&&(r[l.id*3]=l.emissive[0],r[l.id*3+1]=l.emissive[1],r[l.id*3+2]=l.emissive[2]);const a={uAlbedo:{value:n.albedo},uNormal:{value:n.normal},uMatScale:{value:s},uMatEmissive:{value:r},uGi:{value:e.texture},uGiSize:{value:e.size.clone()},uGiTexel:{value:e.volume.texel},uGiDecode:{value:go},uGiStrength:{value:1},uSkyZenith:{value:new B(.2,.36,.72)},uSkyHorizon:{value:new B(.6,.7,.82)},uSkySunColor:{value:new B(1,1,1)},uSunDir:{value:new B(0,1,0)},uTime:{value:0},uDaylight:{value:1},uSh0:{value:null},uSh1:{value:null},uSh2:{value:null},uCursor:{value:new ct(0,0,0,0)},uCursorShape:{value:0}},o=new gc({color:16777215,roughness:1,metalness:0,side:cn});return o.defines={SC_MATERIALS:na,SC_GRASS:fr,SC_DIRT:dr,SC_SNOW:pr,SC_STONE:as,...Hc(t,i)},o.onBeforeCompile=l=>{Object.assign(l.uniforms,a),l.vertexShader=l.vertexShader.replace("#include <common>",`#include <common>
         attribute vec3 aMats;
