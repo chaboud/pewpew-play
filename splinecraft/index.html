@@ -22,6 +22,10 @@
     .slot .name { position: absolute; left: 0; right: 0; bottom: 2px; font-size: 10px; text-align: center; opacity: .9; text-shadow: 0 1px 2px #000; }
     .slot.sel { border-color: #ffe08a; box-shadow: 0 0 0 2px rgba(255,224,138,.35), 0 0 14px rgba(255,224,138,.35); }
     #status { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 13px; padding: 4px 10px; border-radius: 6px; background: rgba(10,14,20,.5); text-shadow: 0 1px 2px #000; }
+    #time-box { position: absolute; right: 16px; top: 40px; display: flex; gap: 6px; align-items: center; pointer-events: auto; }
+    #time-box input { width: 140px; accent-color: #ffe08a; }
+    #time-box button { font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; cursor: pointer; }
+    body.touch #time-box { top: 96px; }
     #clock { position: absolute; right: 16px; top: 14px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
     #debug { position: absolute; left: 16px; top: 14px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
     #toast { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 18px; padding: 6px 14px; border-radius: 8px; background: rgba(10,14,20,.6); opacity: 0; transition: opacity .25s; }
@@ -59,7 +63,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-CWXp3J22.js"></script>
+  <script type="module" crossorigin src="./assets/index-DIsexgyL.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -84,6 +88,7 @@
   <div id="hud">
     <div id="debug"></div>
     <div id="clock"></div>
+    <div id="time-box"><input id="time-slider" type="range" min="0" max="24" step="0.05" value="10.5" title="time of day" /><button id="time-flow" title="pause / resume the clock">⏯</button></div>
     <div id="crosshair"></div>
     <div id="toast"></div>
     <div id="status"></div>
@@ -95,6 +100,7 @@
       <p>A smooth, clay-like voxel world. Dig and build with brushes from half a metre to four metres; the surface is re-meshed, subdivided and re-lit as you go. World seed <b id="seed-label"></b>. Edits save automatically in this browser.</p>
       <div class="row">
         <button id="btn-play">Play</button>
+        <label style="font-size:13px;opacity:.85">time <input id="time-slider-menu" type="range" min="0" max="24" step="0.05" value="10.5" style="vertical-align:middle;width:130px;accent-color:#ffe08a" /></label>
         <select id="quality-select" title="subdivision detail">
           <option value="low">low · no subdivision</option>
           <option value="medium">medium · subdivide near</option>
@@ -104,8 +110,8 @@
       <div class="keys">
         <b>mouse</b><span>look · <b>LMB</b> dig · <b>RMB</b> build / paint / smooth (Tab cycles)</span>
         <b>WASD</b><span>move · <b>Space</b> jump · <b>Shift</b> sprint · <b>F</b> fly</span>
-        <b>1–9 0 - = [ ] \</b><span>material · <b>wheel</b> brush size · <b>Q</b> cube/sphere · <b>G</b> grid snap</span>
-        <b>, .</b><span>time of day · <b>P</b> pause time · <b>Z</b> undo · <b>Esc</b> menu</span>
+        <b>1–9 0 - = [ ] \</b><span>material · <b>wheel</b> brush size (⅙ m to 4 m) · <b>Q</b> cube / slab / ramp / sphere · <b>G</b> grid snap</span>
+        <b>, .</b><span>time of day (or the slider) · <b>P</b> pause time · <b>Z</b> undo · <b>Esc</b> menu</span>
       </div>
       <div class="row">
         <input id="seed-input" placeholder="new world seed (blank = random)" />
