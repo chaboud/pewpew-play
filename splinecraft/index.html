@@ -83,7 +83,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DxuOfHyx.js"></script>
+  <script type="module" crossorigin src="./assets/index-DWIjoGg8.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -153,6 +153,12 @@
       </div>
       <div class="row">
         <input id="seed-input" placeholder="new world seed (blank = random)" />
+        <select id="size-select" title="world size; fixed when the world is created. Bigger worlds need more memory and take longer to shape">
+          <option value="6">small · 96 m</option>
+          <option value="8" selected>normal · 128 m</option>
+          <option value="12">large · 192 m</option>
+          <option value="16">huge · 256 m · desktop</option>
+        </select>
         <button id="btn-new" class="secondary">New world</button>
         <button id="btn-reset" class="secondary" title="erase every edit in this world; the terrain regenerates from its seed">Reset edits</button>
         <button id="btn-copy" class="secondary" title="copy a link with this exact view, time and settings">Copy link</button>
