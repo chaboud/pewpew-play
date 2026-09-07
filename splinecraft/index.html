@@ -33,6 +33,7 @@
     #time-box input { width: 140px; accent-color: #ffe08a; }
     #time-box button { font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; cursor: pointer; }
     body.touch #gear { top: 44px; }
+    body.touch #clock { display: none; } /* the time bar carries the clock; the corner is the button row */
     body.touch #time-box input { height: 34px; }
     #clock { position: absolute; right: 16px; top: 44px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
     #debug { position: absolute; left: 56px; top: 50px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
@@ -40,6 +41,14 @@
     #toast.show { opacity: 1; }
     #overlay, #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,.55); backdrop-filter: blur(4px); }
     #overlay[hidden], #loading[hidden] { display: none; }
+    #worlds { margin-top: 10px; max-height: 26vh; overflow-y: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 8px; }
+    .world { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+    .world.current .wname { color: #ffe08a; }
+    #worlds .wname { flex: 1; text-align: left; background: none; border: 0; color: inherit; font: inherit; font-size: 14px; padding: 4px 6px; border-radius: 6px; cursor: pointer; margin: 0; }
+    #worlds .wname:hover { background: rgba(255,255,255,.08); }
+    .wmeta { font-size: 12px; opacity: .6; white-space: nowrap; }
+    #worlds .wbtn { background: none; border: 1px solid rgba(255,255,255,.18); color: inherit; border-radius: 6px; width: 28px; height: 26px; cursor: pointer; padding: 0; margin: 0; font-size: 13px; }
+    #worlds .wbtn:hover { background: rgba(255,255,255,.1); }
     .panel { width: min(520px, 92vw); padding: 26px 30px; border-radius: 14px; background: rgba(14,18,26,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
     .panel h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: .5px; font-weight: 700; }
     .panel h1 small { font-size: 13px; font-weight: 400; opacity: .7; margin-left: 8px; }
@@ -71,7 +80,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-D9ju5MWo.js"></script>
+  <script type="module" crossorigin src="./assets/index-Di2hwPa6.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -106,7 +115,7 @@
   </div>
   <div id="overlay" hidden>
     <div class="panel">
-      <h1>Splinecraft <small>marching cubes · subdivision · cone-traced GI</small></h1>
+      <h1>Splinecraft <small>marching cubes · subdivision · propagated GI</small></h1>
       <p>A smooth, clay-like voxel world. Dig and build with brushes from half a metre to four metres; the surface is re-meshed, subdivided and re-lit as you go. World seed <b id="seed-label"></b>. Edits save automatically in this browser.</p>
       <div class="row">
         <button id="btn-play">Play</button>
@@ -126,9 +135,10 @@
       <div class="row">
         <input id="seed-input" placeholder="new world seed (blank = random)" />
         <button id="btn-new" class="secondary">New world</button>
-        <button id="btn-reset" class="secondary">Reset edits</button>
+        <button id="btn-reset" class="secondary" title="erase every edit in this world; the terrain regenerates from its seed">Reset edits</button>
         <button id="btn-copy" class="secondary" title="copy a link with this exact view, time and settings">Copy link</button>
       </div>
+      <div id="worlds" title="your saved worlds, in this browser"></div>
     </div>
   </div>
   <div id="loading">
