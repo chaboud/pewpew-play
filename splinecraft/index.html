@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Splinecraft</title>
+  <link rel="icon" href="./favicon.svg" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: #0b0e12; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #e8ecf1; }
+    canvas#view { display: block; width: 100vw; height: 100vh; }
+    #hud { position: fixed; inset: 0; pointer-events: none; transition: opacity .2s; }
+    #hud.dim { opacity: 0.35; }
+    #crosshair { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+    #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.85); box-shadow: 0 0 2px rgba(0,0,0,.8); }
+    #crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+    #crosshair::after { top: 6px; left: 0; width: 14px; height: 2px; }
+    #hotbar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; }
+    .slot { position: relative; width: 50px; height: 50px; border-radius: 8px; background: rgba(10,14,20,.55); border: 2px solid rgba(255,255,255,.18); overflow: hidden; backdrop-filter: blur(6px); }
+    .slot canvas { width: 100%; height: 100%; image-rendering: auto; display: block; filter: saturate(1.1); }
+    .slot .key { position: absolute; left: 4px; top: 2px; font-size: 11px; opacity: .8; text-shadow: 0 1px 2px #000; }
+    .slot .name { position: absolute; left: 0; right: 0; bottom: 2px; font-size: 10px; text-align: center; opacity: .9; text-shadow: 0 1px 2px #000; }
+    .slot.sel { border-color: #ffe08a; box-shadow: 0 0 0 2px rgba(255,224,138,.35), 0 0 14px rgba(255,224,138,.35); }
+    #status { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 13px; padding: 4px 10px; border-radius: 6px; background: rgba(10,14,20,.5); text-shadow: 0 1px 2px #000; }
+    #clock { position: absolute; right: 16px; top: 14px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+    #debug { position: absolute; left: 16px; top: 14px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
+    #toast { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 18px; padding: 6px 14px; border-radius: 8px; background: rgba(10,14,20,.6); opacity: 0; transition: opacity .25s; }
+    #toast.show { opacity: 1; }
+    #overlay, #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,.55); backdrop-filter: blur(4px); }
+    #overlay[hidden], #loading[hidden] { display: none; }
+    .panel { width: min(520px, 92vw); padding: 26px 30px; border-radius: 14px; background: rgba(14,18,26,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    .panel h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: .5px; font-weight: 700; }
+    .panel h1 small { font-size: 13px; font-weight: 400; opacity: .7; margin-left: 8px; }
+    .panel p { margin: 6px 0 14px; opacity: .8; font-size: 14px; line-height: 1.45; }
+    .panel button { font: inherit; font-size: 15px; padding: 10px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: #2b6cb0; color: #fff; cursor: pointer; }
+    .panel button.secondary { background: rgba(255,255,255,.08); }
+    .panel button:hover { filter: brightness(1.12); }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+    .panel input, .panel select { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: inherit; }
+    .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; opacity: .85; margin: 12px 0 4px; }
+    .keys b { font-weight: 600; color: #ffe08a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    #loading-bar-wrap { height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
+    #loading-bar { height: 100%; width: 0; background: linear-gradient(90deg, #6fb1ff, #ffe08a); transition: width .3s; }
+    #hotbar { max-width: 96vw; overflow-x: auto; scrollbar-width: none; }
+    @media (max-width: 900px) { .slot { width: 38px; height: 38px; flex: 0 0 auto; } .slot .name { display: none; } #debug { display: none; } #status { font-size: 11px; bottom: 64px; } }
+    /* touch layer: hidden unless body.touch */
+    #touch { position: fixed; inset: 0; display: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+    body.touch #touch { display: block; }
+    body.touch #crosshair { opacity: .9; }
+    #stick { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: rgba(255,255,255,.06); display: none; pointer-events: none; }
+    #stick.active { display: block; }
+    #stick-thumb { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.45); }
+    .tb { font: inherit; font-size: 13px; color: #fff; background: rgba(10,14,20,.5); border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 8px 10px; touch-action: none; backdrop-filter: blur(4px); }
+    .tb.down { background: rgba(255,224,138,.55); color: #000; }
+    .tb.big { width: 68px; height: 68px; border-radius: 50%; font-size: 14px; }
+    #tb-right { position: absolute; right: 18px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    #tb-top { position: absolute; right: 12px; top: 40px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 60vw; }
+    body.touch .slot { pointer-events: auto; }
+    body.touch #hud { pointer-events: none; }
+    body.touch #hotbar { pointer-events: auto; }
+  </style>
+  <script type="module" crossorigin src="./assets/index-BL3eyRyX.js"></script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="touch">
+    <div id="stick"><div id="stick-thumb"></div></div>
+    <div id="tb-right">
+      <button id="tb-build" class="tb big">build</button>
+      <button id="tb-dig" class="tb big">dig</button>
+      <button id="tb-jump" class="tb big">jump</button>
+    </div>
+    <div id="tb-top">
+      <button id="tb-menu" class="tb">menu</button>
+      <button id="tb-fly" class="tb">fly</button>
+      <button id="tb-size-down" class="tb">−</button>
+      <button id="tb-size-up" class="tb">+</button>
+      <button id="tb-shape" class="tb">shape</button>
+      <button id="tb-op" class="tb">tool</button>
+      <button id="tb-snap" class="tb">snap</button>
+      <button id="tb-undo" class="tb">undo</button>
+    </div>
+  </div>
+  <div id="hud">
+    <div id="debug"></div>
+    <div id="clock"></div>
+    <div id="crosshair"></div>
+    <div id="toast"></div>
+    <div id="status"></div>
+    <div id="hotbar"></div>
+  </div>
+  <div id="overlay" hidden>
+    <div class="panel">
+      <h1>Splinecraft <small>marching cubes · subdivision · cone-traced GI</small></h1>
+      <p>A smooth, clay-like voxel world. Dig and build with brushes from half a metre to four metres; the surface is re-meshed, subdivided and re-lit as you go. World seed <b id="seed-label"></b>. Edits save automatically in this browser.</p>
+      <div class="row">
+        <button id="btn-play">Play</button>
+        <select id="quality-select" title="subdivision detail">
+          <option value="low">low · no subdivision</option>
+          <option value="medium">medium · subdivide near</option>
+          <option value="high">high · subdivide ×2 near</option>
+        </select>
+      </div>
+      <div class="keys">
+        <b>mouse</b><span>look · <b>LMB</b> dig · <b>RMB</b> build / paint / smooth (Tab cycles)</span>
+        <b>WASD</b><span>move · <b>Space</b> jump · <b>Shift</b> sprint · <b>F</b> fly</span>
+        <b>1–9 0 - = [ ] \</b><span>material · <b>wheel</b> brush size · <b>Q</b> cube/sphere · <b>G</b> grid snap</span>
+        <b>, .</b><span>time of day · <b>P</b> pause time · <b>Z</b> undo · <b>Esc</b> menu</span>
+      </div>
+      <div class="row">
+        <input id="seed-input" placeholder="new world seed (blank = random)" />
+        <button id="btn-new" class="secondary">New world</button>
+        <button id="btn-reset" class="secondary">Reset edits</button>
+      </div>
+    </div>
+  </div>
+  <div id="loading">
+    <div class="panel">
+      <h1>Splinecraft</h1>
+      <p id="loading-text">starting</p>
+      <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+    </div>
+  </div>
+</body>
+</html>
