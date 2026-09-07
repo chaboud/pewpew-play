@@ -73,23 +73,35 @@
     #stick-thumb { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,255,255,.45); }
     .tb { font: inherit; font-size: 13px; color: #fff; background: rgba(10,14,20,.5); border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 8px 10px; touch-action: none; backdrop-filter: blur(4px); }
     .tb.down { background: rgba(255,224,138,.55); color: #000; }
-    .tb.big { width: 68px; height: 68px; border-radius: 50%; font-size: 14px; }
-    #tb-right { position: absolute; right: 18px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    .tb.big { width: 62px; height: 62px; border-radius: 50%; font-size: 14px; }
+    #tb-right { position: absolute; right: 14px; bottom: 96px; display: flex; flex-direction: row; gap: 10px; align-items: flex-end; }
+    .tb-col { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+    #tb-dig { background: rgba(120,40,30,.55); }
+    #tb-add { background: rgba(30,90,60,.55); }
     #tb-top { position: absolute; right: 12px; top: 48px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 60vw; }
     body.touch .slot { pointer-events: auto; }
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-y2ujGBdD.js"></script>
+  <script type="module" crossorigin src="./assets/index-DxuOfHyx.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
   <div id="touch">
     <div id="stick"><div id="stick-thumb"></div></div>
     <div id="tb-right">
-      <button id="tb-build" class="tb big">build</button>
-      <button id="tb-dig" class="tb big">dig</button>
-      <button id="tb-jump" class="tb big">jump</button>
+      <div class="tb-col">
+        <button id="tb-jump" class="tb big">jump</button>
+        <button id="tb-duck" class="tb big">duck</button>
+      </div>
+      <div class="tb-col">
+        <button id="tb-smooth" class="tb big">smooth</button>
+        <button id="tb-paint" class="tb big">paint</button>
+      </div>
+      <div class="tb-col">
+        <button id="tb-add" class="tb big">add</button>
+        <button id="tb-dig" class="tb big">dig</button>
+      </div>
     </div>
     <div id="tb-top">
       <button id="tb-menu" class="tb">menu</button>
@@ -97,7 +109,6 @@
       <button id="tb-size-down" class="tb">−</button>
       <button id="tb-size-up" class="tb">+</button>
       <button id="tb-shape" class="tb">shape</button>
-      <button id="tb-op" class="tb">tool</button>
       <button id="tb-snap" class="tb">snap</button>
       <button id="tb-undo" class="tb">undo</button>
     </div>
@@ -136,7 +147,7 @@
       </div>
       <div class="keys">
         <b>mouse</b><span>look · <b>LMB</b> dig · <b>RMB</b> build / paint / smooth (Tab cycles)</span>
-        <b>WASD</b><span>move · <b>Space</b> jump · <b>Shift</b> sprint · <b>F</b> fly</span>
+        <b>WASD</b><span>move · <b>Space</b> jump · <b>C</b> duck (down in the air) · <b>Shift</b> sprint · <b>F</b> fly</span>
         <b>1–9 0 - = [ ] \</b><span>material · <b>wheel</b> brush size (⅙ m to 4 m) · <b>Q</b> cube / slab / ramp / sphere · <b>G</b> grid snap</span>
         <b>, .</b><span>time of day (or the slider) · <b>P</b> pause time · <b>Z</b> undo · <b>Esc</b> menu</span>
       </div>
