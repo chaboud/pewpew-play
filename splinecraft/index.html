@@ -63,7 +63,7 @@
     #loading-bar-wrap { height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
     #loading-bar { height: 100%; width: 0; background: linear-gradient(90deg, #6fb1ff, #ffe08a); transition: width .3s; }
     #hotbar { max-width: 96vw; overflow-x: auto; scrollbar-width: none; }
-    @media (max-width: 900px) { .slot { width: 38px; height: 38px; flex: 0 0 auto; } .slot .name { display: none; } #debug { display: none; } #status { font-size: 11px; bottom: 64px; } }
+    @media (max-width: 900px) { .slot { width: 38px; height: 38px; flex: 0 0 auto; } .slot .name { display: none; } body:not(.debug) #debug { display: none; } #status { font-size: 11px; bottom: 64px; } }
     /* touch layer: hidden unless body.touch */
     #touch { position: fixed; inset: 0; display: none; touch-action: none; user-select: none; -webkit-user-select: none; }
     body.touch #touch { display: block; }
@@ -80,7 +80,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-Di2hwPa6.js"></script>
+  <script type="module" crossorigin src="./assets/index-CHqe-Kna.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -124,6 +124,14 @@
           <option value="low">low · no subdivision</option>
           <option value="medium">medium · subdivide near</option>
           <option value="high">high · subdivide ×2 near</option>
+        </select>
+        <select id="foliage-select" title="grass and leaf density near you">
+          <option value="0">no foliage</option>
+          <option value="0.5">foliage · sparse</option>
+          <option value="1">foliage · normal</option>
+          <option value="2">foliage · lush</option>
+          <option value="4">foliage · dense</option>
+          <option value="8">foliage · absurd</option>
         </select>
       </div>
       <div class="keys">
