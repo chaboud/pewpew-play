@@ -24,13 +24,18 @@
     #status { position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%); font-size: 13px; padding: 4px 10px; border-radius: 6px; background: rgba(10,14,20,.5); text-shadow: 0 1px 2px #000; }
     #error-strip { position: fixed; left: 0; right: 0; top: 0; z-index: 50; padding: 6px 10px; font: 12px ui-monospace, Menlo, monospace; background: rgba(160,20,20,.92); color: #fff; white-space: pre-wrap; word-break: break-all; pointer-events: auto; }
     #error-strip[hidden] { display: none; }
-    #time-box { position: absolute; right: 16px; top: 40px; display: flex; gap: 6px; align-items: center; pointer-events: auto; }
+    #gear { position: absolute; left: 12px; top: 44px; width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; font-size: 18px; cursor: pointer; pointer-events: auto; }
+    /* the day is a full-width bar at the very top: dragging it is half the fun */
+    #time-box { position: fixed; left: 0; right: 0; top: 0; z-index: 40; display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: linear-gradient(rgba(6,8,12,.55), rgba(6,8,12,0)); pointer-events: auto; }
+    #time-box input { flex: 1; height: 26px; accent-color: #ffe08a; cursor: pointer; }
+    #time-label { font-size: 14px; font-variant-numeric: tabular-nums; min-width: 44px; text-shadow: 0 1px 2px #000; }
+    #time-box button { font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; cursor: pointer; }
     #time-box input { width: 140px; accent-color: #ffe08a; }
     #time-box button { font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2); background: rgba(10,14,20,.5); color: #fff; cursor: pointer; }
-    body.touch #time-box { top: auto; bottom: 150px; left: 12px; right: auto; }
-    body.touch #time-box input { width: 120px; }
-    #clock { position: absolute; right: 16px; top: 14px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
-    #debug { position: absolute; left: 16px; top: 14px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
+    body.touch #gear { top: 44px; }
+    body.touch #time-box input { height: 34px; }
+    #clock { position: absolute; right: 16px; top: 44px; font-size: 15px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+    #debug { position: absolute; left: 56px; top: 50px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
     #toast { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 18px; padding: 6px 14px; border-radius: 8px; background: rgba(10,14,20,.6); opacity: 0; transition: opacity .25s; }
     #toast.show { opacity: 1; }
     #overlay, #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,.55); backdrop-filter: blur(4px); }
@@ -61,12 +66,12 @@
     .tb.down { background: rgba(255,224,138,.55); color: #000; }
     .tb.big { width: 68px; height: 68px; border-radius: 50%; font-size: 14px; }
     #tb-right { position: absolute; right: 18px; bottom: 90px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
-    #tb-top { position: absolute; right: 12px; top: 40px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 60vw; }
+    #tb-top { position: absolute; right: 12px; top: 48px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 60vw; }
     body.touch .slot { pointer-events: auto; }
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-XT0QXBAo.js"></script>
+  <script type="module" crossorigin src="./assets/index-D9ju5MWo.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -89,10 +94,11 @@
     </div>
   </div>
   <div id="error-strip" hidden></div>
+  <div id="time-box"><span id="time-label">10:30</span><input id="time-slider" type="range" min="0" max="24" step="0.05" value="10.5" title="time of day" /><button id="time-flow" title="pause / resume the clock">⏯</button></div>
   <div id="hud">
     <div id="debug"></div>
     <div id="clock"></div>
-    <div id="time-box"><input id="time-slider" type="range" min="0" max="24" step="0.05" value="10.5" title="time of day" /><button id="time-flow" title="pause / resume the clock">⏯</button></div>
+    <button id="gear" title="menu">⚙</button>
     <div id="crosshair"></div>
     <div id="toast"></div>
     <div id="status"></div>
