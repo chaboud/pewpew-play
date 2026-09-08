@@ -4669,7 +4669,7 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
   precision highp float;
   uniform sampler2D uPrev, uMask;
   uniform vec2 uTexel, uWorld;
-  uniform float uK, uDamp, uN;
+  uniform float uK, uDamp, uRest, uN;
   uniform vec4 uImp[${Fr}];
   uniform vec4 uObs[${Ts}];
   uniform float uNObs;
@@ -4701,21 +4701,26 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
       float d2 = dot(p - im.xy, p - im.xy);
       v += im.w * exp(-d2 / (im.z * im.z));
     }
-    // a moving body pushes the water at its rim, in proportion to its speed
+    // a moving body pushes the water at its rim, in proportion to its speed — a small, bounded push:
+    // this ran every step at ten times the size, and a player standing in the sea pumped the surface
+    // down to the clamp and left a pit there for good (damping only ever acted on velocity)
     for (int i = 0; i < ${Ts}; i++) {
       if (float(i) >= uNObs) break;
       vec4 o = uObs[i];
       float d = length(p - o.xy);
       float rim = smoothstep(o.z * 0.7, o.z, d) * (1.0 - smoothstep(o.z, o.z * 1.6, d));
-      v -= rim * o.w * 0.012;
+      v -= rim * min(o.w, 3.0) * 0.0015;
     }
+    // the surface wants to be level: a weak spring to rest removes any offset a push left behind
+    v -= h * uRest;
     v *= uDamp;
+    v = clamp(v, -0.03, 0.03);
     h += v;
     float m = open(vUv, p);
     h *= m; v *= m;
-    h = clamp(h, -0.4, 0.4);
+    h = clamp(h, -0.12, 0.12);
     gl_FragColor = vec4(h, v, 0.0, 1.0);
-  }`;class Ox{constructor(e,t,i,s){this.worldX=e,this.worldZ=t,this.level=s;const r=Math.max(16,Math.round(e*i)),a=Math.max(16,Math.round(t*i)),o=()=>new mt(r,a,{type:Dn,format:Nt,minFilter:et,magFilter:et,depthBuffer:!1,stencilBuffer:!1});this.rts=[o(),o()],this.mask=new Lr(new Uint8Array(4),1,1,Si,vt),this.mask.minFilter=et,this.mask.magFilter=et,this.mask.needsUpdate=!0,this.mat=new lt({vertexShader:"varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",fragmentShader:Nx,uniforms:{uPrev:{value:null},uMask:{value:this.mask},uTexel:{value:new Ae(1/r,1/a)},uWorld:{value:new Ae(e,t)},uK:{value:.06},uDamp:{value:.992},uN:{value:0},uImp:{value:Array.from({length:Fr},()=>new ft)},uObs:{value:Array.from({length:Ts},()=>new ft)},uNObs:{value:0}},depthTest:!1,depthWrite:!1}),this.scene.add(new yt(new zn(2,2),this.mat))}rts;cur=0;mat;scene=new as;cam=new Ls(-1,1,1,-1,0,1);mask;pending=[];acc=0;get texture(){return this.rts[this.cur].texture}get maskTexture(){return this.mask}get texelSize(){return this.mat.uniforms.uTexel.value}setMask(e){const t=Wr(this.level),i=Math.min(t-1,e.ny-2),s=e.nx-1,r=e.nz-1,a=new Uint8Array(s*r);if(i>=0)for(let o=0;o<r;o++)for(let l=0;l<s;l++)a[o*s+l]=e.water[e.index(l,i,o)]?255:0;this.mask.dispose(),this.mask=new Lr(a,s,r,Si,vt),this.mask.minFilter=et,this.mask.magFilter=et,this.mask.needsUpdate=!0,this.mat.uniforms.uMask.value=this.mask}setObstacles(e){const t=this.mat.uniforms,i=Math.min(Ts,e.length);for(let s=0;s<i;s++)t.uObs.value[s].set(e[s][0],e[s][1],e[s][2],e[s][3]);t.uNObs.value=i}splash(e,t,i,s){this.pending.push(e,t,Math.max(.15,i),s)}step(e,t){this.acc=Math.min(this.acc+t,3/60);const i=this.mat.uniforms;let s=!0;for(;this.acc>=1/60;){this.acc-=1/60;const r=s?Math.min(Fr,this.pending.length/4):0;for(let l=0;l<r;l++)i.uImp.value[l].set(this.pending[l*4],this.pending[l*4+1],this.pending[l*4+2],this.pending[l*4+3]);i.uN.value=r,i.uPrev.value=this.rts[this.cur].texture;const a=1-this.cur,o=e.getRenderTarget();e.setRenderTarget(this.rts[a]),e.render(this.scene,this.cam),e.setRenderTarget(o),this.cur=a,s=!1}s||(this.pending.length=0)}}const zx=.08,kx=`
+  }`;class Ox{constructor(e,t,i,s){this.worldX=e,this.worldZ=t,this.level=s;const r=Math.max(16,Math.round(e*i)),a=Math.max(16,Math.round(t*i)),o=()=>new mt(r,a,{type:Dn,format:Nt,minFilter:et,magFilter:et,depthBuffer:!1,stencilBuffer:!1});this.rts=[o(),o()],this.mask=new Lr(new Uint8Array(4),1,1,Si,vt),this.mask.minFilter=et,this.mask.magFilter=et,this.mask.needsUpdate=!0,this.mat=new lt({vertexShader:"varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",fragmentShader:Nx,uniforms:{uPrev:{value:null},uMask:{value:this.mask},uTexel:{value:new Ae(1/r,1/a)},uWorld:{value:new Ae(e,t)},uK:{value:.06},uDamp:{value:.988},uRest:{value:.004},uN:{value:0},uImp:{value:Array.from({length:Fr},()=>new ft)},uObs:{value:Array.from({length:Ts},()=>new ft)},uNObs:{value:0}},depthTest:!1,depthWrite:!1}),this.scene.add(new yt(new zn(2,2),this.mat))}rts;cur=0;mat;scene=new as;cam=new Ls(-1,1,1,-1,0,1);mask;pending=[];acc=0;get texture(){return this.rts[this.cur].texture}get maskTexture(){return this.mask}get texelSize(){return this.mat.uniforms.uTexel.value}setMask(e){const t=Wr(this.level),i=Math.min(t-1,e.ny-2),s=e.nx-1,r=e.nz-1,a=new Uint8Array(s*r);if(i>=0)for(let o=0;o<r;o++)for(let l=0;l<s;l++)a[o*s+l]=e.water[e.index(l,i,o)]?255:0;this.mask.dispose(),this.mask=new Lr(a,s,r,Si,vt),this.mask.minFilter=et,this.mask.magFilter=et,this.mask.needsUpdate=!0,this.mat.uniforms.uMask.value=this.mask}setObstacles(e){const t=this.mat.uniforms,i=Math.min(Ts,e.length);for(let s=0;s<i;s++)t.uObs.value[s].set(e[s][0],e[s][1],e[s][2],e[s][3]);t.uNObs.value=i}splash(e,t,i,s){this.pending.push(e,t,Math.max(.15,i),s)}step(e,t){this.acc=Math.min(this.acc+t,3/60);const i=this.mat.uniforms;let s=!0;for(;this.acc>=1/60;){this.acc-=1/60;const r=s?Math.min(Fr,this.pending.length/4):0;for(let l=0;l<r;l++)i.uImp.value[l].set(this.pending[l*4],this.pending[l*4+1],this.pending[l*4+2],this.pending[l*4+3]);i.uN.value=r,i.uPrev.value=this.rts[this.cur].texture;const a=1-this.cur,o=e.getRenderTarget();e.setRenderTarget(this.rts[a]),e.render(this.scene,this.cam),e.setRenderTarget(o),this.cur=a,s=!1}s||(this.pending.length=0)}}const zx=.08,kx=`
   uniform sampler2D uWave, uWaveMask;
   uniform vec2 uWorldSize;
   attribute float aShore, aEdge;
