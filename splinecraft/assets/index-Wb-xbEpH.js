@@ -4775,6 +4775,8 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
     gl_FragColor = vec4(c, 1.0);
   }`,Vx=`
   precision highp sampler2DArray;
+  // foam is a hint, not a paint stroke: a tenth of the full line (founder, 2026-09-08)
+  #define FOAM_STRENGTH 0.1
   #include <packing>
   uniform sampler2DArray uNormal;
   uniform sampler2D uSceneColor, uSceneDepth, uReflTex, uWave;
@@ -4873,7 +4875,7 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
       float window = smoothstep(0.1, 0.6, dot(V, vec3(0.0, -1.0, 0.0)));
       col = mix(col0 * 0.5 + waterBody(light) * 0.35, col0, window);
     } else {
-      col = mix(under, refl, fres) + uSunColor * spec + min(foam, 1.0) * (light * 2.6 + 0.03);
+      col = mix(under, refl, fres) + uSunColor * spec + min(foam, 1.0) * (light * 2.6 + 0.03) * FOAM_STRENGTH;
     }
     float depth = gl_FragCoord.z / gl_FragCoord.w;
     float fogFactor = 1.0 - exp(-fogDensity * fogDensity * depth * depth);
