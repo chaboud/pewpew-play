@@ -39,7 +39,9 @@
     #debug { position: absolute; left: 56px; top: 50px; font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; white-space: pre; }
     #toast { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font-size: 18px; padding: 6px 14px; border-radius: 8px; background: rgba(10,14,20,.6); opacity: 0; transition: opacity .25s; }
     #toast.show { opacity: 1; }
-    #overlay, #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6,8,12,.55); backdrop-filter: blur(4px); }
+    /* the menu scrolls when it is taller than the phone: the panel centres itself with auto margins, which collapse to
+       the top when it overflows, and the overlay itself is the scroll container (a centred flex child cannot scroll) */
+    #overlay, #loading { position: fixed; inset: 0; display: flex; background: rgba(6,8,12,.55); backdrop-filter: blur(4px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; padding: 12px 0; box-sizing: border-box; }
     #overlay[hidden], #loading[hidden] { display: none; }
     #worlds { margin-top: 10px; max-height: 26vh; overflow-y: auto; border-top: 1px solid rgba(255,255,255,.12); padding-top: 8px; }
     .world { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
@@ -49,7 +51,7 @@
     .wmeta { font-size: 12px; opacity: .6; white-space: nowrap; }
     #worlds .wbtn { background: none; border: 1px solid rgba(255,255,255,.18); color: inherit; border-radius: 6px; width: 28px; height: 26px; cursor: pointer; padding: 0; margin: 0; font-size: 13px; }
     #worlds .wbtn:hover { background: rgba(255,255,255,.1); }
-    .panel { width: min(520px, 92vw); padding: 26px 30px; border-radius: 14px; background: rgba(14,18,26,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    .panel { width: min(520px, 92vw); margin: auto; flex: none; padding: 26px 30px; border-radius: 14px; background: rgba(14,18,26,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
     .panel h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: .5px; font-weight: 700; }
     .panel h1 small { font-size: 13px; font-weight: 400; opacity: .7; margin-left: 8px; }
     .panel p { margin: 6px 0 14px; opacity: .8; font-size: 14px; line-height: 1.45; }
