@@ -4626,11 +4626,16 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         vec2 suv = gl_FragCoord.xy / uResolution;
         float sceneDist = -perspectiveDepthToViewZ(texture2D(uSceneDepth, suv).r, uNear, uFar);
         float iceDist = vViewPosition.z;
-        float thick = clamp(sceneDist - iceDist, 0.0, 6.0);
+        float thick = clamp(sceneDist - iceDist, 0.0, 5.0);
+        // the lens: a ray entering ice bends toward the normal, so what is seen at this pixel left the far side
+        // displaced against the normal's screen direction by an amount that grows with the ice crossed and shrinks
+        // with distance; the normal here carries the cracks and frost, so they wobble what is behind them too
         vec3 nV = normalize(normal);
-        vec2 ruv = suv + nV.xy * (0.012 + 0.03 * min(thick, 2.0)) * vec2(1.0, uResolution.x / uResolution.y);
+        vec2 off = -nV.xy * (0.25 * max(thick, 0.15) + 0.03) / max(iceDist, 0.7);
+        vec2 ruv = suv + off * vec2(1.0, uResolution.x / uResolution.y);
+        ruv = clamp(ruv, vec2(0.002), vec2(0.998));
         float rDist = -perspectiveDepthToViewZ(texture2D(uSceneDepth, ruv).r, uNear, uFar);
-        if (rDist < iceDist - 0.05) ruv = suv;
+        if (rDist < iceDist - 0.05) { ruv = suv + off * 0.25 * vec2(1.0, uResolution.x / uResolution.y); rDist = -perspectiveDepthToViewZ(texture2D(uSceneDepth, ruv).r, uNear, uFar); if (rDist < iceDist - 0.05) ruv = suv; }
         vec3 behind = texture2D(uSceneColor, ruv).rgb;
         vec3 absorb = exp(-thick * vec3(0.55, 0.22, 0.10));
         vec3 seen = behind * absorb;
@@ -4651,7 +4656,7 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         vec3 fogCol = fogColor + uSkySunColor * 0.06 * sunAmt;
         float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
         gl_FragColor.rgb = mix(gl_FragColor.rgb, fogCol, fogFactor);
-      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v14-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}class py{mesh;uniforms={uSunDir:{value:new k(0,1,0)},uSunColor:{value:new k(1,1,1)},uZenith:{value:new k(.2,.36,.72)},uHorizon:{value:new k(.6,.7,.82)},uDaylight:{value:1},uTime:{value:0},uCloud:{value:.55}};constructor(){const e=new rt({uniforms:this.uniforms,side:Dt,depthWrite:!1,fog:!1,vertexShader:`
+      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v15-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}class py{mesh;uniforms={uSunDir:{value:new k(0,1,0)},uSunColor:{value:new k(1,1,1)},uZenith:{value:new k(.2,.36,.72)},uHorizon:{value:new k(.6,.7,.82)},uDaylight:{value:1},uTime:{value:0},uCloud:{value:.55}};constructor(){const e=new rt({uniforms:this.uniforms,side:Dt,depthWrite:!1,fog:!1,vertexShader:`
         varying vec3 vDir;
         void main() {
           vDir = normalize(position);
