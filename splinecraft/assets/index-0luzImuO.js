@@ -4467,7 +4467,9 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
           // how far under the ice's sun-facing side we are, in metres, fades the web: light spreads with distance
           float below = (c.z - iceD) * uIceReach * 4.0;
           float spread = exp(-below * 0.12);
-          vec2 q = c.xy * uIceReach * 2.0;
+          // the web lives in world space: the sun's shadow box rides with the camera, so anything drawn in its
+          // coordinates slides as you walk (founder saw the caustics move with him, 2026-09-12)
+          vec2 q = p.xz + p.y * vec2(0.37, 0.23);
           float t = uTime;
           float w = 0.5 + 0.5 * sin(q.x * 4.1 + t * 0.9) * sin(q.y * 3.7 - t * 0.7) + 0.35 * sin((q.x + q.y) * 2.9 + t * 0.5) + 0.25 * sin((q.x - q.y * 1.3) * 5.3 - t * 1.1);
           // measured 2026-09-12 (headless, sun at 21°): a floor of 0.62 and a peak of 1.3 moved the sand under the
@@ -4717,7 +4719,7 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         vec3 fogCol = fogColor + uSkySunColor * 0.06 * sunAmt;
         float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
         gl_FragColor.rgb = mix(gl_FragColor.rgb, fogCol, fogFactor);
-      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v20-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}function fh(n){const e=new Jh({depthPacking:Oh});return e.onBeforeCompile=t=>{t.vertexShader=t.vertexShader.replace("#include <common>",`#include <common>
+      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v21-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}function fh(n){const e=new Jh({depthPacking:Oh});return e.onBeforeCompile=t=>{t.vertexShader=t.vertexShader.replace("#include <common>",`#include <common>
 attribute vec3 aMats; attribute vec3 aBary; flat varying vec3 vMatsD; varying vec3 vBaryD;`).replace("#include <begin_vertex>",`#include <begin_vertex>
 vMatsD = aMats; vBaryD = aBary;`),t.fragmentShader=t.fragmentShader.replace("#include <common>",`#include <common>
 flat varying vec3 vMatsD; varying vec3 vBaryD;`).replace("#include <clipping_planes_fragment>",`#include <clipping_planes_fragment>
