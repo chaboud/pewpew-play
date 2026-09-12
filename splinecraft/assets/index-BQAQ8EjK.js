@@ -4626,7 +4626,9 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         // founder liked it that way; the normal carries the cracks and frost, so they facet the scene behind them
         vec3 P = -vViewPosition;                 // the surface, view space
         vec3 Vv = normalize(-P);                 // toward the camera
-        vec3 nV = normalize(normal);
+        // the bend follows the smooth surface with only half of the crack detail: full crack normals threw
+        // neighbouring pixels onto different things behind and the image aliased into sparkle
+        vec3 nV = normalize(mix(normalize(mat3(viewMatrix) * normalize(vWorldNormal)), normalize(normal), 0.5));
         vec3 T = refract(-Vv, nV, 1.0 / 1.45);
         if (dot(T, T) < 1e-6) T = -Vv;
         vec2 suv = gl_FragCoord.xy / uResolution;
@@ -4643,9 +4645,17 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
           float sceneD = -perspectiveDepthToViewZ(texture2D(uSceneDepth, uv).r, uNear, uFar);
           if (-p.z > sceneD + 0.02) { hit = true; break; }
         }
-        vec3 behind = texture2D(uSceneColor, huv).rgb;
-        // the light through it absorbs toward blue over what it crossed (a ray that met nothing crossed the cap)
+        // what shows through is softened: five taps in a small diamond that widens with the ice crossed (frosted
+        // glass, and no single-pixel sparkle from a lamp behind), each capped so one bright texel cannot bloom
         float thick = hit ? clamp(travelled, 0.0, 5.0) : 5.0;
+        vec2 br = (0.0015 + 0.0035 * min(thick, 3.0)) * vec2(1.0, uResolution.x / uResolution.y);
+        vec3 behind = min(texture2D(uSceneColor, huv).rgb, vec3(2.5));
+        behind += min(texture2D(uSceneColor, huv + vec2(br.x, 0.0)).rgb, vec3(2.5));
+        behind += min(texture2D(uSceneColor, huv - vec2(br.x, 0.0)).rgb, vec3(2.5));
+        behind += min(texture2D(uSceneColor, huv + vec2(0.0, br.y)).rgb, vec3(2.5));
+        behind += min(texture2D(uSceneColor, huv - vec2(0.0, br.y)).rgb, vec3(2.5));
+        behind *= 0.2;
+        // the light through it absorbs toward blue over what it crossed (a ray that met nothing crossed the cap)
         vec3 absorb = exp(-thick * vec3(0.55, 0.22, 0.10));
         vec3 seen = behind * absorb;
         vec3 Vw = normalize(cameraPosition - vWorldPos);
@@ -4665,7 +4675,7 @@ return orthographicDepthToViewZ(depth,cameraNear,cameraFar);
         vec3 fogCol = fogColor + uSkySunColor * 0.06 * sunAmt;
         float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
         gl_FragColor.rgb = mix(gl_FragColor.rgb, fogCol, fogFactor);
-      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v17-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}class my{mesh;uniforms={uSunDir:{value:new k(0,1,0)},uSunColor:{value:new k(1,1,1)},uZenith:{value:new k(.2,.36,.72)},uHorizon:{value:new k(.6,.7,.82)},uDaylight:{value:1},uTime:{value:0},uCloud:{value:.55}};constructor(){const e=new rt({uniforms:this.uniforms,side:Rt,depthWrite:!1,fog:!1,vertexShader:`
+      #endif`)})(h.onBeforeCompile),h.customProgramCacheKey=()=>"splinecraft-terrain-v18-"+s+"-"+(t?"cheap":"full")+"-"+i,{material:h,uniforms:c}}class my{mesh;uniforms={uSunDir:{value:new k(0,1,0)},uSunColor:{value:new k(1,1,1)},uZenith:{value:new k(.2,.36,.72)},uHorizon:{value:new k(.6,.7,.82)},uDaylight:{value:1},uTime:{value:0},uCloud:{value:.55}};constructor(){const e=new rt({uniforms:this.uniforms,side:Rt,depthWrite:!1,fog:!1,vertexShader:`
         varying vec3 vDir;
         void main() {
           vDir = normalize(position);
