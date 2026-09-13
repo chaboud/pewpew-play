@@ -60,6 +60,12 @@
     .panel button:hover { filter: brightness(1.12); }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
     .panel input, .panel select { font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: inherit; }
+    .advanced { margin: 10px 0 4px; font-size: 13px; opacity: .9; }
+    .advanced summary { cursor: pointer; color: #ffe08a; }
+    .advanced h4 { margin: 10px 0 4px; font-size: 12px; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .04em; }
+    .tune { display: grid; grid-template-columns: 9em 1fr 6em; gap: 4px 10px; align-items: center; }
+    .tune input[type=range] { width: 100%; padding: 0; accent-color: #ffe08a; }
+    .tune .val { font-variant-numeric: tabular-nums; opacity: .85; }
     .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 13px; opacity: .85; margin: 12px 0 4px; }
     .keys b { font-weight: 600; color: #ffe08a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     #loading-bar-wrap { height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
@@ -92,7 +98,7 @@
     body.touch #hud { pointer-events: none; }
     body.touch #hotbar { pointer-events: auto; }
   </style>
-  <script type="module" crossorigin src="./assets/index-CEa7tVD3.js"></script>
+  <script type="module" crossorigin src="./assets/index-DGNaqA4V.js"></script>
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -173,6 +179,11 @@
           <option value="30">fall · real · 30 m/s</option>
         </select>
       </div>
+      <details id="advanced" class="advanced">
+        <summary>advanced · rates, strengths, features</summary>
+        <div id="tuning"></div>
+        <div class="row"><button id="btn-defaults" title="every advanced value back to what shipped">defaults</button></div>
+      </details>
       <div class="keys">
         <b>mouse</b><span>look · <b>LMB</b> tool in hand · <b>RMB</b> dig · <b>Tab</b> add / remove / smooth / paint · <b>Caps Lock</b> free the mouse: point and click, with the buttons on screen</span>
         <b>WASD</b><span>move · <b>arrows</b> look · <b>E</b> use tool · <b>M</b> mine · <b>Space</b> jump · <b>C</b> duck — a toggle; jumping stands you up (down in the air) · <b>Shift</b> sprint · <b>F</b> fly</span>
