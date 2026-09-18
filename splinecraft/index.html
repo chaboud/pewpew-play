@@ -58,6 +58,7 @@
     .panel { width: min(520px, 92vw); margin: auto; flex: none; padding: 26px 30px; border-radius: 14px; background: rgba(14,18,26,.92); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
     .panel h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: .5px; font-weight: 700; }
     .panel h1 small { font-size: 13px; font-weight: 400; opacity: .7; margin-left: 8px; }
+    .panel .byline { margin: 0 0 10px; font-size: 13px; opacity: .65; font-style: italic; }
     .panel p { margin: 6px 0 14px; opacity: .8; font-size: 14px; line-height: 1.45; }
     .panel button { font: inherit; font-size: 15px; padding: 10px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: #2b6cb0; color: #fff; cursor: pointer; }
     .panel button.secondary { background: rgba(255,255,255,.08); }
@@ -146,6 +147,7 @@
   <div id="overlay" hidden>
     <div class="panel">
       <h1>Splinecraft <small>marching cubes · subdivision · propagated GI</small></h1>
+      <p class="byline">by Bastian and Matthew Chaboud… but mostly Fable</p>
       <p>A smooth, clay-like voxel world. Dig and build with brushes from a sixth of a metre to eight metres; the surface is re-meshed, subdivided and re-lit as you go. World seed <b id="seed-label"></b>. Edits save automatically in this browser.</p>
       <div class="row">
         <button id="btn-play">Play</button>
@@ -212,6 +214,7 @@
   <div id="loading">
     <div class="panel">
       <h1>Splinecraft</h1>
+      <p class="byline">by Bastian and Matthew Chaboud… but mostly Fable</p>
       <p id="loading-text">starting</p>
       <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
     </div>
