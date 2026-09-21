@@ -71,15 +71,13 @@ const css = `
   text-align: center; z-index: 5; pointer-events: none;
   font: 700 17px ui-monospace, monospace; color: #7dffd0; text-shadow: 0 2px 5px #000; }
 #ck-timer.low { color: #ff7d6b; }
-#ck-toasts { position: fixed; top: 32%; left: 0; right: 0; z-index: 41; pointer-events: none; text-align: center; }
-.ck-toast { display: inline-block; margin: 4px; padding: 8px 16px; border-radius: 20px;
-  border: 1px solid #ffd75e; background: rgba(30,26,20,0.92); color: #ffd75e;
-  font: 700 13px system-ui, sans-serif; animation: cktoast 3s ease forwards; }
-@keyframes cktoast { 0% { opacity: 0; transform: translateY(12px); }
-  12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
-.ck-medals { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 360px; margin-top: 10px; }
-.ck-medal { padding: 5px 10px; border-radius: 14px; font-size: 11px; border: 1px solid #3a3644; color: #8a8798; }
-.ck-medal.got { border-color: #ffd75e; color: #ffd75e; }
+#ck-toasts { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 52px); right: 10px; z-index: 41;
+  pointer-events: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ck-toast { padding: 4px 9px; border-radius: 12px; border: 1px solid #ffd75e;
+  background: rgba(30,26,20,0.9); color: #ffd75e; font: 700 11px system-ui, sans-serif;
+  animation: cktoast 2.6s ease forwards; }
+@keyframes cktoast { 0% { opacity: 0; transform: translateX(24px); }
+  14% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
 `;
 
 function loadSave() {
@@ -269,7 +267,8 @@ export class Career {
         t.className = 'ck-toast';
         t.textContent = `★ ${m.name}`;
         this.toasts.appendChild(t);
-        setTimeout(() => t.remove(), 3100);
+        setTimeout(() => t.remove(), 2700);
+        this.stats.newMedals = (this.stats.newMedals || 0) + 1;
       }
     }
   }
@@ -288,8 +287,6 @@ export class Career {
     }
     this.persist();
     const r = ROOMS[idx];
-    const medalRows = MEDALS.map((m) =>
-      `<span class="ck-medal${this.save.medals[m.id] ? ' got' : ''}" title="${m.desc}">${m.name}</span>`).join('');
     const nextUnlocked = idx + 1 < ROOMS.length && this.save.unlocked > idx + 1;
     const ov = this.overlay();
     ov.innerHTML = `<h1>TIME!</h1>
@@ -297,7 +294,7 @@ export class Career {
       <div style="font:800 40px system-ui;color:#ffe86b">${score.toLocaleString()}</div>
       <div class="ck-stars" style="font-size:28px;margin:6px 0">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</div>
       <div class="bst" style="color:#9ad">${score > prevBest && prevBest > 0 ? 'new best!' : prevBest ? `best ${this.save.best[idx].toLocaleString()}` : ''}</div>
-      <div class="ck-medals">${medalRows}</div>
+      ${this.stats.newMedals ? `<div class="bst" style="color:#ffd75e">+${this.stats.newMedals} medal${this.stats.newMedals > 1 ? 's' : ''}</div>` : ''}
       <div style="display:flex;gap:10px">
         <button class="ck-btn" id="ck-retry">Retry</button>
         ${nextUnlocked ? '<button class="ck-btn" id="ck-next">Next Room</button>' : ''}

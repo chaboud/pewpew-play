@@ -256,13 +256,208 @@ function buildWalkClip(byKey) {
   return clip;
 }
 
+// ---------------------------------------------------------------- fur ---
+// v5: the long-hair. Spike clumps sprout from the v3 body — a crown swept
+// up and back off the skull, a ruff down the chest, cheek tufts, a plumed
+// tail, shorter sweep along the back and belly — cel-shaded on a three-
+// step ramp with an inverted-hull ink outline (founder: "long-hair with
+// Dragonball Z style fur that we cel shade with outlining"). Seeded, so
+// every build is the same cat.
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// where fur grows and how it lies, in canonical coords (+z nose, y up).
+// null = bare (paws, ear tips, the face). len/r in canonical units, flow
+// is the comb direction blended with the surface normal, dens scales the
+// clump count per unit area.
+function furAt(x, y, z, ny) {
+  const ax = Math.abs(x);
+  if (y < 0.5) return null;
+  if (y > 3.4 && ax > 0.3 && z < 1.6) return null;
+  if (z > 1.75 && y > 2.35 && y < 3.35 && ax < 0.42) return null;
+  // big tapered clumps, not needles: the anime read is a few dozen
+  // fat spikes per region with the body showing between them
+  if (y > 3.05 && z > 0.7 && z < 1.75) return { len: 1.15, r: 0.34, flow: [x * 0.5, 1.0, -0.6], dens: 1.3 };
+  if (z > 1.35 && z < 2.05 && y > 2.45 && y < 3.15 && ax > 0.3) return { len: 0.65, r: 0.26, flow: [Math.sign(x) * 0.9, -0.25, -0.5], dens: 1.2 };
+  if (z < -2.05 && y > 1.6) return { len: 0.9, r: 0.28, flow: [0, 0.3, -0.4], dens: 1.3 };
+  if (z > 0.35 && z < 1.5 && y > 1.5 && y < 3.1) return { len: 0.8, r: 0.3, flow: [x * 0.4, -0.6, -0.1], dens: 1.0 };
+  if (ax > 0.28 && y < 1.55) return { len: 0.32, r: 0.18, flow: [0, -0.8, -0.2], dens: 0.35 };
+  if (ny < -0.35) return { len: 0.4, r: 0.22, flow: [0, -0.9, -0.2], dens: 0.6 };
+  // back and flanks lie flatter and shorter so the body still reads
+  return { len: 0.4, r: 0.22, flow: [0, -0.25, -1.0], dens: 0.5 };
+}
+
+// weld MC's triangle soup so the body shades smooth under the toon ramp
+// (spikes stay unwelded on purpose: flat facets read as ink-and-cel)
+function weld(geo, eps = 1e-3) {
+  const pos = geo.getAttribute('position');
+  const map = new Map();
+  const out = [];
+  const index = new Uint32Array(pos.count);
+  for (let v = 0; v < pos.count; v++) {
+    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
+    const k = `${Math.round(x / eps)},${Math.round(y / eps)},${Math.round(z / eps)}`;
+    let id = map.get(k);
+    if (id === undefined) { id = out.length / 3; map.set(k, id); out.push(x, y, z); }
+    index[v] = id;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
+  g.setIndex(new THREE.BufferAttribute(index, 1));
+  return g;
+}
+
+function buildFurGeometry(seed = 7) {
+  const body = weld(buildGeometry(72, 120000));
+  body.computeVertexNormals();
+  const bp = body.getAttribute('position'), bn = body.getAttribute('normal');
+  const bi = body.getIndex();
+  const rand = mulberry32(seed);
+  const verts = [];
+  const tris = [];
+  const K = 7; // clumps per unit area at dens 1
+  let acc = 0;
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
+  const n = new THREE.Vector3(), dir = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3();
+  const p = new THREE.Vector3(), q = new THREE.Vector3(), bend = new THREE.Vector3(), fl = new THREE.Vector3();
+  const pushTri = (a, b, c, axisP, axisD) => {
+    // wind every face outward from the clump axis
+    const e1 = b.clone().sub(a), e2 = c.clone().sub(a);
+    const fn = e1.cross(e2);
+    const cen = a.clone().add(b).add(c).multiplyScalar(1 / 3);
+    const rel = cen.sub(axisP);
+    const out = rel.sub(axisD.clone().multiplyScalar(rel.dot(axisD)));
+    const base = verts.length / 3;
+    if (fn.dot(out) < 0) { const t = b; b = c; c = t; }
+    verts.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    tris.push(base, base + 1, base + 2);
+  };
+  for (let f = 0; f < bi.count; f += 3) {
+    const i0 = bi.getX(f), i1 = bi.getX(f + 1), i2 = bi.getX(f + 2);
+    A.fromBufferAttribute(bp, i0); B.fromBufferAttribute(bp, i1); C.fromBufferAttribute(bp, i2);
+    const area = B.clone().sub(A).cross(C.clone().sub(A)).length() * 0.5;
+    n.fromBufferAttribute(bn, i0).add(q.fromBufferAttribute(bn, i1)).add(q.fromBufferAttribute(bn, i2)).normalize();
+    const cx = (A.x + B.x + C.x) / 3, cy = (A.y + B.y + C.y) / 3, cz = (A.z + B.z + C.z) / 3;
+    const fur = furAt(cx, cy, cz, n.y);
+    if (!fur) continue;
+    acc += area * fur.dens * K;
+    while (acc >= 1) {
+      acc -= 1;
+      // random point on the face
+      let u = rand(), v = rand();
+      if (u + v > 1) { u = 1 - u; v = 1 - v; }
+      p.copy(A).addScaledVector(B.clone().sub(A), u).addScaledVector(C.clone().sub(A), v);
+      const len = fur.len * (0.7 + 0.6 * rand());
+      const r = fur.r * (0.8 + 0.4 * rand());
+      fl.set(fur.flow[0], fur.flow[1], fur.flow[2]);
+      dir.copy(n).addScaledVector(fl, 0.85);
+      // a little scatter so clumps don't comb in lockstep
+      dir.x += (rand() - 0.5) * 0.25; dir.y += (rand() - 0.5) * 0.25; dir.z += (rand() - 0.5) * 0.25;
+      dir.normalize();
+      t1.set(0, 1, 0);
+      if (Math.abs(dir.y) > 0.9) t1.set(1, 0, 0);
+      t1.cross(dir).normalize();
+      t2.crossVectors(dir, t1).normalize();
+      // clumps curve with the comb: mid ring and tip drift along the flow
+      bend.copy(fl).sub(dir.clone().multiplyScalar(fl.dot(dir))).multiplyScalar(len * 0.18);
+      const rot = rand() * Math.PI * 2;
+      const root = p.clone().addScaledVector(n, -0.14); // rooted well under the skin
+      const ring = (center, rad) => [0, 1, 2].map((k) => {
+        const th = rot + (k * Math.PI * 2) / 3;
+        return center.clone().addScaledVector(t1, Math.cos(th) * rad).addScaledVector(t2, Math.sin(th) * rad);
+      });
+      const b0 = ring(root, r);
+      const mid = p.clone().addScaledVector(dir, len * 0.45).add(bend);
+      const m0 = ring(mid, r * 0.55);
+      const apex = p.clone().addScaledVector(dir, len).addScaledVector(bend, 2.4);
+      for (let k = 0; k < 3; k++) {
+        const k2 = (k + 1) % 3;
+        pushTri(b0[k], b0[k2], m0[k2], p, dir);
+        pushTri(b0[k], m0[k2], m0[k], p, dir);
+        pushTri(m0[k], m0[k2], apex, p, dir);
+      }
+    }
+  }
+  // one geometry: welded body (smooth) + clump soup (flat)
+  const nb = bp.count;
+  const pos = new Float32Array(nb * 3 + verts.length);
+  pos.set(bp.array.subarray(0, nb * 3), 0);
+  pos.set(verts, nb * 3);
+  const idx = new Uint32Array(bi.count + tris.length);
+  idx.set(bi.array.subarray(0, bi.count), 0);
+  for (let i = 0; i < tris.length; i++) idx[bi.count + i] = tris[i] + nb;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
+  geo.computeVertexNormals();
+  geo.userData.clumps = tris.length / 27;
+  geo.userData.bodyVerts = nb;
+  return geo;
+}
+
+// inverted hull: the same geometry pushed out along position-welded
+// normals (clump facets share tips, so averaging closes the seams) and
+// drawn back-face in ink; skinned off the same skeleton so it follows
+function buildHullGeometry(geo, thick = 0.075) {
+  const pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal');
+  // clumps get a thin edge: a body-sized hull swallows a spike whole
+  const nb = geo.userData.bodyVerts || pos.count;
+  const acc = new Map();
+  const key = (i) => `${Math.round(pos.getX(i) * 1000)},${Math.round(pos.getY(i) * 1000)},${Math.round(pos.getZ(i) * 1000)}`;
+  for (let i = 0; i < pos.count; i++) {
+    const k = key(i);
+    const a = acc.get(k) || [0, 0, 0];
+    a[0] += nrm.getX(i); a[1] += nrm.getY(i); a[2] += nrm.getZ(i);
+    acc.set(k, a);
+  }
+  const out = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const a = acc.get(key(i));
+    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+    const t = i < nb ? thick : thick * 0.4;
+    out[i * 3] = pos.getX(i) + (a[0] / l) * t;
+    out[i * 3 + 1] = pos.getY(i) + (a[1] / l) * t;
+    out[i * 3 + 2] = pos.getZ(i) + (a[2] / l) * t;
+  }
+  const hull = new THREE.BufferGeometry();
+  hull.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  hull.setIndex(geo.getIndex());
+  hull.setAttribute('uv', geo.getAttribute('uv'));
+  hull.setAttribute('skinIndex', geo.getAttribute('skinIndex'));
+  hull.setAttribute('skinWeight', geo.getAttribute('skinWeight'));
+  hull.computeVertexNormals();
+  return hull;
+}
+
+let toonRamp = null;
+function celRamp() {
+  if (!toonRamp) {
+    // three steps: shadow, mid, lit — the anime read, no soft falloff
+    // shadow step stays warm-dark, not black: flat clump facets facing
+    // away from the key read as shaded fur, the ink hull draws the lines
+    toonRamp = new THREE.DataTexture(new Uint8Array([112, 112, 112, 255, 190, 190, 190, 255, 255, 255, 255, 255]), 3, 1);
+    toonRamp.minFilter = toonRamp.magFilter = THREE.NearestFilter;
+    toonRamp.needsUpdate = true;
+  }
+  return toonRamp;
+}
+
 // ------------------------------------------------------------ variants ---
 // v3: smooth sculpt. v4: chunky faceted low-poly of the same body.
+// v5: v3's body under long spiky fur, cel-shaded with an ink outline.
 const cache = {};
 export function buildCatSource(variant) {
   if (cache[variant]) return cache[variant];
   const faceted = variant === 4;
-  const geo = buildGeometry(faceted ? 34 : 88, 120000);
+  const furry = variant === 5;
+  const geo = furry ? buildFurGeometry() : buildGeometry(faceted ? 34 : 88, 120000);
   if (faceted) {
     // flat shading: non-indexed MC output already is; recompute normals
     // per-face by dropping smooth normals
@@ -280,11 +475,21 @@ export function buildCatSource(variant) {
   }
   skinGeometry(geo);
   const { rootBone, list, byKey } = buildSkeleton();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xff9d45, roughness: 0.9 });
+  const mat = furry
+    ? new THREE.MeshToonMaterial({ color: 0xff9d45, gradientMap: celRamp() })
+    : new THREE.MeshStandardMaterial({ color: 0xff9d45, roughness: 0.9 });
   const mesh = new THREE.SkinnedMesh(geo, mat);
   mesh.name = 'catgen_0';
   mesh.add(rootBone);
   mesh.bind(new THREE.Skeleton(list));
+  if (furry) {
+    const ink = new THREE.SkinnedMesh(buildHullGeometry(geo),
+      new THREE.MeshBasicMaterial({ color: 0x1a1120, side: THREE.BackSide }));
+    ink.name = 'ink_0';
+    ink.userData.outline = true; // catrig: no coat, no shadow
+    ink.bind(mesh.skeleton, mesh.bindMatrix);
+    mesh.add(ink);
+  }
   // Sketchfab-style nesting: wrapper x100 so CatRig's SCALE lands the cat
   // at its usual 0.35m
   const wrap = new THREE.Group();

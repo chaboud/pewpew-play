@@ -90,7 +90,9 @@ function mix3(a, b, t) {
 }
 
 function coatGeometry(baseGeo, c) {
-  if (coatGeoCache.has(c)) return coatGeoCache.get(c);
+  // keyed per source geometry: v3/v4/v5 share coat indices but not bodies
+  const key = `${baseGeo.uuid}:${c}`;
+  if (coatGeoCache.has(key)) return coatGeoCache.get(key);
   const geo = baseGeo.clone();
   const pos = geo.attributes.position;
   const col = new Float32Array(pos.count * 3);
@@ -104,12 +106,13 @@ function coatGeometry(baseGeo, c) {
     col.set([v[0] ** 2.2, v[1] ** 2.2, v[2] ** 2.2], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  coatGeoCache.set(c, geo);
+  coatGeoCache.set(key, geo);
   return geo;
 }
 
 function coatMaterial(srcMat, c) {
-  if (coatMatCache.has(c)) return coatMatCache.get(c);
+  const key = `${srcMat.uuid}:${c}`;
+  if (coatMatCache.has(key)) return coatMatCache.get(key);
   if (!grayMap && srcMat.map && srcMat.map.image) {
     const img = srcMat.map.image;
     const cv = document.createElement('canvas');
@@ -138,7 +141,7 @@ function coatMaterial(srcMat, c) {
   if (grayMap) m.map = grayMap;
   m.vertexColors = true;
   m.color.set(0xffffff);
-  coatMatCache.set(c, m);
+  coatMatCache.set(key, m);
   return m;
 }
 
@@ -278,7 +281,7 @@ export class CatRig {
   // the loaded shape, so the rest of this class doesn't know the difference
   static source(variant) {
     if (variant >= 3) {
-      return import('./catgen.js?v=k50').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k51').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
@@ -304,9 +307,10 @@ export class CatRig {
         }
       }
       if (o.isMesh || o.isSkinnedMesh) {
+        o.frustumCulled = false; // skinned bounds lag the pose
+        if (o.userData.outline) return; // v5's ink hull: no coat, no shadow
         o.castShadow = true;
         o.receiveShadow = true;
-        o.frustumCulled = false; // skinned bounds lag the pose
         if (coat != null && o.isSkinnedMesh) {
           o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
           o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
