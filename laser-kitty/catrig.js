@@ -33,7 +33,7 @@ let gltfPromise = null;
 // texture — the shipped map is orange, and multiplication only darkens,
 // so hue moves to the vertex colors while the map keeps eyes and ear
 // shading. Zero per-frame cost; geometry+material cached per coat.
-export const COAT_NAMES = ['orange tabby', 'grey tabby', 'siamese', 'tuxedo', 'white', 'tortie'];
+export const COAT_NAMES = ['orange tabby', 'grey tabby', 'siamese', 'tuxedo', 'white', 'tortie', 'black', 'grey', 'ragdoll', 'calico', 'cream'];
 const coatGeoCache = new Map();
 const coatMatCache = new Map();
 let grayMap = null;
@@ -80,10 +80,41 @@ function coatColor(c, nx, ny, nz, x, y, z) {
     // white: warm white with the faintest cream mottle
     return mix3([0.97, 0.95, 0.9], [0.92, 0.88, 0.8], n * 0.3);
   }
-  // tortie: brindled black/orange patches, small cream bib
   const patch = hash3(Math.round(x * 2.2) / 2.2, Math.round(y * 2.2) / 2.2, Math.round(z * 2.2) / 2.2);
-  const base = mix3([0.17, 0.13, 0.11], [0.86, 0.49, 0.2], patch > 0.52 ? 1 : 0);
-  return mix3(base, [0.95, 0.9, 0.8], bib * 0.8);
+  if (c === 5) {
+    // tortie: brindled black/orange patches, small cream bib
+    const base = mix3([0.17, 0.13, 0.11], [0.86, 0.49, 0.2], patch > 0.52 ? 1 : 0);
+    return mix3(base, [0.95, 0.9, 0.8], bib * 0.8);
+  }
+  if (c === 6) {
+    // black: near-black with a faint cool sheen so the shape still reads
+    return mix3([0.09, 0.09, 0.11], [0.16, 0.16, 0.2], n * 0.5);
+  }
+  if (c === 7) {
+    // grey: solid blue-grey (the Russian-blue read), a touch lighter underneath
+    return mix3([0.5, 0.52, 0.58], [0.6, 0.62, 0.67], Math.max(paw, bib) * 0.6 + n * 0.15);
+  }
+  if (c === 8) {
+    // ragdoll (bicolor): cream-white body, seal-grey points on ears, tail
+    // and an upper-face mask split by a white blaze; white bib, paws, belly
+    const blaze = face * smooth01((0.16 - Math.abs(nx)) / 0.08);
+    const mask = face * (1 - smooth01((0.66 - ny) / 0.1)) * (1 - blaze);
+    const pt = Math.max(ear, tail, mask);
+    const back = smooth01((ny - 0.5) / 0.2) * (1 - face) * 0.35;
+    const body = mix3([0.97, 0.95, 0.9], [0.8, 0.74, 0.66], back);
+    const white = Math.max(paw, bib, lowFace, blaze);
+    return mix3(mix3(body, [0.42, 0.34, 0.3], smooth01(pt * 1.15)), [0.98, 0.97, 0.94], white * 0.9);
+  }
+  if (c === 9) {
+    // calico: white base with orange and black patches, white bib/paws kept.
+    // Coarser cells on warped coords so the patches don't read as a grid
+    const wx = x + Math.sin(y * 2.3 + z * 1.1) * 0.4, wy = y + Math.sin(z * 1.9) * 0.35, wz = z + Math.sin(x * 2.7) * 0.4;
+    const pc = hash3(Math.round(wx * 1.4) / 1.4, Math.round(wy * 1.4) / 1.4, Math.round(wz * 1.4) / 1.4);
+    const col = pc > 0.66 ? [0.88, 0.5, 0.2] : pc < 0.3 ? [0.15, 0.13, 0.13] : [0.97, 0.95, 0.9];
+    return mix3(col, [0.97, 0.95, 0.9], Math.max(paw, bib, lowFace) * 0.9);
+  }
+  // cream: pale apricot with a faint warm mottle, lighter bib and paws
+  return mix3(mix3([0.93, 0.8, 0.62], [0.86, 0.7, 0.5], n * 0.35), [0.97, 0.93, 0.85], Math.max(paw, bib) * 0.6);
 }
 function mix3(a, b, t) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -281,7 +312,7 @@ export class CatRig {
   // the loaded shape, so the rest of this class doesn't know the difference
   static source(variant) {
     if (variant >= 3) {
-      return import('./catgen.js?v=k52').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k53').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
