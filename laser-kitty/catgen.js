@@ -283,7 +283,9 @@ function furAt(x, y, z, ny) {
   if (z > 1.75 && y > 2.35 && y < 3.35 && ax < 0.42) return null;
   // big tapered clumps, not needles: the anime read is a few dozen
   // fat spikes per region with the body showing between them
-  if (y > 3.05 && z > 0.7 && z < 1.75) return { len: 1.15, r: 0.34, flow: [x * 0.5, 1.0, -0.6], dens: 1.3 };
+  // skull: a mane combed BACK over the head toward the neck (the first
+  // cut stood straight up — founder: "less exorcist")
+  if (y > 3.05 && z > 0.7 && z < 1.75) return { len: 0.7, r: 0.27, flow: [x * 0.6, 0.25, -1.1], dens: 1.0 };
   if (z > 1.35 && z < 2.05 && y > 2.45 && y < 3.15 && ax > 0.3) return { len: 0.65, r: 0.26, flow: [Math.sign(x) * 0.9, -0.25, -0.5], dens: 1.2 };
   if (z < -2.05 && y > 1.6) return { len: 0.9, r: 0.28, flow: [0, 0.3, -0.4], dens: 1.3 };
   if (z > 0.35 && z < 1.5 && y > 1.5 && y < 3.1) return { len: 0.8, r: 0.3, flow: [x * 0.4, -0.6, -0.1], dens: 1.0 };
@@ -321,12 +323,17 @@ function buildFurGeometry(seed = 7) {
   const rand = mulberry32(seed);
   const verts = [];
   const tris = [];
+  // per-vertex sway weights: 0 on the body and at a clump's root, 1 at
+  // its tip, plus a seed so clumps don't wave in lockstep (catrig's
+  // vertex-shader sway reads these)
+  const furT = [];
+  const furSeed = [];
   const K = 7; // clumps per unit area at dens 1
   let acc = 0;
   const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3();
   const n = new THREE.Vector3(), dir = new THREE.Vector3(), t1 = new THREE.Vector3(), t2 = new THREE.Vector3();
   const p = new THREE.Vector3(), q = new THREE.Vector3(), bend = new THREE.Vector3(), fl = new THREE.Vector3();
-  const pushTri = (a, b, c, axisP, axisD) => {
+  const pushTri = (a, b, c, axisP, axisD, ta, tb, tc, seed) => {
     // wind every face outward from the clump axis
     const e1 = b.clone().sub(a), e2 = c.clone().sub(a);
     const fn = e1.cross(e2);
@@ -334,8 +341,10 @@ function buildFurGeometry(seed = 7) {
     const rel = cen.sub(axisP);
     const out = rel.sub(axisD.clone().multiplyScalar(rel.dot(axisD)));
     const base = verts.length / 3;
-    if (fn.dot(out) < 0) { const t = b; b = c; c = t; }
+    if (fn.dot(out) < 0) { const t = b; b = c; c = t; const tt = tb; tb = tc; tc = tt; }
     verts.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    furT.push(ta, tb, tc);
+    furSeed.push(seed, seed, seed);
     tris.push(base, base + 1, base + 2);
   };
   for (let f = 0; f < bi.count; f += 3) {
@@ -367,6 +376,7 @@ function buildFurGeometry(seed = 7) {
       // clumps curve with the comb: mid ring and tip drift along the flow
       bend.copy(fl).sub(dir.clone().multiplyScalar(fl.dot(dir))).multiplyScalar(len * 0.18);
       const rot = rand() * Math.PI * 2;
+      const seed = rand();
       const root = p.clone().addScaledVector(n, -0.14); // rooted well under the skin
       const ring = (center, rad) => [0, 1, 2].map((k) => {
         const th = rot + (k * Math.PI * 2) / 3;
@@ -378,9 +388,9 @@ function buildFurGeometry(seed = 7) {
       const apex = p.clone().addScaledVector(dir, len).addScaledVector(bend, 2.4);
       for (let k = 0; k < 3; k++) {
         const k2 = (k + 1) % 3;
-        pushTri(b0[k], b0[k2], m0[k2], p, dir);
-        pushTri(b0[k], m0[k2], m0[k], p, dir);
-        pushTri(m0[k], m0[k2], apex, p, dir);
+        pushTri(b0[k], b0[k2], m0[k2], p, dir, 0, 0, 0.45, seed);
+        pushTri(b0[k], m0[k2], m0[k], p, dir, 0, 0.45, 0.45, seed);
+        pushTri(m0[k], m0[k2], apex, p, dir, 0.45, 0.45, 1, seed);
       }
     }
   }
@@ -396,6 +406,10 @@ function buildFurGeometry(seed = 7) {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
+  const ft = new Float32Array(pos.length / 3), fs = new Float32Array(pos.length / 3);
+  ft.set(furT, nb); fs.set(furSeed, nb);
+  geo.setAttribute('furT', new THREE.BufferAttribute(ft, 1));
+  geo.setAttribute('furSeed', new THREE.BufferAttribute(fs, 1));
   geo.computeVertexNormals();
   geo.userData.clumps = tris.length / 27;
   geo.userData.bodyVerts = nb;
@@ -432,6 +446,8 @@ function buildHullGeometry(geo, thick = 0.075) {
   hull.setAttribute('uv', geo.getAttribute('uv'));
   hull.setAttribute('skinIndex', geo.getAttribute('skinIndex'));
   hull.setAttribute('skinWeight', geo.getAttribute('skinWeight'));
+  hull.setAttribute('furT', geo.getAttribute('furT'));
+  hull.setAttribute('furSeed', geo.getAttribute('furSeed'));
   hull.computeVertexNormals();
   return hull;
 }

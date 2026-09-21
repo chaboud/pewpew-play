@@ -281,7 +281,7 @@ export class CatRig {
   // the loaded shape, so the rest of this class doesn't know the difference
   static source(variant) {
     if (variant >= 3) {
-      return import('./catgen.js?v=k51').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k52').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
@@ -308,12 +308,22 @@ export class CatRig {
       }
       if (o.isMesh || o.isSkinnedMesh) {
         o.frustumCulled = false; // skinned bounds lag the pose
-        if (o.userData.outline) return; // v5's ink hull: no coat, no shadow
-        o.castShadow = true;
-        o.receiveShadow = true;
-        if (coat != null && o.isSkinnedMesh) {
-          o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
-          o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
+        if (!o.userData.outline) { // v5's ink hull: no coat, no shadow
+          o.castShadow = true;
+          o.receiveShadow = true;
+          if (coat != null && o.isSkinnedMesh) {
+            o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
+            o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
+          }
+        }
+        // v5 fur sways in the vertex shader: this rig's own material
+        // copies (the coat cache is shared across cats) driven by its own
+        // uniforms — the ink hull gets the same displacement, so the
+        // outline moves with the fur (cel shading: the line IS the fur)
+        if (o.geometry.getAttribute('furT')) {
+          if (!this.fur) this.fur = { time: { value: 0 }, lag: { value: new THREE.Vector3() }, lagV: new THREE.Vector3(), prev: null };
+          o.material = o.material.clone();
+          patchFur(o.material, this.fur);
         }
       }
     });
@@ -440,6 +450,7 @@ export class CatRig {
   // pose one of: null|crouch|sit|loaf|groom|stretch|swat|windup|pounce
   update(dt, s) {
     this.phase += dt;
+    if (this.fur) this.#swayFur(dt, s);
     const table = POSES[s.pose] || null;
     const wantAlpha = table ? 1 : 0;
     this.alpha += (wantAlpha - this.alpha) * Math.min(1, dt * 7);
@@ -600,9 +611,62 @@ export class CatRig {
     this.group.visible = v;
   }
 
+  // fur inertia: the clumps trail the cat's motion (world velocity from
+  // the group's frame-to-frame move, expressed in the cat's own frame,
+  // +z nose) through a damped spring, plus a lag against the walk bob.
+  // Canonical units: ~1 m/s of ground speed trails the tips 0.45 units.
+  #swayFur(dt, s) {
+    const f = this.fur;
+    const h = Math.min(0.1, Math.max(1e-3, dt));
+    f.time.value += h;
+    const p = this.group.position;
+    const target = new THREE.Vector3();
+    if (f.prev) {
+      const vx = (p.x - f.prev.x) / h, vy = (p.y - f.prev.y) / h, vz = (p.z - f.prev.z) / h;
+      if (vx * vx + vy * vy + vz * vz < 36) { // a teleport (room reset) isn't motion
+        const yaw = this.group.rotation.y;
+        const c = Math.cos(yaw), sn = Math.sin(yaw);
+        target.set(-(vx * c - vz * sn), -vy, -(vx * sn + vz * c)).multiplyScalar(0.45);
+      }
+    } else {
+      f.prev = new THREE.Vector3();
+    }
+    f.prev.copy(p);
+    const locoW = Math.min(1, (s.speed || 0) / 0.25) * (1 - this.alpha);
+    target.y -= Math.sin((this.walk.time / 0.83) * Math.PI * 4) * 0.12 * locoW;
+    if (target.length() > 0.9) target.setLength(0.9);
+    // damped spring: stiffness 60 (~1.2 Hz bounce), damping 8 — some overshoot
+    f.lagV.addScaledVector(target.clone().sub(f.lag.value).multiplyScalar(60).addScaledVector(f.lagV, -8), h);
+    f.lag.value.addScaledVector(f.lagV, h);
+  }
+
   dispose() {
     this.group.parent?.remove(this.group);
   }
+}
+
+// vertex-shader sway for the v5 fur, injected into any material: tips
+// (furT 1) ride a slow breeze plus the rig's lag vector; roots and the
+// body (furT 0) stay put. Displacement happens in model space BEFORE
+// skinning so it follows the bones.
+const FUR_DECL = 'attribute float furT; attribute float furSeed; uniform float uFurTime; uniform vec3 uFurLag;';
+const FUR_SWAY = `
+  {
+    float fw = furT * furT;
+    float ph = furSeed * 6.2831853;
+    vec3 breeze = vec3(sin(uFurTime * 2.9 + ph), sin(uFurTime * 2.1 + ph * 1.7 + position.z * 0.8), cos(uFurTime * 2.5 + ph * 0.6)) * 0.09;
+    transformed += fw * (breeze + uFurLag);
+  }`;
+function patchFur(mat, fur) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uFurTime = fur.time;
+    shader.uniforms.uFurLag = fur.lag;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + FUR_DECL)
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + FUR_SWAY);
+  };
+  mat.customProgramCacheKey = () => 'fur';
+  mat.needsUpdate = true;
 }
 
 export const CAT_POSE_NAMES = Object.keys(POSES);
