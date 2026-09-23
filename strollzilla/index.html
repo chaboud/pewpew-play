@@ -19,6 +19,9 @@
     #boot p { color: #9aa3b8; font-size: 13px; max-width: 420px; line-height: 1.5; }
     button { font: inherit; color: #0b1020; background: #ffd23a; border: 0; border-radius: 10px; padding: 14px 22px; font-size: 16px; font-weight: 700; cursor: pointer; }
     button.secondary { background: #2b3350; color: #e9ecf5; }
+    #cities { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    #cities button { padding: 8px 14px; font-size: 13px; background: #1b2238; color: #9aa3b8; border: 1px solid #2b3350; }
+    #cities button.on { background: #2b3350; color: #ffd23a; border-color: #ffd23a; }
     #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; font-size: 13px; line-height: 1.45; text-shadow: 0 1px 2px #000; }
     #hud .big { font-size: 30px; font-weight: 700; color: #ffd23a; }
     #hud .right { text-align: right; }
@@ -30,7 +33,7 @@
     #stomp { position: fixed; right: 24px; bottom: max(80px, calc(env(safe-area-inset-bottom) + 70px)); width: 110px; height: 110px; border-radius: 50%; font-size: 18px; touch-action: none; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DY9Kh7Pm.js"></script>
+  <script type="module" crossorigin src="./assets/index-CvHqiuS0.js"></script>
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -38,9 +41,10 @@
     <h1 id="boot-title">Strollzilla: Kaiju Country</h1>
     <p id="boot-stats">loading the city…</p>
     <p>You are big. The city is real. Walk into things.</p>
+    <div id="cities"></div>
     <button id="btn-couch">Couch mode</button>
     <button id="btn-walk" class="secondary">Walk here (your GPS, translated)</button>
-    <p>Walk mode maps your real movement onto Midtown Manhattan. Screen stays on; a PWA gets no GPS with the screen off.</p>
+    <p>Walk mode maps your real movement onto the chosen city. Screen stays on; a PWA gets no GPS with the screen off.</p>
   </div>
   <div id="hud" class="hidden">
     <div>
