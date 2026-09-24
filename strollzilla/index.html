@@ -47,13 +47,15 @@
     #stick { position: fixed; left: 24px; bottom: max(70px, calc(env(safe-area-inset-bottom) + 60px)); width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); touch-action: none; }
     #knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255,210,58,0.85); pointer-events: none; }
     #stomp { position: fixed; right: 24px; bottom: max(80px, calc(env(safe-area-inset-bottom) + 70px)); width: 110px; height: 110px; border-radius: 50%; font-size: 18px; touch-action: none; }
+    #breath { position: fixed; right: 150px; bottom: max(96px, calc(env(safe-area-inset-bottom) + 86px)); width: 80px; height: 80px; border-radius: 50%; font-size: 13px; touch-action: none; background: #1d2a4a; color: #bfe0ff; border: 2px solid #4a7fc0; }
+    #breath.on { background: #7fc4ff; color: #041020; box-shadow: 0 0 24px #9fd6ff; }
     #prof { position: fixed; left: 8px; bottom: max(150px, calc(env(safe-area-inset-bottom) + 140px)); right: 8px; background: rgba(11,16,32,0.92); border: 1px solid #2b3350; border-radius: 10px; padding: 8px 10px; font-size: 10px; line-height: 1.35; color: #d7dbe6; z-index: 5; }
     #prof pre { margin: 0 0 6px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; }
     #prof button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
   </style>
-  <script type="module" crossorigin src="./assets/main-BAJlL89J.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-DJZAGYDN.js">
+  <script type="module" crossorigin src="./assets/main-D-7jUI6O.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-7AeL_hsR.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -84,6 +86,7 @@
   </div>
   <div id="stick"><div id="knob"></div></div>
   <button id="stomp">STOMP</button>
+  <button id="breath">BREATH</button>
   <div id="fps"></div>
   <div id="prof" class="hidden"><pre></pre><button id="prof-copy">copy json</button></div>
   <div id="panel" class="hidden"></div>
