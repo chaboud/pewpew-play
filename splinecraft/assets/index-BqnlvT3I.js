@@ -5225,7 +5225,7 @@ flat varying vec3 vMatsD; varying vec3 vBaryD;`).replace("#include <clipping_pla
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
     float size = aSize * (0.5 + 0.9 * ease) * (0.8 + 0.4 * h(aSeed + 3.0));
-    gl_PointSize = size * uPixelRatio * 420.0 / max(-mv.z, 1.0);
+    gl_PointSize = size * uPixelRatio * 170.0 / max(-mv.z, 1.0);  // shrunk with the powder cloud (founder, 2026-09-24: 420 read as cartoon flakes)
   }`,rS=`
   precision highp float;
   uniform float uLight;
@@ -5276,7 +5276,7 @@ flat varying vec3 vMatsD; varying vec3 vBaryD;`).replace("#include <clipping_pla
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
     float size = (0.5 + 0.6 * h(aSeed + 3.0)) * (1.0 + 0.6 * min(1.0, fall * 0.3)) * (1.0 + 0.5 * landed);
-    gl_PointSize = size * uPixelRatio * 420.0 / max(-mv.z, 1.0);
+    gl_PointSize = size * uPixelRatio * 170.0 / max(-mv.z, 1.0);  // ~0.2-0.7 m a puff: 420 read as cartoon flakes on the phone (founder, 2026-09-24)
   }`,lS=`
   precision highp float;
   uniform float uLight;
@@ -5305,7 +5305,7 @@ flat varying vec3 vMatsD; varying vec3 vBaryD;`).replace("#include <clipping_pla
     if (aAlpha <= 0.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize * uPixelRatio * 260.0 / max(-mv.z, 1.0);
+    gl_PointSize = aSize * uPixelRatio * 85.0 / max(-mv.z, 1.0);  // ~0.15-0.45 m a bead, shrunk with the powder puffs
   }`,uS=`
   precision highp float;
   uniform float uLight;
