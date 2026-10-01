@@ -6,12 +6,13 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k55';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k56';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k56';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k55';
-import { Career } from './career.js?v=k55';
-import { mountNav } from './nav.js?v=k55';
+import { CatRig } from './catrig.js?v=k56';
+import { Career } from './career.js?v=k56';
+import { mountNav } from './nav.js?v=k56';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -24,11 +25,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k55'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k56'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -47,6 +48,11 @@ let roomHX = 3, roomHZ = 3;
 
 // --- three scene -----------------------------------------------------------
 const canvas = document.getElementById('scene');
+// the room's light volume (lightvol.js): signs, lamps and the laser dot
+// flooded through a voxel grid of the room; every lit material and the
+// haze march sample it. Installed before the first program compiles.
+const lightVol = new LightVolume();
+installLightVolumeShading(lightVol.uniforms);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.quality));
 renderer.shadowMap.enabled = cfg.shadows !== 'off';
@@ -173,10 +179,11 @@ function applyAO() {
   }
   if (wantHaze) {
     const coarse = matchMedia('(pointer: coarse)').matches;
-    haze = new HazePass(scene, camera, sun, { steps: coarse ? 8 : 12, scale: 0.5 });
+    haze = new HazePass(scene, camera, sun, lightVol.uniforms, { steps: coarse ? 8 : 12, scale: 0.5 });
     haze.depthSource = () => (n8ao && n8ao.beautyRenderTarget ? n8ao.beautyRenderTarget.depthTexture : null);
     composer.addPass(haze);
     window.__haze = haze; // test hook
+    window.__lightVol = lightVol;
     window.__renderer = renderer;
     const pr = renderer.getPixelRatio();
     const { w, h } = viewSize();
@@ -185,25 +192,50 @@ function applyAO() {
   aoActive = wantAO && !!n8ao;
   postActive = !!composer && composer.passes.length > 0;
 }
-// gather this frame's emitters for the haze: every neon sign (tagged at
-// recognition, dimmed by its flicker) and every budgeted point light
+// the light volume's frame: (re)build the grid when the room changes,
+// re-voxelize the furniture every couple of seconds, and at ~6 Hz inject
+// every emitter — neon signs (tagged at recognition, dimmed by their
+// flicker), budgeted point lights, the laser dot — and flood a couple
+// of rounds. The first flood after a room build runs deeper.
 const hazeEmitters = [];
 const hazeTmp = new THREE.Vector3();
-function hazeFrame(now) {
-  if (!haze) return;
+let volRoomKey = '';
+let volNextInject = 0, volNextVoxel = 0, volDeep = false;
+const volCoarse = matchMedia('(pointer: coarse)').matches;
+function lightFrame(now, data, count) {
+  const key = `${cfg.room | 0}:${roomHX}:${roomHZ}`;
+  if (key !== volRoomKey) {
+    volRoomKey = key;
+    const r = cfg.room | 0;
+    lightVol.setup(roomHX, roomHZ, r === 7 ? 24 : r === 6 ? 4.6 : 3.6);
+    volNextVoxel = 0; volNextInject = 0; volDeep = true;
+  }
+  if (now >= volNextVoxel) { lightVol.voxelize(data, count); volNextVoxel = now + 2000; }
+  if (now < volNextInject) return;
+  volNextInject = now + (volCoarse ? 250 : 160);
   hazeEmitters.length = 0;
   for (const m of meshes) {
     if (!m || !m.userData.emitter || !m.parent) continue;
     const e = m.userData.emitter;
     m.getWorldPosition(hazeTmp);
-    hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 2.4 * (m.userData.flicker ?? 1), radius: e.radius * 1.3 });
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 1.2 * (m.userData.flicker ?? 1) });
   }
   for (const pl of litLights) {
     if (!pl.parent) continue;
     pl.getWorldPosition(hazeTmp);
-    hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 0.5, radius: Math.max(0.8, pl.distance * 0.35) });
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 0.35 });
   }
-  haze.setEmitters(hazeEmitters);
+  if (dot.visible) hazeEmitters.push({ pos: dot.position.clone(), color: new THREE.Color(1, 0.2, 0.12), strength: 1.4 });
+  lightVol.inject(hazeEmitters);
+  lightVol.decay(volDeep ? 0 : 0.85);
+  lightVol.sweep(volDeep ? 5 : volCoarse ? 1 : 2);
+  lightVol.gain = 0.6 * cfg.bounce;
+  lightVol.upload();
+  if (haze) haze.uniforms.uLocal.value = 1.6 / Math.max(0.05, lightVol.gain / 0.6);
+  volDeep = false;
+}
+function hazeFrame(now) {
+  if (!haze) return;
   haze.uniforms.uTime.value = now * 0.001;
   haze.uniforms.uDensity.value = hazeDensity() * cfg.hazeStrength;
   // the bar's smoke is lit by its signs, not the sun
@@ -4057,6 +4089,7 @@ bindSlider('shstr', 'shadowStrength', (v) => v.toFixed(2), (v) => {
   sun.shadow.intensity = v;
 });
 bindSlider('hazestr', 'hazeStrength', (v) => v.toFixed(1));
+bindSlider('bounce', 'bounce', (v) => v.toFixed(1));
 bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
 bindSlider('aostr', 'aoStrength', (v) => v.toFixed(1), (v) => {
   if (n8ao) n8ao.configuration.intensity = v;
@@ -4602,6 +4635,7 @@ function frame(now) {
     ckCodes.length = 0;
     career.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
   }
+  lightFrame(now, data, lk.lk_body_count(sim));
   hazeFrame(now);
   if (postActive) composer.render();
   else renderer.render(scene, camera);

@@ -14,16 +14,18 @@
 // beyond what the frame already pays for.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
+import { LIGHTVOL_GLSL } from './lightvol.js?v=k56';
 
-export const MAX_EMITTERS = 32;
 // objects on this layer are the glow pass's sources: neon tube faces,
 // fixture glow sprites, the laser dot
 export const GLOW_LAYER = 3;
 
 const VERT = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+const VERT3 = `out vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 const MARCH = `
   precision highp float;
+  precision highp sampler3D;
   uniform sampler2D tDepth;
   uniform sampler2D shadowMap;
   uniform mat4 shadowMatrix, invProj, invView;
@@ -32,11 +34,11 @@ const MARCH = `
   uniform vec3 laserA, laserB, laserCol;
   uniform float laserOn;
   uniform vec3 uRoom; // half extents (x, ceiling, z): the haze lives inside the shell
-  uniform int uSteps, eCount;
-  uniform vec3 ePos[${MAX_EMITTERS}];
-  uniform vec3 eCol[${MAX_EMITTERS}];
-  uniform float eInv[${MAX_EMITTERS}];
-  varying vec2 vUv;
+  uniform int uSteps;
+  uniform float uLocal;
+  in vec2 vUv;
+  out vec4 outColor;
+  ${LIGHTVOL_GLSL}
 
   float ign(vec2 p) { return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y)); }
   vec3 worldFromDepth(vec2 uv, float depth) {
@@ -60,7 +62,7 @@ const MARCH = `
     vec4 sc = shadowMatrix * vec4(p, 1.0);
     sc.xyz /= sc.w;
     if (any(lessThan(sc.xy, vec2(0.0))) || any(greaterThan(sc.xy, vec2(1.0)))) return 1.0;
-    vec2 m = texture2D(shadowMap, sc.xy).rg;
+    vec2 m = texture(shadowMap, sc.xy).rg;
     float d = sc.z;
     if (d <= m.x + 0.002) return 1.0;
     float v = max(m.y - m.x * m.x, 2e-5);
@@ -69,7 +71,7 @@ const MARCH = `
     return smoothstep(0.2, 1.0, pmax); // light-bleed trim
   }
   void main() {
-    float depth = texture2D(tDepth, vUv).r;
+    float depth = texture(tDepth, vUv).r;
     vec3 target = worldFromDepth(vUv, min(depth, 0.9999));
     vec3 ro = camPos;
     vec3 seg = target - ro;
@@ -92,12 +94,9 @@ const MARCH = `
       vec3 p = ro + rd * t;
       float dens = density(p);
       vec3 sun = sunColor * (hg * sunVisible(p)) * sunOn * uSun;
-      vec3 loc = vec3(0.0);
-      for (int e = 0; e < ${MAX_EMITTERS}; e++) {
-        if (e >= eCount) break;
-        vec3 L = ePos[e] - p;
-        loc += eCol[e] / (1.0 + dot(L, L) * eInv[e]);
-      }
+      // the room's light volume: signs, lamps and the dot, flooded
+      // around the furniture — one trilinear read per step
+      vec3 loc = lkLight(p) * uLocal;
       // the laser: a thin red beam from the belt to the dot, and a hot
       // point at the dot — the beam only shows where the haze is thick
       if (laserOn > 0.5) {
@@ -113,7 +112,7 @@ const MARCH = `
       T *= exp(-dens * dt);
     }
     if (any(isnan(acc)) || isnan(T)) { acc = vec3(0.0); T = 1.0; }
-    gl_FragColor = vec4(acc, T);
+    outColor = vec4(acc, T);
   }`;
 
 const COMPOSITE = `
@@ -158,7 +157,7 @@ const BLUR = `
   }`;
 
 export class HazePass extends Pass {
-  constructor(scene, camera, sun, { steps = 12, scale = 0.5 } = {}) {
+  constructor(scene, camera, sun, volumeUniforms, { steps = 12, scale = 0.5 } = {}) {
     super();
     this.scene = scene;
     this.camera = camera;
@@ -172,8 +171,6 @@ export class HazePass extends Pass {
       type: THREE.HalfFloatType, depthBuffer: false,
       minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
     });
-    const ePos = [], eCol = [];
-    for (let i = 0; i < MAX_EMITTERS; i++) { ePos.push(new THREE.Vector3()); eCol.push(new THREE.Color(0, 0, 0)); }
     this.uniforms = {
       tDepth: { value: null }, shadowMap: { value: null }, shadowMatrix: { value: new THREE.Matrix4() },
       invProj: { value: new THREE.Matrix4() }, invView: { value: new THREE.Matrix4() },
@@ -181,10 +178,10 @@ export class HazePass extends Pass {
       sunColor: { value: new THREE.Vector3(1.6, 1.4, 1.05) }, ambient: { value: new THREE.Vector3(0.025, 0.02, 0.035) },
       sunOn: { value: 1 }, uSun: { value: 1 }, laserA: { value: new THREE.Vector3() }, laserB: { value: new THREE.Vector3() },
       laserCol: { value: new THREE.Vector3(1.0, 0.16, 0.1) }, laserOn: { value: 0 }, uDensity: { value: 0.08 }, uTime: { value: 0 }, uFloor: { value: 0 }, uCeil: { value: 3.0 },
-      uSteps: { value: steps }, eCount: { value: 0 }, uRoom: { value: new THREE.Vector3(4, 3.2, 3) },
-      ePos: { value: ePos }, eCol: { value: eCol }, eInv: { value: new Float32Array(MAX_EMITTERS).fill(1) },
+      uSteps: { value: steps }, uRoom: { value: new THREE.Vector3(4, 3.2, 3) }, uLocal: { value: 1.6 },
+      ...volumeUniforms,
     };
-    this.mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, fragmentShader: MARCH, depthTest: false, depthWrite: false });
+    this.mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT3, fragmentShader: MARCH, depthTest: false, depthWrite: false, glslVersion: THREE.GLSL3 });
     this.quad = new FullScreenQuad(this.mat);
     this.compMat = new THREE.ShaderMaterial({
       uniforms: { tDiffuse: { value: null }, tHaze: { value: this.target.texture }, tGlow: { value: null }, uGlow: { value: 1 }, uMode: { value: 0 }, uTexel: { value: new THREE.Vector2(1 / 360, 1 / 600) } },
@@ -201,19 +198,6 @@ export class HazePass extends Pass {
     this.glowOn = true;
     this.glowStrength = 1;
     this.compMat.uniforms.tGlow.value = this.glowA.texture;
-  }
-
-  // emitters: [{ pos: Vector3, color: Color, strength, radius }]
-  setEmitters(list) {
-    const n = Math.min(MAX_EMITTERS, list.length);
-    const u = this.uniforms;
-    for (let i = 0; i < n; i++) {
-      const e = list[i];
-      u.ePos.value[i].copy(e.pos);
-      u.eCol.value[i].copy(e.color).multiplyScalar(e.strength);
-      u.eInv.value[i] = 1 / Math.max(0.05, e.radius * e.radius);
-    }
-    u.eCount.value = n;
   }
 
   setSize(w, h) {
