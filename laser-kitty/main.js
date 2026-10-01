@@ -6,11 +6,12 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
+import { HazePass } from './haze.js?v=k54';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k53';
-import { Career } from './career.js?v=k53';
-import { mountNav } from './nav.js?v=k53';
+import { CatRig } from './catrig.js?v=k54';
+import { Career } from './career.js?v=k54';
+import { mountNav } from './nav.js?v=k54';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -23,11 +24,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k53'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k54'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -115,19 +116,47 @@ scene.add(sun);
 // half-res path).
 let composer = null;
 let n8ao = null;
+let haze = null;
 let aoActive = false;
+let postActive = false;
 function aoWanted() {
   if (cfg.ao === 'on') return true;
   if (cfg.ao === 'off') return false;
   return !matchMedia('(pointer: coarse)').matches && !new URLSearchParams(location.search).has('lite');
 }
+// volumetric haze (founder: "volumetric lighting ... like splinecraft"):
+// auto = on everywhere, 12 steps fine-pointer / 8 coarse; ?lite=1 off
+function hazeWanted() {
+  if (cfg.haze === 'on') return true;
+  if (cfg.haze === 'off') return false;
+  return !new URLSearchParams(location.search).has('lite');
+}
+// per-room haze density: the bar is a smoky room, the café steamy, the
+// rest carry a faint dust so sun shafts still read between the furniture
+function hazeDensity() {
+  const r = cfg.room | 0;
+  // per metre: a 9 m view ray through the bar keeps ~70% transmittance
+  return r === 8 ? 0.028 : r === 9 ? 0.016 : r === 4 ? 0.013 : 0.01;
+}
 function applyAO() {
-  if (aoWanted() && !composer) {
+  // rebuilds the whole post chain: [N8AO?] -> [haze?]; nothing wanted =
+  // plain renderer.render
+  const wantAO = aoWanted(), wantHaze = hazeWanted();
+  if (composer) {
+    for (const p of composer.passes) p.dispose?.();
+    composer.passes.length = 0;
+    n8ao = null;
+    haze = null;
+  }
+  if ((wantAO || wantHaze) && !composer) {
+    composer = new EffectComposer(renderer);
+    composer.setPixelRatio(renderer.getPixelRatio());
+    const { w, h } = viewSize();
+    composer.setSize(w, h);
+  }
+  if (wantAO) {
     const pr = renderer.getPixelRatio();
     const { w, h } = viewSize();
-    composer = new EffectComposer(renderer);
-    composer.setPixelRatio(pr);
-    composer.setSize(w, h);
     n8ao = new N8AOPass(scene, camera, w * pr, h * pr);
     n8ao.configuration.gammaCorrection = true;
     // room-scale reach: props are centimeters, the room is meters
@@ -142,7 +171,41 @@ function applyAO() {
     n8ao.configuration.halfRes = coarse;
     composer.addPass(n8ao);
   }
-  aoActive = aoWanted() && !!composer;
+  if (wantHaze) {
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    haze = new HazePass(scene, camera, sun, { steps: coarse ? 8 : 12, scale: 0.5 });
+    haze.depthSource = () => (n8ao && n8ao.beautyRenderTarget ? n8ao.beautyRenderTarget.depthTexture : null);
+    composer.addPass(haze);
+    const pr = renderer.getPixelRatio();
+    const { w, h } = viewSize();
+    haze.setSize(w * pr, h * pr);
+  }
+  aoActive = wantAO && !!n8ao;
+  postActive = !!composer && composer.passes.length > 0;
+}
+// gather this frame's emitters for the haze: every neon sign (tagged at
+// recognition, dimmed by its flicker) and every budgeted point light
+const hazeEmitters = [];
+const hazeTmp = new THREE.Vector3();
+function hazeFrame(now) {
+  if (!haze) return;
+  hazeEmitters.length = 0;
+  for (const m of meshes) {
+    if (!m || !m.userData.emitter || !m.parent) continue;
+    const e = m.userData.emitter;
+    m.getWorldPosition(hazeTmp);
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 1.8 * (m.userData.flicker ?? 1), radius: e.radius });
+  }
+  for (const pl of litLights) {
+    if (!pl.parent) continue;
+    pl.getWorldPosition(hazeTmp);
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 1.2, radius: Math.max(0.8, pl.distance * 0.35) });
+  }
+  haze.setEmitters(hazeEmitters);
+  haze.uniforms.uTime.value = now * 0.001;
+  haze.uniforms.uDensity.value = hazeDensity();
+  haze.uniforms.uCeil.value = (cfg.room | 0) === 7 ? 24 : 3.2;
+  haze.uniforms.uRoom.value.set(roomHX || 4, (cfg.room | 0) === 7 ? 24 : (cfg.room | 0) === 6 ? 4.6 : 3.6, roomHZ || 3);
 }
 
 // --- toon look: shared band ramp + material factory ------------------------
@@ -410,8 +473,13 @@ const dialTex = makeCanvas(96, 96, (g) => {
   g.beginPath(); g.arc(48, 48, 3, 0, Math.PI * 2); g.fill();
 });
 
-// neon sign faces: glowing strokes on near-black, by design index
-function neonTex(kind) {
+// neon sign faces: glowing strokes on near-black, by design slot k =
+// round(tint*20). Twenty slots; the first five founder signs keep their
+// slots (3 BAR, 7 COLD BEER, 10 martini, 13 LIVE CATS, 17 OPEN), the
+// roadhouse round fills the rest.
+const NEON_GLOW = [0xffb84f, 0xff6f3f, 0x5fe8d8, 0xff4fa0, 0xff6f6f, 0xff5fd0, 0x7fff7f, 0x5fd0ff, 0x5fb0ff, 0xffa040,
+  0x5ff0ff, 0xff8fc8, 0x9fff5f, 0xff6f5f, 0xe8c080, 0xffe85f, 0x8fff9f, 0xffb84f, 0xffb050, 0xc080ff];
+function neonTex(k) {
   return makeCanvas(256, 128, (g) => {
     g.fillStyle = 'rgba(10,8,16,0.92)';
     g.fillRect(0, 0, 256, 128);
@@ -426,68 +494,156 @@ function neonTex(kind) {
       draw();
       g.stroke();
     };
-    if (kind === 0) {
-      // BAR in hot pink script
-      g.font = 'italic 700 72px Georgia, serif';
-      g.shadowColor = '#ff4fa0';
-      g.shadowBlur = 22;
-      g.strokeStyle = '#ff9fce';
-      g.lineWidth = 3;
-      g.strokeText('BAR', 52, 88);
-      g.shadowBlur = 0;
-      g.fillStyle = '#ffd9ec';
-      g.fillText('BAR', 52, 88);
-    } else if (kind === 1) {
-      // martini glass, cyan, with an olive
-      stroke('#5ff0ff', 5, () => {
-        g.moveTo(78, 30); g.lineTo(178, 30); g.lineTo(128, 78);
-        g.lineTo(128, 104); g.moveTo(104, 108); g.lineTo(152, 108);
-      });
-      g.shadowColor = '#9fff5f';
-      g.shadowBlur = 14;
-      g.fillStyle = '#c8ff9a';
-      g.beginPath();
-      g.arc(112, 44, 7, 0, Math.PI * 2);
-      g.fill();
-    } else if (kind === 3) {
-      // COLD BEER: icy block letters over a tilted mug
-      g.font = '700 34px system-ui, sans-serif';
-      g.shadowColor = '#5fd0ff';
-      g.shadowBlur = 18;
-      g.strokeStyle = '#a8e6ff';
-      g.lineWidth = 2.5;
-      g.strokeText('COLD', 24, 50);
-      g.strokeText('BEER', 24, 96);
-      stroke('#ffd24f', 4, () => {
-        g.moveTo(158, 34); g.lineTo(158, 100); g.lineTo(216, 100);
-        g.lineTo(216, 34); g.moveTo(216, 48); g.lineTo(238, 54);
-        g.lineTo(238, 84); g.lineTo(216, 90);
-      });
-    } else if (kind === 4) {
-      // LIVE CATS: hot red letters with a little neon cat face
-      g.font = '700 34px system-ui, sans-serif';
-      g.shadowColor = '#ff5f5f';
-      g.shadowBlur = 18;
-      g.strokeStyle = '#ffb0a8';
-      g.lineWidth = 2.5;
-      g.strokeText('LIVE', 20, 50);
-      g.strokeText('CATS', 20, 96);
-      stroke('#ffd24f', 3.5, () => {
-        g.arc(196, 66, 26, 0, Math.PI * 2);
-        g.moveTo(176, 48); g.lineTo(170, 26); g.lineTo(190, 40);
-        g.moveTo(216, 48); g.lineTo(222, 26); g.lineTo(202, 40);
-      });
-    } else {
-      // OPEN in warm amber block letters
-      g.font = '700 56px system-ui, sans-serif';
-      g.shadowColor = '#ffb84f';
+    // glowing text: a tube-coloured stroke with a pale fill, like the BAR script
+    const text = (t, x, y, font, col, pale, lw = 3) => {
+      g.font = font;
+      g.shadowColor = col;
       g.shadowBlur = 20;
-      g.strokeStyle = '#ffd08a';
-      g.lineWidth = 3;
-      g.strokeText('OPEN', 44, 82);
+      g.strokeStyle = pale;
+      g.lineWidth = lw;
+      g.strokeText(t, x, y);
       g.shadowBlur = 0;
-      g.fillStyle = '#fff2d8';
-      g.fillText('OPEN', 44, 82);
+      g.fillStyle = '#fff4e8';
+      g.fillText(t, x, y);
+    };
+    const star = (cx, cy, r) => { for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * 4 * Math.PI / 5; const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath(); };
+    switch (k) {
+      case 3: // BAR in hot pink script
+        text('BAR', 52, 88, 'italic 700 72px Georgia, serif', '#ff4fa0', '#ff9fce');
+        break;
+      case 10: // martini glass, cyan, with an olive
+        stroke('#5ff0ff', 5, () => {
+          g.moveTo(78, 30); g.lineTo(178, 30); g.lineTo(128, 78);
+          g.lineTo(128, 104); g.moveTo(104, 108); g.lineTo(152, 108);
+        });
+        g.shadowColor = '#9fff5f';
+        g.shadowBlur = 14;
+        g.fillStyle = '#c8ff9a';
+        g.beginPath();
+        g.arc(112, 44, 7, 0, Math.PI * 2);
+        g.fill();
+        break;
+      case 7: // COLD BEER: icy block letters over a tilted mug
+        g.font = '700 34px system-ui, sans-serif';
+        g.shadowColor = '#5fd0ff';
+        g.shadowBlur = 18;
+        g.strokeStyle = '#a8e6ff';
+        g.lineWidth = 2.5;
+        g.strokeText('COLD', 24, 50);
+        g.strokeText('BEER', 24, 96);
+        stroke('#ffd24f', 4, () => {
+          g.moveTo(158, 34); g.lineTo(158, 100); g.lineTo(216, 100);
+          g.lineTo(216, 34); g.moveTo(216, 48); g.lineTo(238, 54);
+          g.lineTo(238, 84); g.lineTo(216, 90);
+        });
+        break;
+      case 13: // LIVE CATS: hot red letters with a little neon cat face
+        g.font = '700 34px system-ui, sans-serif';
+        g.shadowColor = '#ff5f5f';
+        g.shadowBlur = 18;
+        g.strokeStyle = '#ffb0a8';
+        g.lineWidth = 2.5;
+        g.strokeText('LIVE', 20, 50);
+        g.strokeText('CATS', 20, 96);
+        stroke('#ffd24f', 3.5, () => {
+          g.arc(196, 66, 26, 0, Math.PI * 2);
+          g.moveTo(176, 48); g.lineTo(170, 26); g.lineTo(190, 40);
+          g.moveTo(216, 48); g.lineTo(222, 26); g.lineTo(202, 40);
+        });
+        break;
+      case 0: // longhorn: skull and two sweeping horns, amber
+        stroke('#ffb84f', 4.5, () => {
+          g.moveTo(104, 70); g.quadraticCurveTo(60, 60, 18, 28);
+          g.moveTo(152, 70); g.quadraticCurveTo(196, 60, 238, 28);
+          g.moveTo(104, 70); g.lineTo(104, 100); g.quadraticCurveTo(128, 122, 152, 100); g.lineTo(152, 70);
+          g.moveTo(104, 70); g.quadraticCurveTo(128, 56, 152, 70);
+        });
+        g.shadowColor = '#ffb84f'; g.shadowBlur = 10; g.fillStyle = '#ffd890';
+        g.beginPath(); g.arc(118, 86, 4, 0, Math.PI * 2); g.arc(138, 86, 4, 0, Math.PI * 2); g.fill();
+        break;
+      case 1: // BBQ with a flame
+        text('BBQ', 16, 96, '900 64px system-ui, sans-serif', '#ff6f3f', '#ffb090');
+        stroke('#ffd24f', 4, () => {
+          g.moveTo(196, 100); g.quadraticCurveTo(170, 70, 200, 44); g.quadraticCurveTo(196, 64, 212, 70);
+          g.quadraticCurveTo(218, 40, 232, 30); g.quadraticCurveTo(230, 60, 244, 76); g.quadraticCurveTo(246, 104, 196, 100);
+        });
+        break;
+      case 2: // cowboy boot, turquoise, with a star on the shaft
+        stroke('#5fe8d8', 4.5, () => {
+          g.moveTo(96, 18); g.lineTo(160, 18); g.lineTo(156, 70); g.lineTo(206, 92); g.lineTo(206, 108);
+          g.lineTo(80, 108); g.lineTo(80, 92); g.lineTo(100, 72); g.closePath();
+          g.moveTo(96, 34); g.lineTo(160, 34);
+        });
+        stroke('#ffe85f', 2.5, () => star(128, 52, 11));
+        break;
+      case 4: // lone star: red ring, blue field, white star
+        stroke('#ff6f6f', 5, () => { g.arc(128, 64, 54, 0, Math.PI * 2); });
+        g.shadowColor = '#8fb8ff'; g.shadowBlur = 16; g.fillStyle = 'rgba(60,90,200,0.55)';
+        g.beginPath(); g.arc(128, 64, 48, 0, Math.PI * 2); g.fill();
+        stroke('#ffffff', 4, () => star(128, 64, 36));
+        break;
+      case 5: // LIVE MUSIC with a note
+        text('LIVE', 14, 54, '700 36px system-ui, sans-serif', '#ff5fd0', '#ffa8e8', 2.5);
+        text('MUSIC', 14, 100, '700 36px system-ui, sans-serif', '#ff5fd0', '#ffa8e8', 2.5);
+        stroke('#5ff0ff', 4, () => { g.moveTo(206, 30); g.lineTo(206, 92); g.moveTo(206, 30); g.lineTo(236, 40); g.lineTo(236, 100); g.moveTo(206, 94); g.arc(196, 94, 10, 0, Math.PI * 2); g.moveTo(246, 102); g.arc(236, 102, 10, 0, Math.PI * 2); });
+        break;
+      case 6: // cactus, green, under a little sun
+        stroke('#7fff7f', 6, () => {
+          g.moveTo(128, 112); g.lineTo(128, 30); g.moveTo(128, 76); g.lineTo(96, 76); g.lineTo(96, 46);
+          g.moveTo(128, 62); g.lineTo(160, 62); g.lineTo(160, 36);
+        });
+        stroke('#ffe85f', 3, () => { g.arc(206, 32, 12, 0, Math.PI * 2); });
+        break;
+      case 8: // ICE COLD on a long arrow
+        stroke('#5fb0ff', 4, () => { g.moveTo(14, 64); g.lineTo(236, 64); g.moveTo(212, 40); g.lineTo(240, 64); g.lineTo(212, 88); });
+        text('ICE COLD', 26, 50, '700 30px system-ui, sans-serif', '#a8e6ff', '#d8f4ff', 2);
+        break;
+      case 9: // guitar, orange body, neck up to the left
+        stroke('#ffa040', 4.5, () => {
+          g.moveTo(170, 66); g.quadraticCurveTo(206, 36, 224, 66); g.quadraticCurveTo(236, 96, 200, 108);
+          g.quadraticCurveTo(164, 112, 160, 84); g.quadraticCurveTo(150, 60, 170, 66);
+          g.moveTo(168, 70); g.lineTo(40, 24); g.moveTo(44, 16); g.lineTo(60, 36);
+        });
+        g.shadowColor = '#ffa040'; g.shadowBlur = 8; g.fillStyle = '#ffd8a0';
+        g.beginPath(); g.arc(194, 80, 8, 0, Math.PI * 2); g.fill();
+        break;
+      case 11: // Y'ALL in pink script
+        text("Y'ALL", 30, 90, 'italic 700 66px Georgia, serif', '#ff8fc8', '#ffc0e0');
+        break;
+      case 12: // POOL with an eight ball
+        text('POOL', 12, 92, '900 58px system-ui, sans-serif', '#9fff5f', '#d0ffa8');
+        stroke('#ffffff', 3.5, () => { g.arc(210, 64, 26, 0, Math.PI * 2); });
+        g.shadowBlur = 0; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(210, 64, 11, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#101018'; g.font = '700 14px system-ui, sans-serif'; g.fillText('8', 206, 69);
+        break;
+      case 14: // cowboy hat, tan
+        stroke('#e8c080', 4.5, () => {
+          g.moveTo(24, 84); g.quadraticCurveTo(128, 120, 232, 84); g.quadraticCurveTo(200, 76, 180, 70);
+          g.lineTo(172, 34); g.quadraticCurveTo(128, 20, 84, 34); g.lineTo(76, 70); g.quadraticCurveTo(56, 76, 24, 84);
+          g.moveTo(80, 68); g.lineTo(176, 68);
+        });
+        break;
+      case 15: // HOWDY in yellow script
+        text('HOWDY', 10, 88, 'italic 700 60px Georgia, serif', '#ffe85f', '#fff2a0');
+        break;
+      case 16: // horseshoe, green, ends up
+        stroke('#8fff9f', 6, () => { g.arc(128, 60, 44, Math.PI * 0.85, Math.PI * 2.15); });
+        g.shadowColor = '#8fff9f'; g.shadowBlur = 8; g.fillStyle = '#d0ffd8';
+        for (const [x, y] of [[90, 64], [100, 36], [128, 18], [156, 36], [166, 64]]) { g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill(); }
+        break;
+      case 17: // OPEN in warm amber block letters
+        text('OPEN', 44, 82, '700 56px system-ui, sans-serif', '#ffb84f', '#ffd08a');
+        break;
+      case 18: // WHISKEY over a bottle
+        text('WHISKEY', 8, 56, '700 34px system-ui, sans-serif', '#ffb050', '#ffd8a0', 2.5);
+        stroke('#ffb050', 3.5, () => { g.moveTo(112, 70); g.lineTo(112, 112); g.lineTo(144, 112); g.lineTo(144, 70); g.lineTo(136, 64); g.lineTo(136, 56); g.lineTo(120, 56); g.lineTo(120, 64); g.closePath(); });
+        break;
+      case 19: // DANCE, purple, with boots kicking
+        text('DANCE', 12, 90, '900 52px system-ui, sans-serif', '#c080ff', '#e0c0ff');
+        stroke('#ff8fc8', 3, () => { g.moveTo(200, 30); g.lineTo(206, 60); g.lineTo(230, 68); g.moveTo(222, 24); g.lineTo(236, 50); g.lineTo(250, 48); });
+        break;
+      default: // slots without a design yet: a plain amber tube ring
+        stroke('#ffb84f', 5, () => { g.arc(128, 64, 40, 0, Math.PI * 2); });
     }
   });
 }
@@ -708,7 +864,7 @@ function liquidStyle(mat, tint) {
   }
 }
 
-function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
+function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   const color = bodyColor(i, cls, [a, b, c], py);
   let m = null;
@@ -1754,18 +1910,29 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px) {
     // design. DoubleSide so it reads from any camera angle.
     m = new THREE.Group();
     const along = Math.max(a, c);
-    const kind2 = tint < 0.25 ? 0 : tint < 0.45 ? 3 : tint < 0.6 ? 1 : tint < 0.75 ? 4 : 2;
+    const k = Math.max(0, Math.min(19, Math.round(tint * 20)));
     const face = new THREE.Mesh(
       new THREE.PlaneGeometry(along * 2, b * 2),
-      new THREE.MeshBasicMaterial({ map: neonTex(kind2), transparent: true, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ map: neonTex(k), transparent: true, side: THREE.DoubleSide })
     );
     // face INTO the room or the text reads mirrored (screenshot-caught):
     // far wall looks -z; the right-wall sign looks -x
     face.rotation.y = c > a ? (px < 0 ? Math.PI / 2 : -Math.PI / 2) : Math.PI;
     m.add(face);
-    const glowCols = [0xff4fa0, 0x5ff0ff, 0xffb84f, 0xffd24f, 0xff6f5f];
-    const ng = glowSprite(glowCols[kind2] ?? 0xffb84f, Math.max(along * 2.6, b * 3.2));
+    const col = NEON_GLOW[k] ?? 0xffb84f;
+    const ng = glowSprite(col, Math.max(along * 2.6, b * 3.2));
     m.add(ng);
+    // a sign hung in the room (not on a wall) gets a pair of chains
+    if (Math.abs(px) < 3.9 && Math.abs(pz) < 2.9) {
+      for (const sx of [-along * 0.7, along * 0.7]) {
+        const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.36, 5), toonMat(0x6a6672));
+        ch.position.set(sx, b + 0.18, 0);
+        m.add(ch);
+      }
+    }
+    // the haze pass gathers signs as emitters; every third sign flickers
+    m.userData.emitter = { color: new THREE.Color(col), strength: 0.9 + along * 1.5, radius: 0.9 + along };
+    if (k % 3 === 1) animParts.push({ node: face, glow: ng, mode: 'flicker', seed: k * 1.7 + px });
     m.userData.noShadow = true;
   } else if (cls === 0 && shape === 0 && gloss > 0.85 && Math.min(a, c) < 0.02 && b >= 0.14 && b <= 0.5 && Math.max(a, c) >= 0.14 && Math.max(a, c) <= 0.6) {
     // window: frame, warm daylight pane, muntins — thin axis picks the
@@ -3861,6 +4028,13 @@ aoEl.addEventListener('change', () => {
   saveCfg();
   applyAO();
 });
+const hazeEl = document.getElementById('s-haze');
+hazeEl.value = cfg.haze;
+hazeEl.addEventListener('change', () => {
+  cfg.haze = hazeEl.value;
+  saveCfg();
+  applyAO();
+});
 applyAO();
 bindSlider('shstr', 'shadowStrength', (v) => v.toFixed(2), (v) => {
   sun.shadow.intensity = v;
@@ -4223,7 +4397,7 @@ function frame(now) {
       if (clothSet.has(i)) {
         meshes[i] = clothDummy; // skinned by its patch, not per-particle
       } else {
-        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5]);
+        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5], data[o + 7]);
         // spawned pieces (flag carries parent rec + 1) inherit the parent
         // mesh's color — TV shards look like the TV, not a fresh rainbow
         if (data[o] === 2 && !meshes[i].userData.spark) {
@@ -4387,7 +4561,15 @@ function frame(now) {
     // and looked parked. Oscillation rates unchanged.
     if (p.mode === 'spin') p.node.rotation.z = now * 0.01;
     else if (p.mode === 'pend') p.node.rotation.z = Math.sin(now * 0.0015) * 0.16;
-    else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
+    else if (p.mode === 'flicker') {
+      // a tired tube: mostly on, with a stutter every few seconds
+      const t = now * 0.001 + p.seed;
+      const stutter = Math.sin(t * 7.3) * Math.sin(t * 13.1) * Math.sin(t * 0.37);
+      const on = stutter > 0.55 ? 0.35 : 1;
+      p.node.material.opacity = on;
+      p.glow.material.opacity = 0.85 * on;
+      p.node.parent.userData.flicker = on;
+    } else p.node.rotation.y = Math.sin(now * 0.0011) * 0.7;
   }
   updateCloths(data);
   updateRings(data);
@@ -4401,7 +4583,8 @@ function frame(now) {
     ckCodes.length = 0;
     career.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
   }
-  if (aoActive) composer.render();
+  hazeFrame(now);
+  if (postActive) composer.render();
   else renderer.render(scene, camera);
 
   // floating per-cat state tags — projected AFTER render so the camera
