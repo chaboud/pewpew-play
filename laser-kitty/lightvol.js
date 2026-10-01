@@ -14,6 +14,9 @@ import * as THREE from 'three';
 
 const ATT = 0.86;       // per 10 cm texel: ~1 m to a third, ~2.5 m to a tenth
 const SCALE = 4;        // bytes store value/SCALE: headroom for stacked signs
+// gaussian kernel mass for a source centred on a texel: splats are scaled
+// so the centre texel of a centred source holds exactly the strength
+const KERNEL_SUM = (() => { let w = 0; const s2 = 2 * 0.7 * 0.7; for (let z = -1; z <= 2; z++) for (let y = -1; y <= 2; y++) for (let x = -1; x <= 2; x++) w += Math.exp(-(x * x + y * y + z * z) / s2); return w; })();
 
 export class LightVolume {
   constructor() {
@@ -34,10 +37,14 @@ export class LightVolume {
     this.originArr = new Float32Array(3);
     this.sizeArr = new Float32Array([1, 1, 1]);
     this.gain = 0.6;
+    // the laser dot stays off the grid for surfaces: an analytic red pool
+    // updated every frame (x, y, z, gain·on), so it never pops texel to texel
+    this.laserArr = new Float32Array(4);
     this.uniforms = {
       uLkLight: { value: null },
       uLkOrigin: { value: this.originArr },
       uLkSize: { value: this.sizeArr },
+      uLkLaser: { value: this.laserArr },
     };
   }
 
@@ -106,26 +113,41 @@ export class LightVolume {
     }
   }
 
-  // emitters: [{ pos, color, strength }] → the source field (max-splat
-  // into the texel and its six neighbours, so a light sitting in a wall
-  // texel still gets out)
+  // emitters: [{ pos, color, strength }] → the source field. A source is
+  // splatted over the 4×4×4 texels around its CONTINUOUS position with a
+  // gaussian of the distance to each texel centre (founder: "injection
+  // needs to be able to happen partially, as a sort of trilinear or
+  // tricubic contribution" — a light snapped to one texel popped texel
+  // to texel as it moved, which matters a lot for the laser). The
+  // kernel is renormalized so the energy is the same wherever the
+  // source sits between centres.
   inject(emitters) {
     this.src.fill(0);
     const t = this.texel, o = this.origin;
+    const sig2 = 2 * 0.7 * 0.7;
     for (const e of emitters) {
-      const ix = Math.floor((e.pos.x - o.x) / t), iy = Math.floor((e.pos.y - o.y) / t), iz = Math.floor((e.pos.z - o.z) / t);
+      const gx = (e.pos.x - o.x) / t - 0.5, gy = (e.pos.y - o.y) / t - 0.5, gz = (e.pos.z - o.z) / t - 0.5;
+      const bx = Math.floor(gx), by = Math.floor(gy), bz = Math.floor(gz);
+      let wsum = 0;
+      for (let dz = -1; dz <= 2; dz++) for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 2; dx++) {
+        const fx = bx + dx - gx, fy = by + dy - gy, fz = bz + dz - gz;
+        wsum += Math.exp(-(fx * fx + fy * fy + fz * fz) / sig2);
+      }
+      const norm = KERNEL_SUM / Math.max(wsum, 1e-6);
       const rr = e.color.r * e.strength, gg = e.color.g * e.strength, bb = e.color.b * e.strength;
-      const put = (x, y, z, k) => {
-        if (x < 0 || y < 0 || z < 0 || x >= this.nx || y >= this.ny || z >= this.nz) return;
-        const j = this.index(x, y, z) * 3;
-        if (rr * k > this.src[j]) this.src[j] = rr * k;
-        if (gg * k > this.src[j + 1]) this.src[j + 1] = gg * k;
-        if (bb * k > this.src[j + 2]) this.src[j + 2] = bb * k;
-      };
-      put(ix, iy, iz, 1);
-      put(ix + 1, iy, iz, ATT); put(ix - 1, iy, iz, ATT);
-      put(ix, iy + 1, iz, ATT); put(ix, iy - 1, iz, ATT);
-      put(ix, iy, iz + 1, ATT); put(ix, iy, iz - 1, ATT);
+      for (let dz = -1; dz <= 2; dz++) {
+        const z = bz + dz; if (z < 0 || z >= this.nz) continue;
+        for (let dy = -1; dy <= 2; dy++) {
+          const y = by + dy; if (y < 0 || y >= this.ny) continue;
+          for (let dx = -1; dx <= 2; dx++) {
+            const x = bx + dx; if (x < 0 || x >= this.nx) continue;
+            const fx = x - gx, fy = y - gy, fz = z - gz;
+            const w = Math.exp(-(fx * fx + fy * fy + fz * fz) / sig2) * norm;
+            const j = this.index(x, y, z) * 3;
+            this.src[j] += rr * w; this.src[j + 1] += gg * w; this.src[j + 2] += bb * w;
+          }
+        }
+      }
     }
   }
 
@@ -168,6 +190,37 @@ export class LightVolume {
     }
   }
 
+  // the six-neighbour flood spreads in a diamond; one separable 3-tap
+  // blur per upload rounds it into a sphere-ish falloff. Solids stay dark.
+  blur() {
+    const L = this.light, solid = this.solid;
+    if (!this.tmp || this.tmp.length !== L.length) this.tmp = new Float32Array(L.length);
+    const T = this.tmp;
+    const nx = this.nx, ny = this.ny, nz = this.nz;
+    const strides = [3, nx * 3, nx * ny * 3];
+    const dims = [nx, ny, nz];
+    let src = L, dst = T;
+    for (let axis = 0; axis < 3; axis++) {
+      const st = strides[axis], n = nx * ny * nz;
+      for (let i = 0; i < n; i++) {
+        const j = i * 3;
+        if (solid[i]) { dst[j] = dst[j + 1] = dst[j + 2] = 0; continue; }
+        const ia = axis === 0 ? i % nx : axis === 1 ? ((i / nx) | 0) % ny : (i / (nx * ny)) | 0;
+        const lo = ia > 0 ? j - st : j, hi = ia < dims[axis] - 1 ? j + st : j;
+        dst[j] = src[j] * 0.5 + (src[lo] + src[hi]) * 0.25;
+        dst[j + 1] = src[j + 1] * 0.5 + (src[lo + 1] + src[hi + 1]) * 0.25;
+        dst[j + 2] = src[j + 2] * 0.5 + (src[lo + 2] + src[hi + 2]) * 0.25;
+      }
+      const sw = src; src = dst; dst = sw;
+    }
+    // three passes: the result sits in T (L→T→L→T); copy back
+    if (src !== L) L.set(src);
+    // the blur must not dim the sources themselves (three passes took a
+    // splat's peak to a third): restore the splats on top of the rounded field
+    const S = this.src;
+    for (let i = 0; i < L.length; i++) if (S[i] > L[i]) L[i] = S[i];
+  }
+
   // a light that went out must fade: decay the field toward the sources
   // before a sweep so stale glow doesn't linger forever
   decay(k = 0.7) {
@@ -193,11 +246,18 @@ export class LightVolume {
 export const LIGHTVOL_GLSL = `
   uniform sampler3D uLkLight;
   uniform vec3 uLkOrigin, uLkSize;
+  uniform vec4 uLkLaser;
   // bytes hold light * gain / 4: this returns gain-scaled linear light
   vec3 lkLight(vec3 wp) {
     vec3 uvw = (wp - uLkOrigin) / uLkSize;
     if (any(lessThan(uvw, vec3(0.0))) || any(greaterThan(uvw, vec3(1.0)))) return vec3(0.0);
     return texture(uLkLight, uvw).rgb * 4.0;
+  }
+  // the laser's pool on surfaces, continuous (see uLkLaser)
+  vec3 lkLaser(vec3 wp) {
+    if (uLkLaser.w <= 0.0) return vec3(0.0);
+    vec3 d = wp - uLkLaser.xyz;
+    return vec3(1.0, 0.2, 0.12) * (uLkLaser.w * 0.9 / (1.0 + dot(d, d) * 60.0));
   }`;
 
 // graft the volume into every built-in lit material: a world-position
@@ -219,7 +279,7 @@ varying vec3 vLkWorld;
 #endif
 `;
   SC.lights_fragment_begin = SC.lights_fragment_begin + `
-  irradiance += lkLight(vLkWorld);
+  irradiance += lkLight(vLkWorld) + lkLaser(vLkWorld);
 `;
   for (const name of Object.keys(THREE.ShaderLib)) {
     const lib = THREE.ShaderLib[name];

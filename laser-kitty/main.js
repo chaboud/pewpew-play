@@ -6,13 +6,13 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k56';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k56';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k57';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k57';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k56';
-import { Career } from './career.js?v=k56';
-import { mountNav } from './nav.js?v=k56';
+import { CatRig } from './catrig.js?v=k57';
+import { Career } from './career.js?v=k57';
+import { mountNav } from './nav.js?v=k57';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -25,7 +25,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k56'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k57'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -203,6 +203,8 @@ let volRoomKey = '';
 let volNextInject = 0, volNextVoxel = 0, volDeep = false;
 const volCoarse = matchMedia('(pointer: coarse)').matches;
 function lightFrame(now, data, count) {
+  lightVol.laserArr[0] = dot.position.x; lightVol.laserArr[1] = dot.position.y; lightVol.laserArr[2] = dot.position.z;
+  lightVol.laserArr[3] = dot.visible ? 0.6 * cfg.bounce : 0;
   const key = `${cfg.room | 0}:${roomHX}:${roomHZ}`;
   if (key !== volRoomKey) {
     volRoomKey = key;
@@ -225,10 +227,10 @@ function lightFrame(now, data, count) {
     pl.getWorldPosition(hazeTmp);
     hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 0.35 });
   }
-  if (dot.visible) hazeEmitters.push({ pos: dot.position.clone(), color: new THREE.Color(1, 0.2, 0.12), strength: 1.4 });
   lightVol.inject(hazeEmitters);
   lightVol.decay(volDeep ? 0 : 0.85);
   lightVol.sweep(volDeep ? 5 : volCoarse ? 1 : 2);
+  lightVol.blur();
   lightVol.gain = 0.6 * cfg.bounce;
   lightVol.upload();
   if (haze) haze.uniforms.uLocal.value = 1.6 / Math.max(0.05, lightVol.gain / 0.6);
