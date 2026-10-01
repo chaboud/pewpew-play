@@ -6,12 +6,12 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass } from './haze.js?v=k54';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k55';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k54';
-import { Career } from './career.js?v=k54';
-import { mountNav } from './nav.js?v=k54';
+import { CatRig } from './catrig.js?v=k55';
+import { Career } from './career.js?v=k55';
+import { mountNav } from './nav.js?v=k55';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -24,11 +24,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k54'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k55'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -176,6 +176,8 @@ function applyAO() {
     haze = new HazePass(scene, camera, sun, { steps: coarse ? 8 : 12, scale: 0.5 });
     haze.depthSource = () => (n8ao && n8ao.beautyRenderTarget ? n8ao.beautyRenderTarget.depthTexture : null);
     composer.addPass(haze);
+    window.__haze = haze; // test hook
+    window.__renderer = renderer;
     const pr = renderer.getPixelRatio();
     const { w, h } = viewSize();
     haze.setSize(w * pr, h * pr);
@@ -194,16 +196,26 @@ function hazeFrame(now) {
     if (!m || !m.userData.emitter || !m.parent) continue;
     const e = m.userData.emitter;
     m.getWorldPosition(hazeTmp);
-    hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 1.8 * (m.userData.flicker ?? 1), radius: e.radius });
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 2.4 * (m.userData.flicker ?? 1), radius: e.radius * 1.3 });
   }
   for (const pl of litLights) {
     if (!pl.parent) continue;
     pl.getWorldPosition(hazeTmp);
-    hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 1.2, radius: Math.max(0.8, pl.distance * 0.35) });
+    hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 0.5, radius: Math.max(0.8, pl.distance * 0.35) });
   }
   haze.setEmitters(hazeEmitters);
   haze.uniforms.uTime.value = now * 0.001;
-  haze.uniforms.uDensity.value = hazeDensity();
+  haze.uniforms.uDensity.value = hazeDensity() * cfg.hazeStrength;
+  // the bar's smoke is lit by its signs, not the sun
+  haze.uniforms.uSun.value = (cfg.room | 0) === 8 ? 0.3 : (cfg.room | 0) === 9 ? 0.6 : 1;
+  haze.glowOn = cfg.glowStrength > 0;
+  haze.glowStrength = cfg.glowStrength;
+  for (const m of meshes) if (m && m.userData.neonSprite) m.userData.neonSprite.visible = !haze.glowOn;
+  haze.uniforms.laserOn.value = dot.visible ? 1 : 0;
+  if (dot.visible) {
+    haze.uniforms.laserA.value.copy(beltWorld());
+    haze.uniforms.laserB.value.copy(dot.position);
+  }
   haze.uniforms.uCeil.value = (cfg.room | 0) === 7 ? 24 : 3.2;
   haze.uniforms.uRoom.value.set(roomHX || 4, (cfg.room | 0) === 7 ? 24 : (cfg.room | 0) === 6 ? 4.6 : 3.6, roomHZ || 3);
 }
@@ -687,6 +699,7 @@ function glowSprite(color, scale) {
     opacity: 0.85,
   }));
   sp.scale.set(scale, scale, 1);
+  sp.layers.enable(GLOW_LAYER);
   return sp;
 }
 const glowSprites = []; // fixture glows that die with their fixture
@@ -1920,8 +1933,11 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
     face.rotation.y = c > a ? (px < 0 ? Math.PI / 2 : -Math.PI / 2) : Math.PI;
     m.add(face);
     const col = NEON_GLOW[k] ?? 0xffb84f;
+    face.layers.enable(GLOW_LAYER); // the tubes themselves are the glow source
     const ng = glowSprite(col, Math.max(along * 2.6, b * 3.2));
+    ng.layers.disable(GLOW_LAYER);
     m.add(ng);
+    m.userData.neonSprite = ng; // hidden while the glow pass runs
     // a sign hung in the room (not on a wall) gets a pair of chains
     if (Math.abs(px) < 3.9 && Math.abs(pz) < 2.9) {
       for (const sx of [-along * 0.7, along * 0.7]) {
@@ -3117,6 +3133,7 @@ const dot = new THREE.Mesh(
   new THREE.SphereGeometry(0.028, 10, 8),
   new THREE.MeshBasicMaterial({ color: 0xff3b30 })
 );
+dot.layers.enable(GLOW_LAYER);
 scene.add(dot);
 const spill = new THREE.Mesh(
   new THREE.CircleGeometry(1, 20),
@@ -4039,6 +4056,8 @@ applyAO();
 bindSlider('shstr', 'shadowStrength', (v) => v.toFixed(2), (v) => {
   sun.shadow.intensity = v;
 });
+bindSlider('hazestr', 'hazeStrength', (v) => v.toFixed(1));
+bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
 bindSlider('aostr', 'aoStrength', (v) => v.toFixed(1), (v) => {
   if (n8ao) n8ao.configuration.intensity = v;
 });

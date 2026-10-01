@@ -16,6 +16,9 @@ import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
 
 export const MAX_EMITTERS = 32;
+// objects on this layer are the glow pass's sources: neon tube faces,
+// fixture glow sprites, the laser dot
+export const GLOW_LAYER = 3;
 
 const VERT = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
@@ -25,7 +28,9 @@ const MARCH = `
   uniform sampler2D shadowMap;
   uniform mat4 shadowMatrix, invProj, invView;
   uniform vec3 camPos, sunDir, sunColor, ambient;
-  uniform float sunOn, uDensity, uTime, uFloor, uCeil;
+  uniform float sunOn, uSun, uDensity, uTime, uFloor, uCeil;
+  uniform vec3 laserA, laserB, laserCol;
+  uniform float laserOn;
   uniform vec3 uRoom; // half extents (x, ceiling, z): the haze lives inside the shell
   uniform int uSteps, eCount;
   uniform vec3 ePos[${MAX_EMITTERS}];
@@ -86,12 +91,21 @@ const MARCH = `
       float t = (float(i) + jitter) * dt;
       vec3 p = ro + rd * t;
       float dens = density(p);
-      vec3 sun = sunColor * (hg * sunVisible(p)) * sunOn;
+      vec3 sun = sunColor * (hg * sunVisible(p)) * sunOn * uSun;
       vec3 loc = vec3(0.0);
       for (int e = 0; e < ${MAX_EMITTERS}; e++) {
         if (e >= eCount) break;
         vec3 L = ePos[e] - p;
         loc += eCol[e] / (1.0 + dot(L, L) * eInv[e]);
+      }
+      // the laser: a thin red beam from the belt to the dot, and a hot
+      // point at the dot — the beam only shows where the haze is thick
+      if (laserOn > 0.5) {
+        vec3 ab = laserB - laserA;
+        float tt = clamp(dot(p - laserA, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
+        vec3 q = laserA + ab * tt - p;
+        vec3 qd = laserB - p;
+        loc += laserCol * (2.5 / (1.0 + dot(q, q) * 900.0) + 6.0 / (1.0 + dot(qd, qd) * 80.0));
       }
       loc = loc / (1.0 + loc * 0.6); // the knee: a sign is a glow, not a sun
       vec3 S = (sun + loc + ambient) * dens;
@@ -104,8 +118,9 @@ const MARCH = `
 
 const COMPOSITE = `
   precision highp float;
-  uniform sampler2D tDiffuse, tHaze;
+  uniform sampler2D tDiffuse, tHaze, tGlow;
   uniform float uMode; // 0: both linear (this pass drew the scene) · 1: colour already display-encoded (N8AO)
+  uniform float uGlow;
   varying vec2 vUv;
   uniform vec2 uTexel; // one haze-buffer texel
   vec3 oetf(vec3 c) { return pow(max(c, 0.0), vec3(1.0 / 2.2)); }
@@ -118,7 +133,28 @@ const COMPOSITE = `
     // composite in linear light either way: an encoded frame is decoded
     // first (adding encoded in-scatter lifted every black by a gamma floor)
     vec3 lin = uMode < 0.5 ? c.rgb : eotf(c.rgb);
-    gl_FragColor = vec4(oetf(lin * h.a + h.rgb), c.a);
+    // the sources are small on screen (a 30 cm tube at 9 m is a few texels
+    // at half res) and the blur spreads them thin: a fixed gain makes a tube
+    // read as HOT, the slider scales from there
+    vec3 glow = texture2D(tGlow, vUv).rgb * uGlow * 4.0;
+    gl_FragColor = vec4(oetf(lin * h.a + h.rgb + glow), c.a);
+  }`;
+
+// separable 9-tap gaussian over the quarter-res glow source; run twice
+// with a widened radius for a soft halo shaped like the tubes
+const BLUR = `
+  precision highp float;
+  uniform sampler2D tSrc;
+  uniform vec2 uDir; // texel step along the blur axis
+  varying vec2 vUv;
+  void main() {
+    float w0 = 0.227027, w1 = 0.1945946, w2 = 0.1216216, w3 = 0.054054, w4 = 0.016216;
+    vec3 acc = texture2D(tSrc, vUv).rgb * w0;
+    acc += (texture2D(tSrc, vUv + uDir).rgb + texture2D(tSrc, vUv - uDir).rgb) * w1;
+    acc += (texture2D(tSrc, vUv + uDir * 2.0).rgb + texture2D(tSrc, vUv - uDir * 2.0).rgb) * w2;
+    acc += (texture2D(tSrc, vUv + uDir * 3.0).rgb + texture2D(tSrc, vUv - uDir * 3.0).rgb) * w3;
+    acc += (texture2D(tSrc, vUv + uDir * 4.0).rgb + texture2D(tSrc, vUv - uDir * 4.0).rgb) * w4;
+    gl_FragColor = vec4(acc, 1.0);
   }`;
 
 export class HazePass extends Pass {
@@ -143,17 +179,28 @@ export class HazePass extends Pass {
       invProj: { value: new THREE.Matrix4() }, invView: { value: new THREE.Matrix4() },
       camPos: { value: new THREE.Vector3() }, sunDir: { value: new THREE.Vector3(0, 1, 0) },
       sunColor: { value: new THREE.Vector3(1.6, 1.4, 1.05) }, ambient: { value: new THREE.Vector3(0.025, 0.02, 0.035) },
-      sunOn: { value: 1 }, uDensity: { value: 0.08 }, uTime: { value: 0 }, uFloor: { value: 0 }, uCeil: { value: 3.0 },
+      sunOn: { value: 1 }, uSun: { value: 1 }, laserA: { value: new THREE.Vector3() }, laserB: { value: new THREE.Vector3() },
+      laserCol: { value: new THREE.Vector3(1.0, 0.16, 0.1) }, laserOn: { value: 0 }, uDensity: { value: 0.08 }, uTime: { value: 0 }, uFloor: { value: 0 }, uCeil: { value: 3.0 },
       uSteps: { value: steps }, eCount: { value: 0 }, uRoom: { value: new THREE.Vector3(4, 3.2, 3) },
       ePos: { value: ePos }, eCol: { value: eCol }, eInv: { value: new Float32Array(MAX_EMITTERS).fill(1) },
     };
     this.mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, fragmentShader: MARCH, depthTest: false, depthWrite: false });
     this.quad = new FullScreenQuad(this.mat);
     this.compMat = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, tHaze: { value: this.target.texture }, uMode: { value: 0 }, uTexel: { value: new THREE.Vector2(1 / 360, 1 / 600) } },
+      uniforms: { tDiffuse: { value: null }, tHaze: { value: this.target.texture }, tGlow: { value: null }, uGlow: { value: 1 }, uMode: { value: 0 }, uTexel: { value: new THREE.Vector2(1 / 360, 1 / 600) } },
       vertexShader: VERT, fragmentShader: COMPOSITE, depthTest: false, depthWrite: false,
     });
     this.compQuad = new FullScreenQuad(this.compMat);
+    // glow pass: the GLOW_LAYER objects rendered alone at half res,
+    // blurred twice (the second pass at a wider radius)
+    const gopt = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+    this.glowA = new THREE.WebGLRenderTarget(1, 1, gopt);
+    this.glowB = new THREE.WebGLRenderTarget(1, 1, gopt);
+    this.blurMat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } }, vertexShader: VERT, fragmentShader: BLUR, depthTest: false, depthWrite: false });
+    this.blurQuad = new FullScreenQuad(this.blurMat);
+    this.glowOn = true;
+    this.glowStrength = 1;
+    this.compMat.uniforms.tGlow.value = this.glowA.texture;
   }
 
   // emitters: [{ pos: Vector3, color: Color, strength, radius }]
@@ -173,6 +220,8 @@ export class HazePass extends Pass {
     this.w = Math.max(1, w | 0); this.h = Math.max(1, h | 0);
     this.target.setSize(Math.max(1, Math.floor(this.w * this.scale)), Math.max(1, Math.floor(this.h * this.scale)));
     this.compMat.uniforms.uTexel.value.set(1 / this.target.width, 1 / this.target.height);
+    this.glowA.setSize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
+    this.glowB.setSize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
     if (this.sceneTarget) this.sceneTarget.setSize(this.w, this.h);
   }
 
@@ -206,6 +255,8 @@ export class HazePass extends Pass {
     u.sunDir.value.copy(this.sun.position).sub(this.sun.target.position).normalize();
     renderer.setRenderTarget(this.target);
     this.quad.render(renderer);
+    if (this.glowOn) this.renderGlow(renderer);
+    this.compMat.uniforms.uGlow.value = this.glowOn ? this.glowStrength : 0;
     this.compMat.uniforms.tDiffuse.value = color;
     this.compMat.uniforms.tHaze.value = this.target.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
@@ -213,7 +264,45 @@ export class HazePass extends Pass {
     this.compQuad.render(renderer);
   }
 
+  renderGlow(renderer) {
+    // sources only: swap the camera to the glow layer, no fog, no
+    // background, and no shadow re-render for this extra pass
+    const cam = this.camera, sc = this.scene;
+    const mask = cam.layers.mask;
+    const fog = sc.fog, bg = sc.background;
+    const au = renderer.shadowMap.autoUpdate;
+    const oldClear = new THREE.Color();
+    renderer.getClearColor(oldClear);
+    const oldAlpha = renderer.getClearAlpha();
+    cam.layers.set(GLOW_LAYER);
+    sc.fog = null; sc.background = null;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.setClearColor(0x000000, 1);
+    renderer.setRenderTarget(this.glowA);
+    renderer.clear();
+    renderer.render(sc, cam);
+    renderer.setClearColor(oldClear, oldAlpha);
+    renderer.shadowMap.autoUpdate = au;
+    sc.fog = fog; sc.background = bg;
+    cam.layers.mask = mask;
+    const tw = 1 / this.glowA.width, th = 1 / this.glowA.height;
+    for (const r of [1.5, 4]) {
+      this.blurMat.uniforms.tSrc.value = this.glowA.texture;
+      this.blurMat.uniforms.uDir.value.set(tw * r, 0);
+      renderer.setRenderTarget(this.glowB);
+      this.blurQuad.render(renderer);
+      this.blurMat.uniforms.tSrc.value = this.glowB.texture;
+      this.blurMat.uniforms.uDir.value.set(0, th * r);
+      renderer.setRenderTarget(this.glowA);
+      this.blurQuad.render(renderer);
+    }
+  }
+
   dispose() {
+    this.glowA.dispose();
+    this.glowB.dispose();
+    this.blurMat.dispose();
+    this.blurQuad.dispose();
     this.target.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
     this.mat.dispose();

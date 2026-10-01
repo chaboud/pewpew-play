@@ -112,6 +112,10 @@
     <option value="on">On</option>
     <option value="off">Off</option>
   </select></div>
+  <label>Haze strength</label>
+  <div class="row"><input type="range" id="s-hazestr" min="0" max="3" step="0.1"><span class="val" id="v-hazestr"></span></div>
+  <label>Glow</label>
+  <div class="row"><input type="range" id="s-glowstr" min="0" max="3" step="0.1"><span class="val" id="v-glowstr"></span></div>
   <label>Shadow strength</label>
   <div class="row"><input type="range" id="s-shstr" min="0.2" max="1" step="0.05"><span class="val" id="v-shstr"></span></div>
   <label>SSAO strength</label>
@@ -135,7 +139,7 @@
   <label class="row"><input type="checkbox" id="s-sound"> Sound</label>
   <label class="row"><input type="checkbox" id="s-pops"> Score pop-ups</label>
   <button id="s-defaults" style="width:100%;margin-top:10px;padding:6px;border-radius:8px;border:1px solid #3a3644;background:#241f31;color:#cfd4e6;font:600 12px system-ui,sans-serif;">Reset to defaults</button>
-  <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live &middot; build <b id="buildtag">k54</b></div>
+  <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live &middot; build <b id="buildtag">k55</b></div>
 </div>
 <div id="hud">
   <div id="score">0</div>
@@ -153,6 +157,6 @@
   "postprocessing": "./vendor/pp-stub.js"
 }}
 </script>
-<script type="module" src="main.js?v=k54"></script>
+<script type="module" src="main.js?v=k55"></script>
 </body>
 </html>
