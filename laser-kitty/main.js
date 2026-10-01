@@ -6,13 +6,13 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k57';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k57';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k58';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k58';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k57';
-import { Career } from './career.js?v=k57';
-import { mountNav } from './nav.js?v=k57';
+import { CatRig } from './catrig.js?v=k58';
+import { Career } from './career.js?v=k58';
+import { mountNav } from './nav.js?v=k58';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -25,7 +25,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k57'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k58'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -193,14 +193,15 @@ function applyAO() {
   postActive = !!composer && composer.passes.length > 0;
 }
 // the light volume's frame: (re)build the grid when the room changes,
-// re-voxelize the furniture every couple of seconds, and at ~6 Hz inject
-// every emitter — neon signs (tagged at recognition, dimmed by their
-// flicker), budgeted point lights, the laser dot — and flood a couple
-// of rounds. The first flood after a room build runs deeper.
+// hand the furniture rows to the worker every couple of seconds, and
+// hand it this frame's emitters — neon signs (tagged at recognition,
+// dimmed by their flicker), budgeted point lights, the laser dot — so
+// its next refinement step uses them. The worker refines as fast as it
+// can; results ease into the texture (see lightvol.js).
 const hazeEmitters = [];
 const hazeTmp = new THREE.Vector3();
 let volRoomKey = '';
-let volNextInject = 0, volNextVoxel = 0, volDeep = false;
+let volNextVoxel = 0;
 const volCoarse = matchMedia('(pointer: coarse)').matches;
 function lightFrame(now, data, count) {
   lightVol.laserArr[0] = dot.position.x; lightVol.laserArr[1] = dot.position.y; lightVol.laserArr[2] = dot.position.z;
@@ -209,12 +210,12 @@ function lightFrame(now, data, count) {
   if (key !== volRoomKey) {
     volRoomKey = key;
     const r = cfg.room | 0;
-    lightVol.setup(roomHX, roomHZ, r === 7 ? 24 : r === 6 ? 4.6 : 3.6);
-    volNextVoxel = 0; volNextInject = 0; volDeep = true;
+    // denser grid on fine pointers (founder: "we could also have a higher density grid")
+    lightVol.setup(roomHX, roomHZ, r === 7 ? 24 : r === 6 ? 4.6 : 3.6, volCoarse ? 0.1 : 0.07);
+    lightVol.minInterval = volCoarse ? 80 : 40;
+    volNextVoxel = 0;
   }
   if (now >= volNextVoxel) { lightVol.voxelize(data, count); volNextVoxel = now + 2000; }
-  if (now < volNextInject) return;
-  volNextInject = now + (volCoarse ? 250 : 160);
   hazeEmitters.length = 0;
   for (const m of meshes) {
     if (!m || !m.userData.emitter || !m.parent) continue;
@@ -227,14 +228,13 @@ function lightFrame(now, data, count) {
     pl.getWorldPosition(hazeTmp);
     hazeEmitters.push({ pos: hazeTmp.clone(), color: pl.color, strength: pl.intensity * 0.35 });
   }
-  lightVol.inject(hazeEmitters);
-  lightVol.decay(volDeep ? 0 : 0.85);
-  lightVol.sweep(volDeep ? 5 : volCoarse ? 1 : 2);
-  lightVol.blur();
+  // the laser lights the room (founder: "I like the laser contributing
+  // to global-ish illumination") — the volume carries its spread, the
+  // analytic core on surfaces stays sharp
+  if (dot.visible) hazeEmitters.push({ pos: dot.position.clone(), color: new THREE.Color(1, 0.2, 0.12), strength: 1.6 });
   lightVol.gain = 0.6 * cfg.bounce;
-  lightVol.upload();
+  lightVol.setEmitters(hazeEmitters);
   if (haze) haze.uniforms.uLocal.value = 1.6 / Math.max(0.05, lightVol.gain / 0.6);
-  volDeep = false;
 }
 function hazeFrame(now) {
   if (!haze) return;
