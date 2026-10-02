@@ -22,6 +22,10 @@
     #cities { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
     #cities button { padding: 8px 14px; font-size: 13px; background: #1b2238; color: #9aa3b8; border: 1px solid #2b3350; }
     #cities button.on { background: #2b3350; color: #ffd23a; border-color: #ffd23a; }
+    #addr-form { display: flex; gap: 8px; width: min(420px, 100%); }
+    #addr { flex: 1; min-width: 0; padding: 10px 12px; font: inherit; font-size: 15px; border-radius: 10px; border: 1px solid #2b3350; background: #1b2238; color: #e9ecf5; }
+    #addr-results { display: flex; flex-direction: column; gap: 6px; width: min(420px, 100%); }
+    #addr-results button { text-align: left; padding: 8px 12px; font-size: 13px; background: #1b2238; color: #e9ecf5; border: 1px solid #2b3350; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; font-size: 13px; line-height: 1.45; text-shadow: 0 1px 2px #000; }
     #hud .big { font-size: 30px; font-weight: 700; color: #ffd23a; }
     #hud .right { text-align: right; }
@@ -54,7 +58,7 @@
     #prof button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
   </style>
-  <script type="module" crossorigin src="./assets/main-BpKtfSU6.js"></script>
+  <script type="module" crossorigin src="./assets/main-B-TIiuBe.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-BlwSo0Ad.js">
 </head>
 <body>
@@ -66,9 +70,14 @@
     <div id="cities"></div>
     <button id="btn-continue" class="hidden">Continue</button>
     <button id="btn-couch">Couch mode</button>
-    <button id="btn-here" class="secondary">Where I am (your real GPS)</button>
+    <form id="addr-form">
+      <input id="addr" disabled type="search" placeholder="Start at an address, a place, or lat, lon" autocomplete="street-address" enterkeyhint="go">
+      <button type="submit" disabled>Go</button>
+    </form>
+    <div id="addr-results"></div>
+    <button id="btn-here" class="secondary">Start where I am (your real GPS)</button>
     <button id="btn-walk" class="secondary">Walk here (your GPS, translated)</button>
-    <p>Where I am puts the kaiju at your real position when you are inside the map, and it follows you. Walk mode maps your real movement onto the chosen city from its centre. Screen stays on; a PWA gets no GPS with the screen off.</p>
+    <p>Start at any address and the city around it is built for you (a minute the first time, then kept). Where I am does the same at your real position, and the kaiju follows you as you walk. Walk mode maps your movement onto the chosen city from its centre. Screen stays on; a PWA gets no GPS with the screen off.</p>
   </div>
   <div id="hud" class="hidden">
     <div>
