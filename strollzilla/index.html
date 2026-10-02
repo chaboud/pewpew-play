@@ -16,6 +16,27 @@
     .hidden { display: none !important; }
     #boot { position: fixed; inset: 0; z-index: 50; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(11,16,32,0.92); padding: 24px; text-align: center; }
     #boot h1 { font-size: 22px; letter-spacing: 0.04em; }
+    /* centred while it fits, scrollable from its top when it does not (a centred flex column overflows upward, out of reach) */
+    #boot { justify-content: flex-start; }
+    #boot > :first-child { margin-top: auto; }
+    #boot > :last-child { margin-bottom: auto; }
+    #kaiju-pick { width: min(560px, 100%); display: flex; flex-direction: column; gap: 8px; }
+    #kaiju-pick .kp-head { color: #d7dbe6; font-size: 13px; }
+    .kp-row { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; }
+    .kp-card { flex: 0 0 132px; scroll-snap-align: start; background: #1b2238; border: 1px solid #2b3350; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 3px; text-align: left; font-size: 11px; color: #9aa3b8; }
+    .kp-card b { color: #e9ecf5; font-size: 14px; }
+    .kp-card .kp-size { color: #ffd23a; }
+    .kp-card .kp-best { color: #7fc4ff; }
+    .kp-card.on { border-color: #ffd23a; }
+    .kp-card.locked { opacity: 0.65; }
+    .kp-card button { margin-top: auto; padding: 6px 8px; font-size: 12px; }
+    .kp-card button:disabled, .kp-up button:disabled { opacity: 0.5; }
+    .kp-ups { display: flex; flex-direction: column; gap: 4px; }
+    .kp-up { display: flex; align-items: center; gap: 8px; font-size: 12px; text-align: left; }
+    .kp-up > span:first-child { flex: 1; }
+    .kp-up small { color: #6f7890; }
+    .kp-dots { color: #ffd23a; letter-spacing: 1px; }
+    .kp-up button { padding: 5px 9px; font-size: 12px; min-width: 76px; }
     #boot p { color: #9aa3b8; font-size: 13px; max-width: 420px; line-height: 1.5; }
     button { font: inherit; color: #0b1020; background: #ffd23a; border: 0; border-radius: 10px; padding: 14px 22px; font-size: 16px; font-weight: 700; cursor: pointer; }
     button.secondary { background: #2b3350; color: #e9ecf5; }
@@ -71,8 +92,8 @@
     #prof button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
   </style>
-  <script type="module" crossorigin src="./assets/main-DN0LuhZN.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-CZ98jtDK.js">
+  <script type="module" crossorigin src="./assets/main-DEe5EmoS.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-CEA3LEfM.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -82,6 +103,7 @@
     <p>You are big. The city is real. Walk into things.</p>
     <div id="cities"></div>
     <button id="btn-continue" class="hidden">Continue</button>
+    <div id="kaiju-pick"></div>
     <div id="where">
       <button id="btn-couch">Start in this city</button>
       <form id="addr-form">
