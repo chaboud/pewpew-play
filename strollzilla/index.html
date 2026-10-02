@@ -22,9 +22,7 @@
     #cities { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
     #cities button { padding: 8px 14px; font-size: 13px; background: #1b2238; color: #9aa3b8; border: 1px solid #2b3350; }
     #cities button.on { background: #2b3350; color: #ffd23a; border-color: #ffd23a; }
-    .seg { display: flex; gap: 0; border: 1px solid #2b3350; border-radius: 10px; overflow: hidden; }
-    .seg button { border-radius: 0; padding: 8px 14px; font-size: 13px; background: #1b2238; color: #9aa3b8; }
-    .seg button.on { background: #2b3350; color: #ffd23a; }
+    #where, #how { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
     #addr-form { display: flex; gap: 8px; width: min(420px, 100%); }
     #addr { flex: 1; min-width: 0; padding: 10px 12px; font: inherit; font-size: 15px; border-radius: 10px; border: 1px solid #2b3350; background: #1b2238; color: #e9ecf5; }
     #addr-results { display: flex; flex-direction: column; gap: 6px; width: min(420px, 100%); }
@@ -61,7 +59,7 @@
     #prof button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
   </style>
-  <script type="module" crossorigin src="./assets/main-DRARi3-w.js"></script>
+  <script type="module" crossorigin src="./assets/main-DgUlMHg_.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-BlwSo0Ad.js">
 </head>
 <body>
@@ -72,15 +70,22 @@
     <p>You are big. The city is real. Walk into things.</p>
     <div id="cities"></div>
     <button id="btn-continue" class="hidden">Continue</button>
-    <div id="play-how" class="seg"><button data-how="couch" class="on">Couch: the stick</button><button data-how="walk">Walk: your real steps</button></div>
-    <button id="btn-couch">Start in this city</button>
-    <form id="addr-form">
-      <input id="addr" disabled type="search" placeholder="Start at an address, a place, or lat, lon" autocomplete="street-address" enterkeyhint="go">
-      <button type="submit" disabled>Go</button>
-    </form>
-    <div id="addr-results"></div>
-    <button id="btn-here" class="secondary">Start where I am</button>
-    <p>Pick how, then where. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps; from where you stand, the kaiju follows you. Keep the screen on while walking.</p>
+    <div id="where">
+      <button id="btn-couch">Start in this city</button>
+      <form id="addr-form">
+        <input id="addr" disabled type="search" placeholder="Start at an address, a place, or lat, lon" autocomplete="street-address" enterkeyhint="go">
+        <button type="submit" disabled>Go</button>
+      </form>
+      <div id="addr-results"></div>
+      <button id="btn-here" class="secondary">Start where I am</button>
+    </div>
+    <div id="how" class="hidden">
+      <p id="how-where"></p>
+      <button id="btn-how-couch">Couch: the stick</button>
+      <button id="btn-how-walk" class="secondary">Walk it: your real steps (GPS)</button>
+      <button id="btn-how-back" class="secondary">back</button>
+    </div>
+    <p>Pick where, then how. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps from wherever the kaiju starts; from where you stand, it follows you. Keep the screen on while walking.</p>
   </div>
   <div id="hud" class="hidden">
     <div>
