@@ -6,13 +6,13 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k58';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k58';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k59';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k59';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k58';
-import { Career } from './career.js?v=k58';
-import { mountNav } from './nav.js?v=k58';
+import { CatRig } from './catrig.js?v=k59';
+import { Career } from './career.js?v=k59';
+import { mountNav } from './nav.js?v=k59';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -25,7 +25,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k58'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k59'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -1816,6 +1816,56 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
     const spout = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.008, 6, 12, Math.PI), steel);
     spout.position.set(0, b + 0.045, c * 0.75);
     m.add(spout);
+  } else if (cls === 1 && shape === 0 && Math.abs(c - 0.015) < 0.003 && Math.abs(a - 0.35) < 0.01 && (Math.abs(b - 0.78) < 0.01 || Math.abs(b - 0.22) < 0.01) && gloss >= 0.6) {
+    // fridge / freezer door: enamel slab with a long handle on the free
+    // (-x) edge and a gasket line; hinged on the sim side
+    m = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), new THREE.MeshPhongMaterial({ color: 0xeceae4, shininess: 90, specular: 0xccd6dd }));
+    m.add(slab);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.02, Math.min(b * 1.4, 0.5), 0.025), new THREE.MeshPhongMaterial({ color: 0x9aa0aa, shininess: 120, specular: 0xffffff }));
+    handle.position.set(-a + 0.05, 0, -c - 0.016);
+    m.add(handle);
+    const gasket = new THREE.Mesh(new THREE.BoxGeometry(a * 1.92, b * 1.92, 0.004), toonMat(0x4a4a52));
+    gasket.position.z = c + 0.001;
+    m.add(gasket);
+  } else if (cls === 1 && shape === 0 && Math.abs(c - 0.012) < 0.003 && ((Math.abs(a - 0.19) < 0.01 && Math.abs(b - 0.36) < 0.01) || (Math.abs(a - 0.24) < 0.01 && Math.abs(b - 0.29) < 0.01)) && Math.abs(gloss - 0.3) < 0.05) {
+    // cabinet door: wood panel with a raised field and a knob near the
+    // free edge (the sim hinges it; the knob side is whichever edge is
+    // farther from the hinge — guessed as the inner edge for pairs)
+    m = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(0xa08056, { map: woodTex }));
+    m.add(panel);
+    const field = new THREE.Mesh(new THREE.BoxGeometry(a * 1.5, b * 1.6, 0.006), toonMat(0x8c6c48, { map: woodTex }));
+    field.position.z = -c - 0.002;
+    m.add(field);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshPhongMaterial({ color: 0xc8b070, shininess: 100, specular: 0xffffff }));
+    // left-hinged doors (free edge +x): the sink pair's left, the island
+    // pair's left, the upper cabinet's left
+    const leftHinged = px < -2.4 || Math.abs(px + 1.0) < 0.05 || (px > 1.2 && px < 1.6);
+    knob.position.set(leftHinged ? a - 0.03 : -a + 0.03, 0, -c - 0.012);
+    m.add(knob);
+  } else if (cls === 2 && shape === 0 && Math.abs(a - 0.032) < 0.002 && Math.abs(b - 0.055) < 0.003 && Math.abs(c - 0.032) < 0.002 && Math.abs(gloss - 0.72) < 0.02) {
+    // tin can: steel cylinder with a paper label band in the sim's tint hue
+    m = new THREE.Group();
+    const steelC = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, shininess: 110, specular: 0xffffff });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(a, a, b * 2, 12), steelC);
+    m.add(body);
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.02, a * 1.02, b * 1.5, 12, 1, true), toonMat(new THREE.Color().setHSL(tint ?? 0.5, 0.75, 0.5), { side: THREE.DoubleSide }));
+    m.add(label);
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(a * 1.03, a * 1.03, b * 0.3, 12, 1, true), toonMat(0xf4f0e6, { side: THREE.DoubleSide }));
+    m.add(stripe);
+  } else if (cls === 2 && shape === 0 && ((Math.abs(a - 0.07) < 0.004 && Math.abs(b - 0.14) < 0.006 && Math.abs(c - 0.025) < 0.004) || (Math.abs(a - 0.05) < 0.004 && Math.abs(b - 0.11) < 0.006 && Math.abs(c - 0.03) < 0.004)) && Math.abs(gloss - 0.2) < 0.02) {
+    // cereal / pasta box: a bright carton in the tint hue with a pale
+    // label panel on the front
+    m = new THREE.Group();
+    const carton = new THREE.Mesh(new THREE.BoxGeometry(a * 2, b * 2, c * 2), toonMat(new THREE.Color().setHSL(tint ?? 0.5, 0.7, 0.48)));
+    m.add(carton);
+    const lab = new THREE.Mesh(new THREE.BoxGeometry(a * 1.3, b * 0.9, 0.004), toonMat(0xfff4dc));
+    lab.position.set(0, b * 0.15, -c - 0.001);
+    m.add(lab);
+    const lab2 = lab.clone();
+    lab2.position.z = c + 0.001;
+    m.add(lab2);
   } else if (cls === 2 && shape === 0 && Math.abs(a - 0.055) < 0.003 && Math.abs(b - 0.045) < 0.004 && Math.abs(c - 0.055) < 0.003 && gloss > 0.5) {
     // steel pot: cylinder, rim, handle nubs
     m = new THREE.Group();
