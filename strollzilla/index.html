@@ -91,15 +91,18 @@
     #prof pre { margin: 0 0 6px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; }
     #prof button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
+    #boot-last { color: #ffb8a8; font-size: 12px; line-height: 1.35; cursor: pointer; }
+    #boot-last.hidden { display: none; }
   </style>
-  <script type="module" crossorigin src="./assets/main-cjxxs6Ql.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-lSlRizsZ.js">
+  <script type="module" crossorigin src="./assets/main-n3fwiN5Z.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-DVQh8VdQ.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
   <div id="boot">
     <h1 id="boot-title">Strollzilla: Kaiju Country</h1>
     <p id="boot-stats">loading the city…</p>
+    <p id="boot-last" class="hidden"></p>
     <p>You are big. The city is real. Walk into things.</p>
     <div id="cities"></div>
     <button id="btn-continue" class="hidden">Continue</button>
@@ -131,6 +134,7 @@
       <div id="hud-dist">0 m</div>
       <div id="hud-size"></div>
       <div class="btns">
+        <button id="btn-menu" aria-label="main menu" title="main menu (saves the run)">☰</button>
         <button id="btn-cam">camera</button>
         <button id="btn-dbg">DBG</button>
         <button id="btn-prof">prof</button>
