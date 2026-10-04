@@ -93,8 +93,12 @@
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
     #boot-last { color: #ffb8a8; font-size: 12px; line-height: 1.35; cursor: pointer; }
     #boot-last.hidden { display: none; }
+    #fresh-row { display: block; margin: 10px 0 2px; font-size: 13px; color: #c9cbd6; }
+    #fresh-row input { vertical-align: middle; margin-right: 6px; }
+    /* destructive and rare: small and quiet, under everything else */
+    #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-Bjif8G3V.js"></script>
+  <script type="module" crossorigin src="./assets/main-Ci1rdJO_.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-CmHSYF2j.js">
 </head>
 <body>
@@ -115,6 +119,7 @@
       </form>
       <div id="addr-results"></div>
       <button id="btn-here" class="secondary">Start where I am</button>
+      <label id="fresh-row"><input type="checkbox" id="fresh"> Start fresh: forget the wreck saved where you start</label>
     </div>
     <div id="how" class="hidden">
       <p id="how-where"></p>
@@ -122,6 +127,7 @@
       <button id="btn-how-walk" class="secondary">Walk it: your real steps (GPS)</button>
       <button id="btn-how-back" class="secondary">back</button>
     </div>
+    <button id="btn-reset" class="secondary">Reset: clear saved runs, wreckage and the maps built for you</button>
     <p>Pick where, then how. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps from wherever the kaiju starts; from where you stand, it follows you. Keep the screen on while walking.</p>
   </div>
   <div id="hud" class="hidden">
