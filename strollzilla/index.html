@@ -92,6 +92,11 @@
     #prof { position: fixed; left: 8px; bottom: max(150px, calc(env(safe-area-inset-bottom) + 140px)); right: 8px; background: rgba(11,16,32,0.92); border: 1px solid #2b3350; border-radius: 10px; padding: 8px 10px; font-size: 10px; line-height: 1.35; color: #d7dbe6; z-index: 5; }
     #prof pre { margin: 0 0 6px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; }
     #prof button { font-size: 11px; padding: 4px 8px; }
+    /* the RAM inventory (app/ram.ts): over the prof readout's place, scrolls if long */
+    #ram { position: fixed; left: 8px; right: 8px; top: max(120px, calc(env(safe-area-inset-top) + 110px)); max-height: 55vh; overflow: auto; background: rgba(11,16,32,0.94); border: 1px solid #2b3350; border-radius: 10px; padding: 8px 10px; font-size: 10px; line-height: 1.35; color: #d7dbe6; z-index: 6; }
+    #ram.hidden { display: none; }
+    #ram pre { margin: 0 0 6px; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Menlo, monospace; }
+    #ram button { font-size: 11px; padding: 4px 8px; }
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
     #boot-last { color: #ffb8a8; font-size: 12px; line-height: 1.35; cursor: pointer; }
     #boot-last.hidden { display: none; }
@@ -109,8 +114,8 @@
     #log-note { color: #9aa0b8; font-size: 12px; margin: 6px 0 0; }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-hgDmoP-V.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-C_0Oso8J.js">
+  <script type="module" crossorigin src="./assets/main-BzPBrfEE.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-DrI89qPS.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -165,6 +170,7 @@
   <button id="special">SPECIAL</button>
   <div id="fps"></div>
   <div id="prof" class="hidden"><pre></pre><button id="prof-copy">copy json</button></div>
+  <div id="ram" class="hidden"><pre></pre><button id="ram-copy">copy json</button> <button id="ram-close" aria-label="close">✕</button></div>
   <div id="log" class="hidden"><div class="head"><b>flight log</b><span><button id="log-copy">copy</button><button id="log-close" aria-label="close">✕</button></span></div><textarea id="log-text" readonly spellcheck="false"></textarea><p id="log-note"></p></div>
   <div id="scrim" class="hidden"></div>
   <div id="panel" class="hidden"></div>
