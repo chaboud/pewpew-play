@@ -98,10 +98,19 @@
     #fresh-row { display: block; margin: 10px 0 2px; font-size: 13px; color: #c9cbd6; }
     #fresh-row input { vertical-align: middle; margin-right: 6px; }
     /* destructive and rare: small and quiet, under everything else */
+    #btn-log { font-size: 12px; padding: 8px 12px; margin-bottom: 8px; }
+    #btn-log.alarm { background: #6b1d1d; border-color: #c44; color: #fff; font-weight: bold; }
+    /* the flight log: over everything, the text selectable for a long-press copy where the clipboard is refused */
+    #log { position: fixed; inset: 0; z-index: 60; background: rgba(8, 10, 18, 0.96); display: flex; flex-direction: column; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); box-sizing: border-box; }
+    #log.hidden { display: none; }
+    #log .head { display: flex; justify-content: space-between; align-items: center; color: #e8e9f0; margin-bottom: 8px; }
+    #log .head button { margin-left: 8px; }
+    #log textarea { flex: 1; width: 100%; box-sizing: border-box; font: 11px/1.35 ui-monospace, Menlo, monospace; color: #cfd3e6; background: #11141f; border: 1px solid #2b3150; border-radius: 6px; padding: 8px; white-space: pre; overflow: auto; -webkit-user-select: text; user-select: text; }
+    #log-note { color: #9aa0b8; font-size: 12px; margin: 6px 0 0; }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-B4MYZw6U.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-hsxtcAkU.js">
+  <script type="module" crossorigin src="./assets/main-B0oCeYO4.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-C_0Oso8J.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -129,6 +138,7 @@
       <button id="btn-how-walk" class="secondary">Walk it: your real steps (GPS)</button>
       <button id="btn-how-back" class="secondary">back</button>
     </div>
+    <button id="btn-log" class="secondary hidden">Copy the last run's log</button>
     <button id="btn-reset" class="secondary">Reset: clear saved runs, wreckage and the maps built for you</button>
     <p>Pick where, then how. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps from wherever the kaiju starts; from where you stand, it follows you. Keep the screen on while walking.</p>
   </div>
@@ -155,6 +165,7 @@
   <button id="special">SPECIAL</button>
   <div id="fps"></div>
   <div id="prof" class="hidden"><pre></pre><button id="prof-copy">copy json</button></div>
+  <div id="log" class="hidden"><div class="head"><b>flight log</b><span><button id="log-copy">copy</button><button id="log-close" aria-label="close">✕</button></span></div><textarea id="log-text" readonly spellcheck="false"></textarea><p id="log-note"></p></div>
   <div id="scrim" class="hidden"></div>
   <div id="panel" class="hidden"></div>
   <div id="foot"><div id="attribution"></div><div id="status"></div></div>
