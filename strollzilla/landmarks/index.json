@@ -1,0 +1,30 @@
+[
+ {
+  "id": "eiffel-tower",
+  "name": "Eiffel Tower",
+  "lon": 2.2945,
+  "lat": 48.858255,
+  "file": "eiffel-tower.json"
+ },
+ {
+  "id": "gateway-arch",
+  "name": "Gateway Arch",
+  "lon": -90.184979,
+  "lat": 38.624624,
+  "file": "gateway-arch.json"
+ },
+ {
+  "id": "cloud-gate",
+  "name": "Cloud Gate",
+  "lon": -87.623344,
+  "lat": 41.88268,
+  "file": "cloud-gate.json"
+ },
+ {
+  "id": "cupids-span",
+  "name": "Cupid's Span",
+  "lon": -122.38962,
+  "lat": 37.791243,
+  "file": "cupids-span.json"
+ }
+]
