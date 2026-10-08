@@ -112,9 +112,38 @@
     #log .head button { margin-left: 8px; }
     #log textarea { flex: 1; width: 100%; box-sizing: border-box; font: 11px/1.35 ui-monospace, Menlo, monospace; color: #cfd3e6; background: #11141f; border: 1px solid #2b3150; border-radius: 6px; padding: 8px; white-space: pre; overflow: auto; -webkit-user-select: text; user-select: text; }
     #log-note { color: #9aa0b8; font-size: 12px; margin: 6px 0 0; }
+    /* the loading screen (app/loading.ts): over everything but the log, opaque, fading out once the first frames drew */
+    #loading { position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center; background: #0b1020; padding: 16px; transition: opacity 0.4s; overflow-y: auto; }
+    #loading.fade { opacity: 0; pointer-events: none; }
+    .ld-card { width: min(440px, 100%); display: flex; flex-direction: column; gap: 10px; text-align: left; }
+    .ld-title { font-size: 15px; color: #9aa3b8; letter-spacing: 0.03em; }
+    .ld-step { font-size: 22px; font-weight: 700; color: #ffd23a; line-height: 1.25; }
+    .ld-detail { font-size: 13px; color: #d7dbe6; min-height: 1.4em; overflow-wrap: anywhere; }
+    .ld-bar { position: relative; height: 12px; border-radius: 6px; background: #1b2238; overflow: hidden; border: 1px solid #2b3350; }
+    .ld-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #ffd23a; transition: width 0.3s; }
+    /* a sweep the compositor runs: it keeps moving while a long step holds the page's thread */
+    .ld-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent); animation: ld-sweep 1.3s linear infinite; will-change: transform; }
+    .ld-bar.stopped .ld-sweep { display: none; }
+    @keyframes ld-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+    .ld-clock { font-size: 13px; color: #9aa3b8; text-align: right; font-variant-numeric: tabular-nums; }
+    .ld-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .ld-steps li { display: flex; gap: 8px; color: #5d6580; }
+    .ld-steps li.done { color: #8fd18f; }
+    .ld-steps li.now { color: #e9ecf5; }
+    .ld-steps li.failed { color: #ffb8a8; }
+    .ld-steps .ld-m { width: 1em; text-align: center; }
+    .ld-steps span:nth-child(2) { flex: 1; }
+    .ld-steps .ld-s { color: #6f7890; font-variant-numeric: tabular-nums; }
+    .ld-slow { font-size: 12px; color: #c9cbd6; line-height: 1.45; margin: 0; }
+    .ld-err { font-size: 13px; color: #ffb8a8; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
+    /* a square being built mid-run (app/tiles.ts): a small pill under the distance, a spinner the compositor turns */
+    #stream { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 8px; border-radius: 10px; background: rgba(11,16,32,0.7); font-size: 11px; color: #d7dbe6; max-width: 46vw; }
+    #stream .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .spin { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; border: 2px solid #ffd23a; border-right-color: transparent; animation: spin 0.8s linear infinite; will-change: transform; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-DyxIbqkm.js"></script>
+  <script type="module" crossorigin src="./assets/main-Bixx6L_H.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-CeOpQZSH.js">
   <link rel="modulepreload" crossorigin href="./assets/landmarks-gTdSGn8y.js">
   <link rel="modulepreload" crossorigin href="./assets/pose-CGz14i5S.js">
@@ -149,6 +178,19 @@
     <button id="btn-reset" class="secondary">Reset: clear saved runs, wreckage and the maps built for you</button>
     <p>Pick where, then how. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps from wherever the kaiju starts; from where you stand, it follows you. Keep the screen on while walking.</p>
   </div>
+  <div id="loading" class="hidden" role="status" aria-live="polite">
+    <div class="ld-card">
+      <div class="ld-title"></div>
+      <div class="ld-step"></div>
+      <div class="ld-detail"></div>
+      <div class="ld-bar"><div class="ld-fill"></div><div class="ld-sweep"></div></div>
+      <div class="ld-clock">0 s</div>
+      <ul class="ld-steps"></ul>
+      <p class="ld-slow hidden"></p>
+      <p class="ld-err hidden"></p>
+      <button class="ld-back hidden">Back to the start</button>
+    </div>
+  </div>
   <div id="hud" class="hidden">
     <div>
       <div class="big" id="hud-score">$0</div>
@@ -156,6 +198,7 @@
     </div>
     <div class="right">
       <div id="hud-dist">0 m</div>
+      <div id="stream" class="hidden"><span class="spin"></span><span class="txt"></span></div>
       <div id="hud-size"></div>
       <div class="btns">
         <button id="btn-menu" aria-label="main menu" title="main menu (saves the run)">☰</button>
