@@ -17,7 +17,7 @@
 // samples it as coloured irradiance through a global shader-chunk graft.
 import * as THREE from 'three';
 
-import { LightGrid, SCALE } from './lightgrid.js?v=k61';
+import { LightGrid, SCALE } from './lightgrid.js?v=k62';
 export { LightGrid, SCALE };
 
 // ------------------------------------------------- the main-thread side ---
@@ -79,7 +79,7 @@ export class LightVolume {
     this.tex.needsUpdate = true;
     this.uniforms.uLkLight.value = this.tex;
     if (!this.worker) {
-      this.worker = new Worker(new URL('./lightvol.worker.js?v=k61', import.meta.url), { type: 'module' });
+      this.worker = new Worker(new URL('./lightvol.worker.js?v=k62', import.meta.url), { type: 'module' });
       this.worker.onmessage = (ev) => this.onResult(ev.data);
       this.worker.onerror = (e) => console.error('light volume worker', e.message || e);
     }
