@@ -82,6 +82,35 @@ function addNoise(d, sr, t0, dur, amp, o, rnd) {
   }
 }
 
+// a grain: a few samples of noise exciting a two-pole resonator at f that
+// rings for `ring` s (60 dB down) — a stone on a stone, a shard on tile.
+// Breaking matter is thousands of these at a density that thins (Strollzilla
+// audio/bank.ts; its measurement: tuned modes ring like chimes, recordings
+// of breaking glass are 2-12 kHz crunch, ~40% tonal at most)
+function grain(d, sr, t, f, ring, amp, rnd, burst = 0.002) {
+  const at = Math.max(0, Math.round(t * sr));
+  const w = (TAU * Math.min(f, sr * 0.45)) / sr;
+  const rad = Math.exp(-1 / ((ring * sr) / 6.9));
+  const a1 = 2 * rad * Math.cos(w), a2 = -rad * rad, g = (1 - rad) * 2;
+  const nb = Math.max(1, Math.round(burst * sr)), len = Math.min(d.length - at, Math.round(ring * sr) + nb);
+  let y1 = 0, y2 = 0;
+  for (let i = 0; i < len; i++) {
+    const x = i < nb ? (rnd() * 2 - 1) * (1 - i / nb) : 0;
+    const y = g * x + a1 * y1 + a2 * y2;
+    y2 = y1; y1 = y;
+    d[at + i] += y * amp;
+  }
+}
+// a crumble: n grains between fLo..fHi (log-uniform), arriving with an
+// exponential density of mean `mean` s that thins as the pile settles
+function crumbleInto(d, sr, t0, n, fLo, fHi, ringLo, ringHi, amp, mean, fall, rnd) {
+  for (let i = 0; i < n; i++) {
+    const t = t0 + Math.min(1.6, -Math.log(1 - rnd() * 0.997) * mean);
+    const f = fLo * Math.pow(fHi / fLo, rnd());
+    grain(d, sr, t, f, ringLo + (ringHi - ringLo) * rnd(), amp * Math.exp(-(t - t0) / fall) * (0.3 + 0.7 * rnd()), rnd, 0.0008 + 0.002 * rnd());
+  }
+}
+
 // a gliding sine (bubbles rise in pitch as they close)
 function addChirp(d, sr, t0, f0, f1, dur, amp, tau) {
   const i0 = Math.max(0, Math.round(t0 * sr));
@@ -121,8 +150,8 @@ function normalize(d, peak = 0.9) {
 // clamped to [lo, hi]; tauScale(size) stretches the ring for bigger things;
 // click: the contact transient (shorter + brighter = harder)
 const MATS = {
-  wood: { k: 55, lo: 70, hi: 1400, modes: [[1, 1, 0.1], [2.57, 0.55, 0.055], [4.1, 0.35, 0.035], [6.3, 0.2, 0.02]],
-    tauScale: (s) => clamp(0.7 + s * 2, 0.7, 2), click: { dur: 0.004, f: 3200, amp: 0.55 }, bounce: 0.35 },
+  wood: { k: 32, lo: 60, hi: 900, modes: [[1, 1, 0.05], [2.57, 0.45, 0.03], [4.1, 0.25, 0.02], [6.3, 0.12, 0.012]],
+    tauScale: (s) => clamp(0.7 + s * 2, 0.7, 2), click: { dur: 0.004, f: 1700, amp: 0.7 }, bounce: 0.35, body: 1 },
   metal: { k: 70, lo: 220, hi: 2600, modes: [[1, 1, 0.5], [2.76, 0.7, 0.38], [5.4, 0.5, 0.28], [8.93, 0.32, 0.2], [13.3, 0.2, 0.14]],
     tauScale: (s) => clamp(0.5 + s * 4, 0.5, 1.8), click: { dur: 0.002, f: 7000, amp: 0.3 }, bounce: 0.45, beat: 0.004 },
   glass: { k: 120, lo: 700, hi: 5200, modes: [[1, 1, 0.32], [2.32, 0.6, 0.22], [4.25, 0.4, 0.14], [6.63, 0.25, 0.09]],
@@ -142,6 +171,8 @@ function hit(d, sr, t0, mat, size, amp, rnd) {
     if (M.beat && ratio < 3) addMode(d, sr, t0, f * (1 + M.beat), aa * 0.5, tau * ts, rnd() * TAU);
   }
   addNoise(d, sr, t0, M.click.dur * 3, amp * M.click.amp, { type: 'bp', f: M.click.f, q: 0.7, tau: M.click.dur }, rnd);
+  // a knock is mostly the board's damped noise, not its ring
+  if (M.body) addNoise(d, sr, t0, 0.06, amp * 0.9, { type: 'bp', f: f0 * 1.3, q: 1.2, tau: 0.018 }, rnd);
 }
 
 function floorThud(d, sr, t0, size, amp, rnd) {
@@ -200,25 +231,28 @@ function shardShower(d, sr, t0, n, fLo, fHi, mean, ratios, tauLo, tauHi, amp, fa
 
 export function shatter(kind, size, seed, sr) {
   const rnd = mulberry32(seed);
-  const d = new Float32Array(Math.ceil(sr * 1.4));
+  const d = new Float32Array(Math.ceil(sr * 1.5));
+  const big = clamp(size / 0.3, 0, 1);
   if (kind === 'ceramic') {
-    // a mug, a plate, a vase: a mid crack, chunky clinking pieces, crumble
-    addNoise(d, sr, 0, 0.03, 1, { type: 'bp', f: 1900, q: 0.6, tau: 0.006 }, rnd);
-    addMode(d, sr, 0, 520 + 300 * rnd() - size * 400, 0.6, 0.045);
-    shardShower(d, sr, 0, Math.round(12 + size * 40), 900, 2900, 0.1, [1, 2.1, 3.9], 0.03, 0.08, 0.55, 0.3, rnd);
-    for (let i = 0; i < 60; i++) {
-      const t = rnd() * 0.35;
-      addNoise(d, sr, t, 0.003, 0.12 * Math.exp(-t / 0.2), { type: 'hp', f: 3200, q: 0.7, tau: 0.001 }, rnd);
-    }
+    // a mug, a plate, a vase: a mid crack, chunky pieces, a gritty crumble
+    addNoise(d, sr, 0, 0.03, 1, { type: 'bp', f: 2200, q: 0.6, tau: 0.006 }, rnd);
+    addNoise(d, sr, 0, 0.05, 0.55, { type: 'bp', f: 520, q: 0.8, tau: 0.014 }, rnd); // the body meets the floor
+    for (let i = 0; i < 4 + Math.round(big * 4); i++) addMode(d, sr, 0.01 + rnd() * 0.25, 1400 + 1800 * rnd(), 0.25 * (1 - i * 0.08), 0.02 + 0.02 * rnd(), rnd() * TAU);
+    crumbleInto(d, sr, 0.004, Math.round(90 + big * 260), 1200, 7000, 0.004, 0.016, 0.6, 0.1, 0.3, rnd);
     if (size > 0.08) floorThud(d, sr, 0, size, 0.5, rnd);
   } else {
-    // glass: a bright crack, a few pings, a shard shower that thins out,
+    // glass: a broadband crack, one or two short pings, a dense crunch of
+    // shards (2.5-12 kHz, rings of a few ms) thinning out, shards landing,
     // a glitter tail. Electric gear adds the zap and the buzz dying.
-    addNoise(d, sr, 0, 0.025, 1, { type: 'hp', f: 2600, q: 0.7, tau: 0.004 }, rnd);
-    for (let i = 0; i < 3; i++) addMode(d, sr, 0.002 * i, 3000 + 3000 * rnd(), 0.45, 0.08 + 0.1 * rnd(), rnd() * TAU);
-    if (size > 0.05) addMode(d, sr, 0, 180 + 120 * rnd(), 0.4, 0.05);
-    shardShower(d, sr, 0, Math.round(Math.min(60, 26 + size * 70)), 2600, 7500, 0.12, [1, 2.4], 0.02, 0.07, 0.4, 0.35, rnd);
-    addNoise(d, sr, 0.03, 0.6, 0.09, { type: 'hp', f: 6000, q: 0.7, tau: 0.15 }, rnd);
+    addNoise(d, sr, 0, 0.02, 1, { type: 'hp', f: 1800, q: 0.7, tau: 0.004 }, rnd);
+    addNoise(d, sr, 0, 0.06, 0.7, { type: 'bp', f: 450, q: 0.5, tau: 0.018 }, rnd); // what it lands on
+    for (let i = 0; i < 1 + (rnd() < 0.5 ? 1 : 0); i++) addMode(d, sr, 0.002 * i, 4000 + 3000 * rnd(), 0.17, 0.03 + 0.03 * rnd(), rnd() * TAU);
+    crumbleInto(d, sr, 0.003, Math.round(160 + big * 380), 3000, 16000, 0.0015, 0.007, 0.7, 0.11, 0.28, rnd);
+    for (let i = 0; i < 6 + Math.round(big * 6); i++) {
+      const t = 0.08 + rnd() * 0.6;
+      addMode(d, sr, t, 4500 + 6500 * rnd(), 0.07 * Math.exp(-t / 0.4), 0.01 + 0.012 * rnd(), rnd() * TAU);
+    }
+    addNoise(d, sr, 0.02, 0.6, 0.05, { type: 'hp', f: 7000, q: 0.7, tau: 0.12 }, rnd);
     if (kind === 'electric') {
       // the zap: a 120 Hz buzz gated by crackle, a pop, and fizzing
       const n = Math.ceil(0.5 * sr);
@@ -240,16 +274,49 @@ export function shatter(kind, size, seed, sr) {
   return normalize(d);
 }
 
+// what a break leaves behind: the pieces settling, a grainy tail by
+// material (the compound crash's last layer)
+export function crumble(mat, seed, sr) {
+  const rnd = mulberry32(seed);
+  const d = new Float32Array(Math.ceil(sr * 1.6));
+  if (mat === 'glass') crumbleInto(d, sr, 0, 140, 3000, 11000, 0.002, 0.007, 0.5, 0.25, 0.5, rnd);
+  else if (mat === 'ceramic') crumbleInto(d, sr, 0, 120, 1200, 6000, 0.004, 0.014, 0.6, 0.22, 0.5, rnd);
+  else {
+    // wood: splinters and bits, lower and duller, a few knocks of pieces
+    crumbleInto(d, sr, 0, 110, 350, 3200, 0.005, 0.02, 0.6, 0.25, 0.55, rnd);
+    for (let i = 0; i < 4; i++) hit(d, sr, 0.05 + rnd() * 0.8, 'wood', 0.04 + 0.06 * rnd(), 0.25, rnd);
+  }
+  return normalize(d);
+}
+
+// the debris bed: grains trickling at a steady density, loopable, mixed
+// materials; two lengths so their sum seldom repeats
+export function bed(len, seed, sr) {
+  const rnd = mulberry32(seed);
+  const n = Math.round(len * sr), d = new Float32Array(n);
+  const count = Math.round(len * 55);
+  for (let i = 0; i < count; i++) {
+    const t = rnd() * (len - 0.03);
+    const m = rnd();
+    const [lo, hi, rl, rh] = m < 0.5 ? [350, 3000, 0.005, 0.02] : m < 0.8 ? [1200, 6000, 0.004, 0.014] : [3000, 11000, 0.002, 0.007];
+    grain(d, sr, t, lo * Math.pow(hi / lo, rnd()), rl + (rh - rl) * rnd(), 0.3 + 0.7 * rnd(), rnd, 0.001 + 0.002 * rnd());
+  }
+  let m = 0;
+  for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(d[i]));
+  for (let i = 0; i < n; i++) d[i] *= 0.7 / (m || 1);
+  // 10 ms crossfade of the loop seam
+  const fl = Math.round(0.01 * sr);
+  for (let i = 0; i < fl; i++) { const w = i / fl; d[i] *= w; d[n - 1 - i] *= w; }
+  return d;
+}
+
 // furniture breaking apart (Severed): splinters, the crack, a groan, the
 // pieces hitting the floor
 export function snap(seed, sr) {
   const rnd = mulberry32(seed);
   const d = new Float32Array(Math.ceil(sr * 1.3));
-  const nsp = 6 + Math.floor(rnd() * 7);
-  for (let i = 0; i < nsp; i++) {
-    const t = rnd() * 0.07;
-    addNoise(d, sr, t, 0.012, 0.5 + 0.5 * rnd(), { type: 'bp', f: 1800 + 2400 * rnd(), q: 0.9, tau: 0.003 }, rnd);
-  }
+  // the splintering: a fast burst of wood grains, then the crack
+  crumbleInto(d, sr, 0, 70, 700, 4500, 0.003, 0.012, 0.8, 0.025, 0.06, rnd);
   hit(d, sr, 0.01, 'wood', 0.35, 1, rnd);
   if (rnd() < 0.6) {
     // the groan of fibres letting go
@@ -266,6 +333,7 @@ export function snap(seed, sr) {
   }
   floorThud(d, sr, 0.14 + 0.06 * rnd(), 0.5, 1, rnd);
   for (let i = 0; i < 3; i++) hit(d, sr, 0.25 + 0.3 * rnd(), 'wood', 0.08 + 0.1 * rnd(), 0.35, rnd);
+  crumbleInto(d, sr, 0.2, 80, 350, 3200, 0.005, 0.02, 0.35, 0.3, 0.5, rnd); // bits settling
   return normalize(d);
 }
 
@@ -377,7 +445,7 @@ function at(pts, u, j) {
   return pts[pts.length - 1][j];
 }
 
-const BW = [190, 260, 380];
+const BW = [260, 340, 480];
 const FG = [1, 0.75, 0.4];
 function voice(d, sr, t0, sp, rnd) {
   const n = Math.floor(sp.dur * sr);
@@ -423,9 +491,11 @@ function voice(d, sr, t0, sp, rnd) {
 
 // vowel paths: [u, F1, F2, F3]. "m" is nasal and closed; "i/e" bright;
 // "a" open; "ow" rounded
+// cat vocal tracts are short: formants sit above a person's (measured
+// against ESC-50 cat clips: centroid ~1.7 kHz, energy 1-4 kHz)
 const V = {
-  m: [320, 1250, 2900], i: [650, 2500, 3600], a: [1050, 1900, 3300], o: [800, 1300, 3000], u: [560, 950, 2850],
-  closed: [420, 1450, 3100], ek: [1100, 2200, 3500],
+  m: [520, 1500, 3200], i: [950, 2900, 4100], a: [1350, 2400, 3900], o: [1050, 1800, 3500], u: [780, 1350, 3300],
+  closed: [620, 1700, 3400], ek: [1250, 2500, 3800],
 };
 const F = (u, v) => [u, ...v];
 
@@ -438,10 +508,10 @@ export function cat(kind, seed, sr) {
     // plaintive "hey, keep playing": m - i - a - ow, rising then falling
     const dur = j(0.82, 0.12);
     voice(d, sr, 0.005, {
-      dur, f0: [[0, j(470)], [0.18, j(600)], [0.38, j(760)], [0.62, j(690)], [1, j(420)]],
+      dur, f0: [[0, j(400)], [0.18, j(510)], [0.38, j(640)], [0.62, j(590)], [1, j(360)]],
       form: [F(0, V.m), F(0.12, V.i), F(0.42, V.a), F(0.72, V.o), F(1, V.u)],
       amp: [[0, 0], [0.08, 0.45], [0.16, 1], [0.6, 0.9], [0.86, 0.45], [1, 0]],
-      vib: [5.5, 0.012, 0.3], breath: 0.05, tilt: 0.95,
+      vib: [5.5, 0.012, 0.3], breath: 0.05, tilt: 0.7,
     }, rnd);
   } else if (kind === 'mew') {
     const dur = j(0.32, 0.1);
@@ -565,6 +635,9 @@ export function catalog(sr) {
     sizes.forEach((s, si) => V3(`shatter:${kind}:${si}`, (seed) => shatter(kind, s, seed, sr)));
   }
   V3('snap', (seed) => snap(seed, sr));
+  for (const mat of ['wood', 'ceramic', 'glass']) V3(`crumble:${mat}`, (seed) => crumble(mat, seed, sr));
+  L.push(['bed:0', () => bed(2.7, 77, sr)]);
+  L.push(['bed:1', () => bed(3.6, 78, sr)]);
   V3('scratch:0', (seed) => scratch(0, seed, sr));
   V3('scratch:1', (seed) => scratch(2, seed, sr));
   for (let i = 0; i < 3; i++) V3(`splash:${i}`, (seed) => splash(i, seed, sr));

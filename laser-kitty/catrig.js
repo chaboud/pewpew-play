@@ -312,7 +312,7 @@ export class CatRig {
   // the loaded shape, so the rest of this class doesn't know the difference
   static source(variant) {
     if (variant >= 3) {
-      return import('./catgen.js?v=k60').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k61').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
@@ -336,6 +336,18 @@ export class CatRig {
           this.rest[key] = o.quaternion.clone();
           this.restPos[key] = o.position.clone();
         }
+      }
+      if ((o.isMesh || o.isSkinnedMesh) && o.userData.furShell && gltf.shellMaterial) {
+        // v6's fur layers: the coat's colours on the shell surface, this
+        // rig's own layer materials (their sway uniforms are this cat's),
+        // no shadow (a layer would cast as a solid hull)
+        o.frustumCulled = false;
+        o.castShadow = false;
+        o.receiveShadow = true;
+        if (!this.fur) this.fur = { time: { value: 0 }, lag: { value: new THREE.Vector3() }, lagV: new THREE.Vector3(), prev: null };
+        if (coat != null) o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
+        o.material = gltf.shellMaterial(o.userData.furShell, this.fur, coat != null);
+        return;
       }
       if (o.isMesh || o.isSkinnedMesh) {
         o.frustumCulled = false; // skinned bounds lag the pose

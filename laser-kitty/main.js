@@ -6,15 +6,15 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k60';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k60';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k61';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k61';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k60';
-import { Career } from './career.js?v=k60';
-import { mountNav } from './nav.js?v=k60';
-import { SfxEngine, } from './sfx.js?v=k60';
-import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k60';
+import { CatRig } from './catrig.js?v=k61';
+import { Career } from './career.js?v=k61';
+import { mountNav } from './nav.js?v=k61';
+import { SfxEngine, } from './sfx.js?v=k61';
+import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k61';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -27,7 +27,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k60'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k61'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3758,7 +3758,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k60', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k61', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.dry;
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
@@ -4007,6 +4007,19 @@ function catPanOf(k) {
 }
 const catLast = {};
 const crashBacklog = [0, 0, 0];
+// the compound crash (founder: "probably compound crashes and crumbles"):
+// every fall, break and snap adds energy; it decays over ~0.9 s and drives
+// the debris bed under the one-shots, so an avalanche is a roar of
+// settling bits, not twenty separate clacks
+let destructionEnergy = 0, lastBedT = 0;
+function feedDestruction(e) { destructionEnergy += e; }
+function bedFrame() {
+  if (!bankOn()) return;
+  const t = performance.now(), dt = Math.min(0.2, (t - lastBedT) / 1000);
+  lastBedT = t;
+  destructionEnergy *= Math.exp(-dt / 0.9);
+  engine.bed(destructionEnergy > 0.4 ? Math.min(0.6, (destructionEnergy - 0.4) * 0.22) : 0);
+}
 function catThrottled(kind, k, ms) {
   const key = kind + k, t = performance.now();
   if (catLast[key] && t - catLast[key] < ms) return true;
@@ -4031,6 +4044,7 @@ const sfx = {
     const rate = Math.max(0.8, Math.min(1.25, Math.sqrt(ref / Math.max(0.01, s.size)))) * jit(0.05);
     const gain = Math.max(0.3, Math.min(1.1, 0.3 + s.size * 1.6));
     engine.play(key, { pan, gain, rate, when: delay + Math.random() * 0.03 });
+    feedDestruction(0.15 + s.size);
     if (n >= 4 && !throttled('rumble', 1100)) engine.play('hit:wood:3', { pan: 0, gain: 0.55, rate: 0.7 }); // the avalanche bed
   },
   // a break: glass, ceramic, or electric gear; a liquid container that
@@ -4058,6 +4072,9 @@ const sfx = {
     const kind = s.electric ? 'electric' : s.mat === 'glass' ? 'glass' : 'ceramic';
     const si = Math.min(SHATTER_SIZES[kind].length - 1, nearestIdx(SHATTER_SIZES[kind], s.size) + (extra >= 6 ? 2 : extra >= 2 ? 1 : 0));
     engine.play(`shatter:${kind}:${si}`, { pan, gain: Math.min(1.4, 0.8 + s.size * 2 + extra * 0.05), rate: jit(0.06) });
+    // a pile of breaks leaves a pile of pieces settling
+    if (extra >= 2 || s.size > 0.2) engine.play(`crumble:${kind === 'ceramic' ? 'ceramic' : 'glass'}`, { pan, gain: 0.5 + Math.min(0.4, extra * 0.05), rate: jit(0.08), when: 0.25 });
+    feedDestruction(0.6 + extra * 0.2);
     if (s.liquid) sfx.splash(pan, s.size > 0.06 ? 1 : 0, 0.04);
   },
   // furniture coming apart
@@ -4065,8 +4082,12 @@ const sfx = {
     if (!ac) return;
     if (!bankOn()) { for (let k = 0; k < 4; k++) synthSfx.impact(mesh); return; }
     const pan = panOf(mesh);
+    // the compound crash: splinters and the crack, the pieces' own falls,
+    // then the bits settling
     engine.play('snap', { pan, gain: 1.3, rate: jit(0.06) });
     for (let k = 0; k < 3; k++) sfx.impact(mesh, 0.2 + Math.random() * 0.4);
+    engine.play('crumble:wood', { pan, gain: 0.7, rate: jit(0.08), when: 0.35 });
+    feedDestruction(1.4);
   },
   scratch(pan, stage = 0) {
     if (!ac || throttled('scratch', 110)) return;
@@ -4860,6 +4881,7 @@ function frame(now) {
     ckCodes.length = 0;
     career.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
   }
+  bedFrame();
   lightFrame(now, data, lk.lk_body_count(sim));
   hazeFrame(now);
   if (postActive) composer.render();
