@@ -26,5 +26,201 @@
   "lon": -122.38962,
   "lat": 37.791243,
   "file": "cupids-span.json"
+ },
+ {
+  "id": "golden-gate-south-tower",
+  "name": "Golden Gate Bridge, south tower",
+  "lon": -122.47789300567298,
+  "lat": 37.814012944969406,
+  "file": "golden-gate-south-tower.json"
+ },
+ {
+  "id": "golden-gate-north-tower",
+  "name": "Golden Gate Bridge, north tower",
+  "lon": -122.47923699432702,
+  "lat": 37.8255010550306,
+  "file": "golden-gate-north-tower.json"
+ },
+ {
+  "id": "golden-gate-main-1",
+  "name": "Golden Gate Bridge, main span",
+  "lon": -122.47806885282198,
+  "lat": 37.81551604649896,
+  "file": "golden-gate-main-1.json"
+ },
+ {
+  "id": "golden-gate-main-2",
+  "name": "Golden Gate Bridge, main span",
+  "lon": -122.47839961760732,
+  "lat": 37.81834334883299,
+  "file": "golden-gate-main-2.json"
+ },
+ {
+  "id": "golden-gate-main-3",
+  "name": "Golden Gate Bridge, main span",
+  "lon": -122.47873038239268,
+  "lat": 37.821170651167016,
+  "file": "golden-gate-main-3.json"
+ },
+ {
+  "id": "golden-gate-main-4",
+  "name": "Golden Gate Bridge, main span",
+  "lon": -122.47906114717803,
+  "lat": 37.82399795350104,
+  "file": "golden-gate-main-4.json"
+ },
+ {
+  "id": "golden-gate-side-south",
+  "name": "Golden Gate Bridge, south side span",
+  "lon": -122.47770830272395,
+  "lat": 37.81243414607055,
+  "file": "golden-gate-side-south.json"
+ },
+ {
+  "id": "golden-gate-side-north",
+  "name": "Golden Gate Bridge, north side span",
+  "lon": -122.47942169727605,
+  "lat": 37.827079853929455,
+  "file": "golden-gate-side-north.json"
+ },
+ {
+  "id": "golden-gate-south-anchorage",
+  "name": "Golden Gate Bridge, south anchorage",
+  "lon": -122.47751313501861,
+  "lat": 37.81076589680915,
+  "file": "golden-gate-south-anchorage.json"
+ },
+ {
+  "id": "golden-gate-north-anchorage",
+  "name": "Golden Gate Bridge, north anchorage",
+  "lon": -122.4796168649814,
+  "lat": 37.828748103190854,
+  "file": "golden-gate-north-anchorage.json"
+ },
+ {
+  "id": "bay-bridge-sf-anchorage",
+  "name": "Bay Bridge, San Francisco anchorage",
+  "lon": -122.38852641723334,
+  "lat": 37.78822347767153,
+  "file": "bay-bridge-sf-anchorage.json"
+ },
+ {
+  "id": "bay-bridge-sf-side",
+  "name": "Bay Bridge, west span, San Francisco side span",
+  "lon": -122.38713530500641,
+  "lat": 37.78952330973019,
+  "file": "bay-bridge-sf-side.json"
+ },
+ {
+  "id": "bay-bridge-w2",
+  "name": "Bay Bridge, tower W2",
+  "lon": -122.38581760239569,
+  "lat": 37.79075454906809,
+  "file": "bay-bridge-w2.json"
+ },
+ {
+  "id": "bay-bridge-main-1a",
+  "name": "Bay Bridge, west span, main span",
+  "lon": -122.38450540550618,
+  "lat": 37.79198064395192,
+  "file": "bay-bridge-main-1a.json"
+ },
+ {
+  "id": "bay-bridge-main-1b",
+  "name": "Bay Bridge, west span, main span",
+  "lon": -122.38195442134335,
+  "lat": 37.794364240998824,
+  "file": "bay-bridge-main-1b.json"
+ },
+ {
+  "id": "bay-bridge-w3",
+  "name": "Bay Bridge, tower W3",
+  "lon": -122.38064222445384,
+  "lat": 37.79559033588266,
+  "file": "bay-bridge-w3.json"
+ },
+ {
+  "id": "bay-bridge-side-w3",
+  "name": "Bay Bridge, west span, side span",
+  "lon": -122.37936856761283,
+  "lat": 37.79678041958809,
+  "file": "bay-bridge-side-w3.json"
+ },
+ {
+  "id": "bay-bridge-w4",
+  "name": "Bay Bridge, centre anchorage",
+  "lon": -122.37786,
+  "lat": 37.79819,
+  "file": "bay-bridge-w4.json"
+ },
+ {
+  "id": "bay-bridge-side-w5",
+  "name": "Bay Bridge, west span, side span",
+  "lon": -122.37635143238717,
+  "lat": 37.79959958041191,
+  "file": "bay-bridge-side-w5.json"
+ },
+ {
+  "id": "bay-bridge-w5",
+  "name": "Bay Bridge, tower W5",
+  "lon": -122.37507777554616,
+  "lat": 37.80078966411734,
+  "file": "bay-bridge-w5.json"
+ },
+ {
+  "id": "bay-bridge-main-2a",
+  "name": "Bay Bridge, west span, main span",
+  "lon": -122.37376557865664,
+  "lat": 37.80201575900117,
+  "file": "bay-bridge-main-2a.json"
+ },
+ {
+  "id": "bay-bridge-main-2b",
+  "name": "Bay Bridge, west span, main span",
+  "lon": -122.37121459449382,
+  "lat": 37.80439935604807,
+  "file": "bay-bridge-main-2b.json"
+ },
+ {
+  "id": "bay-bridge-w6",
+  "name": "Bay Bridge, tower W6",
+  "lon": -122.3699023976043,
+  "lat": 37.805625450931906,
+  "file": "bay-bridge-w6.json"
+ },
+ {
+  "id": "bay-bridge-ybi-side",
+  "name": "Bay Bridge, west span, island side span",
+  "lon": -122.36858469499359,
+  "lat": 37.806856690269804,
+  "file": "bay-bridge-ybi-side.json"
+ },
+ {
+  "id": "bay-bridge-ybi-anchorage",
+  "name": "Bay Bridge, Yerba Buena anchorage",
+  "lon": -122.36719358276666,
+  "lat": 37.80815652232847,
+  "file": "bay-bridge-ybi-anchorage.json"
+ },
+ {
+  "id": "coit-tower",
+  "name": "Coit Tower",
+  "lon": -122.405836,
+  "lat": 37.802372,
+  "file": "coit-tower.json"
+ },
+ {
+  "id": "sutro-tower",
+  "name": "Sutro Tower",
+  "lon": -122.452855,
+  "lat": 37.755242,
+  "file": "sutro-tower.json"
+ },
+ {
+  "id": "palace-of-fine-arts",
+  "name": "Palace of Fine Arts",
+  "lon": -122.448405,
+  "lat": 37.80292,
+  "file": "palace-of-fine-arts.json"
  }
 ]
