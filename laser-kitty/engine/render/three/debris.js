@@ -9,8 +9,8 @@
 // pop: a woken crumb whose support moved or broke falls again; past the
 // budget the oldest resting crumb crumbles away over CRUMBLE_S.
 import * as THREE from 'three';
-import { ROW, F, CLS, SHAPE } from '../../seam.js?v=k62';
-import { CRUMBLE_S } from './crumble.js?v=k62';
+import { ROW, F, CLS, SHAPE } from '../../seam.js?v=k63';
+import { CRUMBLE_S } from './crumble.js?v=k63';
 
 const G = 9.8;
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _ax = new THREE.Vector3();

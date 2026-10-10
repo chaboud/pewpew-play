@@ -2,7 +2,7 @@
 // as one continuous sheet each, vertices on the particles; curtain rings
 // are brass tori parked on their particles (main.js rebuildCloths/Rings).
 import * as THREE from 'three';
-import { ROW, F } from '../../seam.js?v=k62';
+import { ROW, F } from '../../seam.js?v=k63';
 
 export class Cloths {
   constructor(scene) {

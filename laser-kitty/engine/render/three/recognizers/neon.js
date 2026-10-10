@@ -3,9 +3,9 @@
 // into the room or the text reads mirrored. A sign hung in the room (not on
 // a wall) gets chains; every third sign flickers like a tired tube.
 import * as THREE from 'three';
-import { CLS } from '../../../seam.js?v=k62';
-import { part } from '../kit.js?v=k62';
-import { neonAtlas, NEON_GLOW, ATLAS } from '../art/neon.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part } from '../kit.js?v=k63';
+import { neonAtlas, NEON_GLOW, ATLAS } from '../art/neon.js?v=k63';
 
 // every design in one atlas, one material, one batch: a sign picks its cell
 // per instance (aCell), so twenty signs are one draw, not twenty

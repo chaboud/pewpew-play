@@ -3,10 +3,10 @@
 // engine sees: the engine only gets the laser state the sim answers with.
 // The mapping is main.js's compact pad (its default): a centered island
 // whose near edge is an arc swept from a belly button below the screen.
-import { norm } from './camera.js?v=k62';
+import { norm } from './camera.js?v=k63';
 
 export class LaserInput {
-  /** @param {HTMLElement} pad @param {HTMLElement} thumb @param {import('./camera.js?v=k62').RoomCamera} cam */
+  /** @param {HTMLElement} pad @param {HTMLElement} thumb @param {import('./camera.js?v=k63').RoomCamera} cam */
   constructor(pad, thumb, cam, { padScale = 0.5 } = {}) {
     this.pad = pad;
     this.thumb = thumb;

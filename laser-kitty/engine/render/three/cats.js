@@ -5,9 +5,9 @@
 // than copied: it is already a pure render module. Until its glb loads a
 // cat is drawn as main.js's v1 blob.
 import * as THREE from 'three';
-import { F, catState, catAct } from '../../seam.js?v=k62';
-import { CatRig } from '../../../catrig.js?v=k62';
-import { ramp } from './textures.js?v=k62';
+import { F, catState, catAct } from '../../seam.js?v=k63';
+import { CatRig } from '../../../catrig.js?v=k63';
+import { ramp } from './textures.js?v=k63';
 
 const COATS = [0xff9d45, 0x8a8f9e, 0xf5f0e6, 0x3d3a45];
 const DARKS = [0xd97f2e, 0x6b7080, 0xd8cfc0, 0x2a2830];

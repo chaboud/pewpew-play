@@ -6,15 +6,15 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k62';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k62';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k63';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k63';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k62';
-import { Career } from './career.js?v=k62';
-import { mountNav } from './nav.js?v=k62';
-import { SfxEngine, } from './sfx.js?v=k62';
-import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k62';
+import { CatRig } from './catrig.js?v=k63';
+import { Career } from './career.js?v=k63';
+import { mountNav } from './nav.js?v=k63';
+import { SfxEngine, } from './sfx.js?v=k63';
+import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k63';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -27,11 +27,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k62'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k63'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, catVolume: 1, fxVolume: 1, pops: false };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -3710,7 +3710,8 @@ for (const [ev, on] of [['pointerdown', true], ['pointermove', null], ['pointeru
 // construction; zero asset bytes; mickey-moused per the audio research.
 // (CC0 sample packs are the later richness pass.)
 let ac = null;
-let sfxGain = null;
+let sfxGain = null;      // the destruction bus (synth fallback + rack samples)
+let sfxCatGain = null;   // the cats bus
 let noiseBuf = null;
 const sfxLast = {};
 // sample rack: drop CC0 files in sfx/ and list them in sfx/manifest.json
@@ -3744,10 +3745,11 @@ function playSample(name, pan, rateJitter = 0.15, gain = 0.55, when = 0) {
   src.playbackRate.value = 1 + (Math.random() * 2 - 1) * rateJitter;
   const g = ac.createGain();
   g.gain.value = gain;
-  src.connect(g).connect(outNode(pan));
+  src.connect(g).connect(CAT_POOLS.has(name) ? catOut(pan) : outNode(pan));
   src.start(ac.currentTime + when);
   return true;
 }
+const CAT_POOLS = new Set(['meow', 'mrrow', 'purr', 'chirp', 'chatter']);
 // the engine (sfx.js): procedural bank built in a worker, dry bus + room
 // reverb + compressor. Until the bank lands, the old synth voices below
 // still play — through the same bus, so they get the room too.
@@ -3758,9 +3760,12 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k62', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k63', import.meta.url));
   window.__sfx = engine; // test hook
-  sfxGain = engine.dry;
+  sfxGain = engine.bus.fx.d;
+  sfxCatGain = engine.bus.cats.d;
+  engine.setLevel('cats', cfg.catVolume);
+  engine.setLevel('fx', cfg.fxVolume);
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -3783,6 +3788,10 @@ function outNode(pan) {
   p.connect(sfxGain);
   return p;
 }
+// the old synth's cat voices build their nodes on sfxGain: point it at the
+// cats bus for the length of the call
+function catOut(pan) { const g = sfxGain; sfxGain = sfxCatGain; try { return outNode(pan); } finally { sfxGain = g; } }
+function onCatBus(fn) { const g = sfxGain; sfxGain = sfxCatGain; try { return fn(); } finally { sfxGain = g; } }
 function tone(freq0, freq1, dur, type, gain, when = 0, pan) {
   const o = ac.createOscillator();
   const g = ac.createGain();
@@ -3865,7 +3874,9 @@ function setPurr(on) {
   if (!ac) return;
   if (engine && engine.has('cat:purr')) {
     if (purr) { purr.pg.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.3); purr.o.stop(ac.currentTime + 0.35); purr.am.stop(ac.currentTime + 0.35); purr = null; }
-    engine.loop('cat:purr', on, { gain: 0.42 });
+    // the real purr's energy is mostly under 60 Hz: kept below the
+    // compressor's knee so an inaudible-on-phones rumble can't duck the mix
+    engine.loop('cat:purr', on, { gain: 0.32 });
     return;
   }
   if (on && !purr) {
@@ -3880,7 +3891,7 @@ function setPurr(on) {
     const amG = ac.createGain();
     amG.gain.value = 0.04;
     am.connect(amG).connect(pg.gain);
-    o.connect(pg).connect(sfxGain);
+    o.connect(pg).connect(sfxCatGain);
     o.start();
     am.start();
     purr = { o, am, pg };
@@ -4118,7 +4129,7 @@ const sfx = {
     if (throttled('pounce', 150)) return;
     const pan = catPanOf(k), r = CAT_VOICE[k % CAT_VOICE.length];
     engine.play('whoosh', { pan, gain: 0.5, rate: jit(0.1) });
-    if (Math.random() < 0.6) engine.play('cat:mrp', { pan, gain: 0.45, rate: r * jit(0.04) });
+    if (Math.random() < 0.6) engine.play('cat:mrp', { pan, gain: 0.55, rate: r * jit(0.04) });
   },
   // vocals: per cat, panned to where that cat is
   cat(kind, k = 0, ms = 900) {
@@ -4126,14 +4137,15 @@ const sfx = {
     const pool = kind === 'meow' || kind === 'mrrow' ? kind : null;
     if (pool && playSample(pool, catPanOf(k), 0.12, 0.6)) return;
     if (!bankOn()) {
-      if (kind === 'trill') return synthSfx.chirp();
-      if (kind === 'chatter') return synthSfx.chatter();
-      if (kind === 'meow' || kind === 'mew') return synthSfx.meow();
-      if (kind === 'mrrow') return synthSfx.mrrow();
+      if (kind === 'trill') return onCatBus(() => synthSfx.chirp());
+      if (kind === 'chatter') return onCatBus(() => synthSfx.chatter());
+      if (kind === 'meow' || kind === 'mew') return onCatBus(() => synthSfx.meow());
+      if (kind === 'mrrow') return onCatBus(() => synthSfx.mrrow());
       return;
     }
     // cats sit under the destruction: a meow is a line, a mirror is the punchline
-    const gain = kind === 'chatter' ? 0.38 : kind === 'mew' ? 0.4 : kind === 'trill' ? 0.45 : 0.42;
+    // (k63 voices re-levelled: the measured chatter is sparse and quiet)
+    const gain = kind === 'chatter' ? 0.6 : kind === 'mew' ? 0.42 : kind === 'trill' ? 0.45 : 0.5;
     engine.play(`cat:${kind}`, { pan: catPanOf(k), gain, rate: CAT_VOICE[k % CAT_VOICE.length] * jit(0.04), wet: 0.8 });
   },
   // the old names the rest of the file still calls
@@ -4325,6 +4337,9 @@ bindSlider('shstr', 'shadowStrength', (v) => v.toFixed(2), (v) => {
 });
 bindSlider('hazestr', 'hazeStrength', (v) => v.toFixed(1));
 bindSlider('bounce', 'bounce', (v) => v.toFixed(1));
+// input levels for the two sound buses (cats vs destruction), 0-200%
+bindSlider('volcat', 'catVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('cats', v); });
+bindSlider('volfx', 'fxVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('fx', v); });
 bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
 bindSlider('aostr', 'aoStrength', (v) => v.toFixed(1), (v) => {
   if (n8ao) n8ao.configuration.intensity = v;

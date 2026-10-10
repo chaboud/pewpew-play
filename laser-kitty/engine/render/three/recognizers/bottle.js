@@ -6,8 +6,8 @@
 // label and neck are unit cylinders scaled per instance and only the
 // shoulder's taper is quantized (2 mm), so a mixed shelf shares a few
 // batches instead of one set per bottle size (measured: +15 in the kitchen).
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near } from '../kit.js?v=k63';
 
 const GLASS = [0x8a4f1a, 0x2e6a38, 0x7a2530, 0x2f5a7a, 0xcfd8da, 0x4a2c12];
 const CAPS = [0xd8c93a, 0xb03a34, 0x2a2732, 0xc9c2b0];

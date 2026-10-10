@@ -4,7 +4,7 @@
 // per instance (materials are white and the instance colour tints them,
 // which is what main.js's `map * color` did per mesh).
 import * as THREE from 'three';
-import { ramp, woodTex, fabricTex, glowTex } from './textures.js?v=k62';
+import { ramp, woodTex, fabricTex, glowTex } from './textures.js?v=k63';
 
 const q = (x) => Math.round(x * 1e4) / 1e4;
 

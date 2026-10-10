@@ -6,9 +6,9 @@
 // where gloss is silent (rule 'glaze': a brittle prop with no optics of its
 // own reads glazed). One source of truth for how surfaces behave: the sim's optics.
 import * as THREE from 'three';
-import { CLS, SHAPE, MAT } from '../../seam.js?v=k62';
-import { part, hash01 } from './kit.js?v=k62';
-import { floorTex, concreteTex, checkerTex, artTex } from './textures.js?v=k62';
+import { CLS, SHAPE, MAT } from '../../seam.js?v=k63';
+import { part, hash01 } from './kit.js?v=k63';
+import { floorTex, concreteTex, checkerTex, artTex } from './textures.js?v=k63';
 
 /** main.js bodyColor: deterministic variety within each class palette */
 export function bodyColor(i, cls) {

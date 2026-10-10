@@ -3,8 +3,8 @@
 // (-x) edge, a gasket line. Cabinet door: wood panel, a raised field and a
 // knob near the free edge (guessed from the door's place in the kitchen,
 // as main.js does — the stream does not say which side the hinge is).
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near } from '../kit.js?v=k63';
 
 export const fridgeDoor = {
   name: 'fridge-door',

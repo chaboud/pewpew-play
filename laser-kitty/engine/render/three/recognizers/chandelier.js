@@ -1,8 +1,8 @@
 // chandelier (main.js meshFor @1135): the sim's hub slab becomes a brass
 // ring, a stem, six candles with flames and crystal drops; it is lit.
 // The crystal is a plain glassy phong here (main.js bends a baked cubemap).
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near } from '../kit.js?v=k63';
 
 export default {
   name: 'chandelier',

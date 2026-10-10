@@ -2,8 +2,8 @@
 // the cylinder family the kitchen and the bar are full of. Every mug in
 // every room upgrades at once — that is the point of a signature.
 import * as THREE from 'three';
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near, hash01 } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near, hash01 } from '../kit.js?v=k63';
 
 export const steelPot = {
   name: 'steel-pot',
