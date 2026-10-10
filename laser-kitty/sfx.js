@@ -3,7 +3,7 @@
 // compressor so a bookcase avalanche doesn't clip. Works on a live
 // AudioContext (the bank is built in a worker) or an OfflineAudioContext
 // (the bank is built synchronously — that's how the reel test renders).
-import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k61';
+import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k62';
 
 export class SfxEngine {
   constructor(ctx) {

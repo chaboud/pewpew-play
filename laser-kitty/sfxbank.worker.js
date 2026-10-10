@@ -1,6 +1,6 @@
 // sfxbank.worker.js — builds the procedural sample bank off the main
 // thread and hands each buffer back as it's done (transferred, not copied).
-import { catalog } from './sfxbank.js?v=k61';
+import { catalog } from './sfxbank.js?v=k62';
 
 self.onmessage = (ev) => {
   const { sr } = ev.data;

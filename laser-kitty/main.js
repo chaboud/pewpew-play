@@ -6,15 +6,15 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k61';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k61';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k62';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k62';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k61';
-import { Career } from './career.js?v=k61';
-import { mountNav } from './nav.js?v=k61';
-import { SfxEngine, } from './sfx.js?v=k61';
-import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k61';
+import { CatRig } from './catrig.js?v=k62';
+import { Career } from './career.js?v=k62';
+import { mountNav } from './nav.js?v=k62';
+import { SfxEngine, } from './sfx.js?v=k62';
+import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k62';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -27,7 +27,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k61'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k62'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3758,7 +3758,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k61', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k62', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.dry;
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);

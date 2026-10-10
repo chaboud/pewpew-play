@@ -1,11 +1,12 @@
 // nav.js — the hamburger every page shares (founder: "add the hamburger
 // to the playground and other pages so we can access them from the main
-// menu and get back to it"). One button, one overlay, three links.
+// menu and get back to it"). One button, one overlay, a link per page.
 // Career mode brings its own ☰ (pause menu) and skips this one.
 const LINKS = [
   ['Main menu (Career)', 'play.html'],
   ['Free Play', 'index.html'],
   ['Cat Lab', 'catlab.html'],
+  ['Engine preview', 'engine.html'],
 ];
 export function mountNav({ left = '10px', right = null, top = null } = {}) {
   const style = document.createElement('style');

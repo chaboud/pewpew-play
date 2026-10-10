@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>laser-kitty engine preview</title>
+<link rel="icon" href="data:," />
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14121a; touch-action: none; overscroll-behavior: none; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  #hud { position: fixed; top: env(safe-area-inset-top, 8px); left: 0; right: 0; text-align: center;
+         font: 700 22px system-ui, sans-serif; color: #ffe86b; pointer-events: none; text-shadow: 0 2px 6px #000; }
+  #state { font-size: 13px; color: #9ad; font-weight: 500; letter-spacing: 0.12em; }
+  #meter { width: 120px; height: 5px; margin: 4px auto 0; background: #333; border-radius: 3px; overflow: hidden; }
+  #meter > div { height: 100%; width: 0%; background: #6ecb63; }
+  #pad { position: fixed; bottom: 0; height: 33vh; border-radius: 14px 14px 0 0;
+         background: linear-gradient(to top, rgba(255,60,60,0.10), rgba(255,60,60,0.02));
+         border-top: 1px solid rgba(255,90,90,0.35); }
+  #thumb { position: absolute; width: 46px; height: 46px; border-radius: 50%; border: 2px solid #ff5a5a;
+           background: rgba(255,90,90,0.25); transform: translate(-50%,-50%); left: 50%; top: 50%; pointer-events: none; }
+  .ctl { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 4px); z-index: 5; height: 44px; border-radius: 10px;
+         border: 1px solid #3a3644; background: rgba(30,27,38,0.85); color: #cfd4e6; font: 600 13px system-ui, sans-serif; }
+  #reset { left: 62px; width: 44px; font-size: 17px; }
+  #picks { position: fixed; right: 10px; top: calc(env(safe-area-inset-top, 8px) + 4px); z-index: 5; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  #picks select { max-width: 46vw; background: rgba(36,31,49,0.9); color: #cfd4e6; border: 1px solid #3a3644; border-radius: 8px; padding: 5px; font: 600 12px system-ui, sans-serif; }
+  #stats { position: fixed; left: 10px; right: 10px; bottom: calc(33vh * 0.5 + 8px); text-align: center; pointer-events: none;
+           font: 500 11px ui-monospace, monospace; color: #8a8798; text-shadow: 0 1px 3px #000; }
+  #tag { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 8px) + 92px); text-align: center; pointer-events: none;
+         font: 700 10px system-ui, sans-serif; letter-spacing: 0.18em; color: #53c8d8; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<button id="reset" class="ctl" aria-label="Rebuild the room">&#8634;</button>
+<div id="picks">
+  <select id="room" aria-label="Room"></select>
+  <select id="engine" aria-label="Render engine"></select>
+</div>
+<div id="hud">
+  <div id="score">0</div>
+  <div id="state">LOADING</div>
+  <div id="meter"><div id="meterfill"></div></div>
+</div>
+<div id="tag">ENGINE PREVIEW</div>
+<div id="stats"></div>
+<div id="pad"><div id="thumb"></div></div>
+<script type="importmap">
+{"imports":{
+  "three": "./vendor/three.module.min.js",
+  "three/examples/jsm/postprocessing/Pass.js": "./vendor/Pass.js",
+  "postprocessing": "./vendor/pp-stub.js"
+}}
+</script>
+<script type="module" src="engine/app/main.js?v=k62"></script>
+</body>
+</html>
