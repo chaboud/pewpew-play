@@ -1,7 +1,7 @@
 // lamps (main.js meshFor @2155 floor-lamp shade, @2165 table lamp): a
 // shade over a glowing core, and a pool of real light from the budget.
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near } from '../kit.js?v=k63';
 
 const shadeMat = (k) => k.phong({ side: 2, shininess: 30 }); // DoubleSide
 

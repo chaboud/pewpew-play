@@ -1,9 +1,11 @@
 // sfx.js — the sound engine: plays the procedural bank (sfxbank.js) on a
 // small mixing graph — a dry bus and a room-reverb send into a gentle
-// compressor so a bookcase avalanche doesn't clip. Works on a live
+// compressor so a bookcase avalanche doesn't clip. Two input buses sit in
+// front of it, cats and destruction, each with its own level (the settings
+// sliders), and each feeds both the dry bus and the room send. Works on a live
 // AudioContext (the bank is built in a worker) or an OfflineAudioContext
 // (the bank is built synchronously — that's how the reel test renders).
-import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k62';
+import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k63';
 
 export class SfxEngine {
   constructor(ctx) {
@@ -31,6 +33,25 @@ export class SfxEngine {
     this.comp.connect(this.master).connect(ctx.destination);
     this.room = -1;
     this.loopSrc = null;
+    // input buses: voices and the cat's own body (paws, landings, the pounce
+    // whoosh) on 'cats'; everything that breaks, falls or spills on 'fx'
+    this.bus = {};
+    for (const name of ['cats', 'fx']) {
+      const d = ctx.createGain(), w = ctx.createGain();
+      d.connect(this.dry);
+      w.connect(this.wetSend);
+      this.bus[name] = { d, w };
+    }
+  }
+
+  busOf(key) { return /^(cat:|paw|land|whoosh)/.test(key) ? 'cats' : 'fx'; }
+
+  // input level for one bus, 0..2 (1 = as mixed)
+  setLevel(name, v) {
+    const b = this.bus[name];
+    if (!b) return;
+    const t = this.ctx.currentTime;
+    for (const g of [b.d.gain, b.w.gain]) { g.cancelScheduledValues(t); g.setTargetAtTime(Math.max(0, v), t, 0.03); }
   }
 
   setRoom(room) {
@@ -74,7 +95,7 @@ export class SfxEngine {
 
   // play one variant of `key`. pan -1..1, rate scales pitch and speed,
   // when is seconds from now (or absolute on an offline context via at)
-  play(key, { pan = 0, gain = 1, rate = 1, when = 0, wet = 1, at } = {}) {
+  play(key, { pan = 0, gain = 1, rate = 1, when = 0, wet = 1, at, bus } = {}) {
     const pool = this.bank[key];
     if (!pool || !pool.length) return false;
     if (this.voices >= this.maxVoices) {
@@ -95,11 +116,12 @@ export class SfxEngine {
       g.connect(p);
       out = p;
     }
-    out.connect(this.dry);
+    const b = this.bus[bus ?? this.busOf(key)];
+    out.connect(b.d);
     if (wet > 0) {
       const ws = ctx.createGain();
       ws.gain.value = wet;
-      out.connect(ws).connect(this.wetSend);
+      out.connect(ws).connect(b.w);
     }
     this.voices++;
     src.onended = () => { this.voices--; };
@@ -116,10 +138,10 @@ export class SfxEngine {
       if (!this.has('bed:0') || !this.has('bed:1')) return;
       this.bedG = ctx.createGain();
       this.bedG.gain.value = 0;
-      this.bedG.connect(this.dry);
+      this.bedG.connect(this.bus.fx.d);
       const ws = ctx.createGain();
       ws.gain.value = 0.8;
-      this.bedG.connect(ws).connect(this.wetSend);
+      this.bedG.connect(ws).connect(this.bus.fx.w);
       for (const k of ['bed:0', 'bed:1']) {
         const src = ctx.createBufferSource();
         src.buffer = this.bank[k][0];
@@ -146,7 +168,7 @@ export class SfxEngine {
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(gain, ctx.currentTime + 0.6);
-      src.connect(g).connect(this.dry);
+      src.connect(g).connect(this.bus.cats.d);
       src.start();
       this.loopSrc = { src, g };
       this.stats[key] = (this.stats[key] || 0) + 1;

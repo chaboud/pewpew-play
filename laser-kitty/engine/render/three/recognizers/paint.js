@@ -4,9 +4,9 @@
 // frame (`grow`); paw prints (0.74) are a separate reserved signature —
 // never inferred from dims (a puddle spawns print-sized and floods).
 import * as THREE from 'three';
-import { CLS, SHAPE } from '../../../seam.js?v=k62';
-import { part } from '../kit.js?v=k62';
-import { liquidColor } from './liquid.js?v=k62';
+import { CLS, SHAPE } from '../../../seam.js?v=k63';
+import { part } from '../kit.js?v=k63';
+import { liquidColor } from './liquid.js?v=k63';
 
 export default {
   name: 'paint',

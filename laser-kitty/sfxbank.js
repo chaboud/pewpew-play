@@ -445,143 +445,394 @@ function at(pts, u, j) {
   return pts[pts.length - 1][j];
 }
 
-const BW = [260, 340, 480];
-const FG = [1, 0.75, 0.4];
-function voice(d, sr, t0, sp, rnd) {
-  const n = Math.floor(sp.dur * sr);
-  const i0 = Math.round(t0 * sr);
-  const maxK = 28;
-  const amps = new Float32Array(maxK + 1);
-  let ph = 0, K = 1, f = sp.f0[0][1], env = 0, am = 1, jit = 0;
-  // breath: noise through a band-pass that rides F2
-  let bk = coef('bp', 2400, 2.5, sr), bx1 = 0, bx2 = 0, by1 = 0, by2 = 0;
-  const tilt = sp.tilt ?? 0.75;
-  const vibPh = rnd() * TAU;
-  for (let i = 0; i < n && i0 + i < d.length; i++) {
-    const u = i / n, t = i / sr;
-    if ((i & 31) === 0) {
-      jit = jit * 0.9 + (rnd() - 0.5) * 0.006;
-      let vib = 1;
-      if (sp.vib) vib = 1 + sp.vib[1] * Math.sin(TAU * sp.vib[0] * t + vibPh) * clamp((u - (sp.vib[2] ?? 0.2)) * 4, 0, 1);
-      f = at(sp.f0, u, 1) * (sp.pitch ?? 1) * vib * (1 + jit);
-      env = at(sp.amp, u, 1) * (1 + (rnd() - 0.5) * 0.06);
-      am = 1;
-      if (sp.trill && u >= sp.trill[2] && u <= sp.trill[3]) am = 1 - sp.trill[1] * (0.5 + 0.5 * Math.cos(TAU * sp.trill[0] * t));
-      const F = [at(sp.form, u, 1), at(sp.form, u, 2), at(sp.form, u, 3)];
-      K = Math.max(1, Math.min(maxK, Math.floor((0.45 * sr) / f), Math.floor(9500 / f)));
-      for (let k = 1; k <= K; k++) {
-        const fk = k * f;
-        let h = 0.02;
-        for (let j = 0; j < 3; j++) { const x = (fk - F[j]) / (BW[j] * 0.5); h += FG[j] / (1 + x * x); }
-        amps[k] = h * Math.pow(k, -tilt);
+// ------------------------------------------------------------ cat voices ---
+// Fitted to real cats, not guessed (k63). Every table and target below was
+// measured from recordings: ESC-50's cat class plus a public animal-sound
+// set on GitHub, 232 clips, analysis only — no recording ships, and the
+// tables are medians over 20-38 calls, so no single cat is in here. Method
+// and numbers: wiki/research/cat-voice.md.
+//
+// Real meows sort into three shapes (k-means on pitch + brightness paths,
+// 85 clean calls from 49 recordings):
+//   A "mee-ow"  45%  starts dark, opens bright by u~0.3, closes from u~0.8
+//   B "yeow"    26%  starts open and closes all the way through
+//   C "mrr-ow?" 24%  dark throughout, pitch rising at the end
+// ENV rows are u = 0, .1 ... 1; columns are harmonic level in dB re the
+// frame's loudest, on a 0.19-octave grid from 513 Hz to 6.56 kHz.
+const ENV_LO = 300 * 25 ** (4 / 24), ENV_STEP = Math.log2(25) / 24, ENV_N = 20;
+const ENV = {
+  A: [
+    [0, -1, -2, -2, -3, -4, -6, -8, -11, -15, -18, -22, -25, -28, -29, -30, -34, -38, -40, -41],
+    [0, -2, -4, -2, -1, -2, -3, -4, -5, -6, -9, -14, -17, -20, -23, -27, -30, -33, -37, -42],
+    [-2, -3, -3, -2, -1, -1, -1, -1, 0, 0, -2, -7, -11, -14, -19, -24, -28, -31, -34, -40],
+    [-3, -4, -5, -4, -3, -3, -2, -2, -1, 0, -1, -4, -9, -14, -19, -24, -28, -32, -34, -36],
+    [-4, -4, -4, -3, -2, -2, -2, -1, -1, 0, -1, -4, -9, -14, -19, -25, -30, -33, -34, -36],
+    [-4, -4, -4, -4, -4, -4, -2, -1, 0, 0, -1, -6, -11, -15, -20, -26, -32, -34, -35, -37],
+    [-4, -4, -5, -6, -5, -4, -2, -1, 0, 0, -2, -6, -12, -17, -23, -29, -34, -36, -37, -39],
+    [-2, -3, -4, -4, -4, -3, -2, 0, 0, -1, -4, -8, -13, -19, -26, -32, -37, -39, -38, -39],
+    [0, -1, -2, -2, -2, -2, -2, -2, -2, -4, -6, -11, -16, -21, -27, -33, -37, -38, -41, -47],
+    [0, -1, -3, -3, -4, -4, -4, -6, -8, -11, -14, -18, -21, -25, -29, -31, -34, -38, -42, -46],
+    [0, -2, -3, -4, -5, -5, -6, -8, -11, -14, -16, -18, -20, -23, -25, -28, -31, -36, -40, -41],
+  ],
+  B: [
+    [-6, -5, -3, -1, 0, 0, -2, -3, -2, -1, -2, -4, -8, -12, -14, -20, -27, -30, -36, -46],
+    [-15, -12, -4, 0, -1, -1, 0, 0, 0, 0, 0, -1, -5, -9, -13, -21, -29, -33, -37, -44],
+    [-17, -13, -8, -5, -4, -2, -1, 0, 0, 0, -1, -4, -10, -14, -17, -24, -31, -37, -41, -42],
+    [-18, -16, -10, -6, -3, -1, 0, 0, 0, -1, -3, -7, -14, -20, -23, -29, -35, -40, -44, -43],
+    [-13, -12, -8, -4, -1, 0, 0, -1, -2, -4, -8, -13, -20, -24, -27, -31, -34, -36, -40, -47],
+    [-9, -8, -6, -3, -1, 0, 0, -1, -2, -4, -9, -16, -22, -26, -28, -32, -35, -35, -37, -42],
+    [-8, -7, -6, -3, -1, 0, -1, -2, -5, -9, -13, -19, -25, -28, -30, -35, -37, -36, -39, -47],
+    [-6, -5, -4, -2, -1, 0, -1, -4, -7, -11, -15, -22, -27, -30, -32, -37, -42, -41, -40, -41],
+    [-5, -3, -2, -1, 0, 0, -2, -4, -7, -10, -15, -21, -26, -29, -33, -38, -42, -42, -43, -48],
+    [0, 0, 0, 0, 0, -1, -4, -7, -10, -13, -16, -21, -25, -28, -32, -37, -38, -38, -39, -40],
+    [-1, 0, -1, -2, -2, -4, -6, -9, -12, -14, -16, -19, -22, -25, -29, -34, -37, -36, -33, -34],
+  ],
+  C: [
+    [0, -3, -4, -6, -9, -11, -12, -11, -12, -16, -23, -28, -32, -37, -38, -40, -44, -46, -47, -46],
+    [-1, 0, 0, -1, -3, -4, -5, -7, -9, -14, -22, -30, -38, -43, -45, -48, -52, -55, -55, -52],
+    [-1, 0, 0, -2, -3, -4, -6, -8, -12, -19, -26, -32, -40, -46, -47, -46, -49, -51, -51, -50],
+    [-1, 0, 0, 0, -1, -2, -3, -4, -8, -15, -24, -32, -39, -44, -49, -51, -52, -52, -50, -52],
+    [0, 0, 0, -1, -1, -1, -2, -4, -9, -15, -21, -28, -35, -40, -42, -45, -49, -50, -51, -53],
+    [-2, -2, -1, 0, 0, -1, -2, -5, -9, -16, -23, -31, -37, -41, -43, -44, -45, -48, -50, -50],
+    [-2, -1, -1, 0, 0, -1, -3, -6, -10, -17, -25, -31, -36, -41, -45, -47, -49, -50, -50, -50],
+    [0, 0, 0, -1, 0, 0, -1, -3, -6, -10, -16, -26, -37, -44, -44, -44, -46, -50, -51, -50],
+    [-1, -1, 0, 0, 0, 0, -1, -2, -4, -8, -13, -21, -32, -39, -40, -40, -44, -49, -48, -47],
+    [0, 0, 0, 0, -1, -3, -4, -6, -8, -11, -15, -22, -29, -34, -36, -35, -36, -38, -39, -42],
+    [0, 0, -1, -1, -1, -1, -3, -5, -8, -10, -13, -19, -24, -27, -30, -30, -30, -32, -33, -37],
+  ],
+};
+const LEV = { A: [-19, -6, -4, -4, -3, -3, -4, -4, -8, -13, -21], B: [-14, -6, -6, -6, -7, -9, -5, -7, -10, -18, -24], C: [-12, -7, -6, -6, -4, -4, -5, -7, -8, -14, -27] };
+const F0P = { A: [0.975, 0.983, 1.0, 1.014, 1.01, 1.004, 1.002, 0.993, 0.968, 0.944, 0.898], B: [1.038, 1.012, 1.0, 0.999, 1.0, 0.99, 0.969, 0.981, 0.969, 0.951, 0.942], C: [0.995, 0.998, 0.983, 0.96, 0.964, 0.995, 1.031, 1.061, 1.096, 1.079, 1.07] };
+// what the old formant voice got wrong, by measurement: pitch swung 1.8x
+// inside a call (real median 1.25x), a sine vibrato (real: irregular
+// 4-8 Hz drift, ~15 cents, plus ~5 cents of jitter), breath hiss ~18 dB
+// under the harmonics (real HNR ~38 dB), formants at 2.4-3.9 kHz (real
+// energy sits at 0.9-2 kHz and falls ~25 dB/octave above it)
+
+function envRow(r, x) {
+  if (x <= 0) return r[0];
+  if (x >= ENV_N - 1) return r[ENV_N - 1] - 4 * (x - (ENV_N - 1));
+  const j = Math.floor(x), w = x - j;
+  return r[j] + (r[j + 1] - r[j]) * w;
+}
+// each shape's time-mean row: the vowel's motion is measured against it.
+// A median over 20-38 calls blurs each call's opening and closing (their
+// timing differs), so a single call plays the motion back at `contrast`
+// (1.4 puts our brightness path on the real calls' median path)
+const ENV_MEAN = Object.fromEntries(Object.entries(ENV).map(([k, t]) => [k, t[0].map((_, j) => t.reduce((a, r) => a + r[j], 0) / t.length)]));
+function envDb(tab, u, f, mean, contrast = 1) {
+  const x = Math.log2(f / ENV_LO) / ENV_STEP;
+  const tu = clamp(u, 0, 1) * 10, t0 = Math.min(9, Math.floor(tu)), w = tu - t0;
+  const v = envRow(tab[t0], x) * (1 - w) + envRow(tab[t0 + 1], x) * w;
+  if (contrast === 1) return v;
+  const m = envRow(mean, x);
+  return m + (v - m) * contrast;
+}
+// env path: [[u, shape, uInShape], ...] blends shapes over the call (a
+// mrrow is a C-dark trill that opens into an A body)
+function envAt(path, u, f, c = 1) {
+  let i = 0;
+  while (i < path.length - 2 && u > path[i + 1][0]) i++;
+  const a = path[i], b = path[i + 1];
+  const w = clamp((u - a[0]) / Math.max(1e-6, b[0] - a[0]), 0, 1);
+  const uu = a[2] + (b[2] - a[2]) * w;
+  const da = envDb(ENV[a[1]], uu, f, ENV_MEAN[a[1]], c);
+  return a[1] === b[1] ? da : da + (envDb(ENV[b[1]], uu, f, ENV_MEAN[b[1]], c) - da) * w;
+}
+const lerpPath = (p, u) => {
+  const x = clamp(u, 0, 1) * (p.length - 1), i = Math.min(p.length - 2, Math.floor(x)), w = x - i;
+  return p[i] + (p[i + 1] - p[i]) * w;
+};
+
+// additive voice: each harmonic is a phasor whose level is read off the
+// measured envelope at its own frequency, so the vowel moves the way real
+// mouths move it. sp: {dur, f0, f0p, lev, env, scale, hnr, breathy,
+// wobble, jitter, tilt, am:{rate,depth,deep,u0,u1}, sub:{u0,u1,d},
+// voiced, noiseAmp, gain}
+const KM = 40;
+function vox(d, sr, t0, sp, rnd) {
+  const n = Math.floor(sp.dur * sr), i0 = Math.round(t0 * sr);
+  if (n <= 0 || i0 >= d.length) return;
+  const B = 32, fmax = Math.min(9500, sr * 0.45);
+  const re = new Float64Array(KM + 1), im = new Float64Array(KM + 1), amp = new Float64Array(KM + 1);
+  const da = new Float64Array(KM + 1), cr = new Float64Array(KM + 1), ci = new Float64Array(KM + 1);
+  for (let k = 1; k <= KM; k++) { const p = rnd() * TAU; re[k] = Math.cos(p); im[k] = Math.sin(p); }
+  // this call's own timbre: a gentle ripple over log-frequency, the formant
+  // detail the medians average away
+  // (single real calls stripe +-4-6 dB across frequency; the medians are smooth)
+  const rip = [0, 1, 2].map(() => [2.2 + rnd() * 1.8, 0.45 + rnd() * 0.55, rnd() * TAU, (rnd() - 0.5) * 3]);
+  const ripple = (f, u) => { let s = 0; for (const [a, p, ph, dr] of rip) s += a * Math.sin((TAU * Math.log2(f)) / p + ph + dr * u); return s; };
+  const wobs = [0, 1, 2].map(() => [3 + rnd() * 5, rnd() * TAU]);
+  const scale = sp.scale ?? 1, voiced = sp.voiced ?? 1, tilt = sp.tilt ?? 0, contrast = sp.contrast ?? 1;
+  const env = sp.env, wobC = sp.wobble ?? 12, jitC = sp.jitter ?? 4;
+  const am = sp.am, sub = sp.sub, gain = sp.gain ?? 1;
+  // aspiration filter: band-pass at the voice's brightness, then two
+  // low-passes an octave up — real cat noise falls as steeply as the
+  // harmonics do (a lone band-pass left a flat hiss over 3 kHz)
+  let nk = coef('bp', 1500, 0.7, sr), lk = coef('lp', 3000, 0.7, sr), x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  let p1 = 0, p2 = 0, q1 = 0, q2 = 0, r1 = 0, r2 = 0, s1 = 0, s2 = 0;
+  let amJ = 1, ph1 = 0, amPh = rnd() * TAU, shim = 0, nA = 0, dnA = 0, L = 0, dL = 0, f = sp.f0, jv = 0;
+  // jitter: white noise one-pole'd to ~25 Hz, scaled to jitC cents RMS
+  const jA = Math.exp((-TAU * 25 * B) / sr), jN = Math.sqrt((3 * (1 + jA)) / (1 - jA));
+  // and cycle-to-cycle irregularity: a fresh period jitter (cents) and
+  // shimmer (dB) every glottal cycle. This is what blurs real cats' upper
+  // harmonics; without it every harmonic is a ruled line
+  const jitP = sp.jitP ?? 9, shimP = sp.shimP ?? 0.7;
+  let cyc = 0, pj = 0, ps = 0;
+  const fade = Math.max(1, Math.round(0.004 * sr)), subPh = rnd() * TAU;
+  for (let i = 0; i < n && i0 + i < d.length; i += B) {
+    const u = i / n, tt = i / sr;
+    let wc = 0;
+    for (const [r, p] of wobs) wc += Math.sin(TAU * r * tt + p);
+    jv = jv * jA + (rnd() * 2 - 1) * (1 - jA);
+    if (ph1 >= cyc) { cyc = ph1 + TAU; pj = (rnd() + rnd() + rnd() - 1.5) * 2 * jitP; ps = (rnd() + rnd() + rnd() - 1.5) * 2 * shimP; }
+    const cents = wc * wobC * 0.8165 + jv * jN * jitC + pj;
+    f = sp.f0 * lerpPath(sp.f0p, u) * 2 ** (cents / 1200);
+    shim = shim * 0.92 + (rnd() - 0.5) * 0.15;
+    const Lt = 10 ** ((lerpPath(sp.lev, u) + shim + ps) / 20);
+    const KK = Math.min(KM, Math.floor(fmax / f));
+    let pw = 0, cen = 0;
+    for (let k = 1; k <= KM; k++) {
+      let a = 0;
+      if (k <= KK) {
+        const fk = k * f, fe = fk / scale;
+        a = voiced * 10 ** ((envAt(env, u, fe, contrast) + ripple(fe, u) + tilt * Math.log2(fe / 1000)) / 20);
+        const w = (TAU * fk) / sr;
+        cr[k] = Math.cos(w); ci[k] = Math.sin(w);
+        pw += a * a; cen += a * a * fk;
       }
-      bk = coef('bp', F[1], 2.5, sr);
+      da[k] = (a - amp[k]) / B;
     }
-    ph += (TAU * f) / sr;
-    if (ph > TAU) ph -= TAU;
-    const cp = Math.cos(ph);
-    let s2 = 0, s1 = Math.sin(ph), acc = amps[1] * s1;
-    for (let k = 2; k <= K; k++) { const s = 2 * cp * s1 - s2; acc += amps[k] * s; s2 = s1; s1 = s; }
-    const x = rnd() * 2 - 1;
-    const y = bk[0] * x + bk[1] * bx1 + bk[2] * bx2 - bk[3] * by1 - bk[4] * by2;
-    bx2 = bx1; bx1 = x; by2 = by1; by1 = y;
-    d[i0 + i] += (acc + y * (sp.breath ?? 0.05) * 6) * env * am * (sp.gain ?? 1);
+    // aspiration: noise centred on the voice's own brightness, HNR ~33 dB
+    // in the body; a breathy onset starts ~20 dB noisier
+    const fc = clamp(pw > 0 ? cen / pw : 2000, 700, 4000);
+    nk = coef('bp', fc, 0.7, sr); lk = coef('lp', fc * 2, 0.7, sr);
+    const gN = 1 / Math.sqrt((1 / 3) * (Math.PI / 2) * (fc / 0.9) / (sr / 2));
+    let hnr = sp.hnr ?? 33;
+    if (sp.breathy) hnr -= sp.breathy * clamp(1 - u / 0.14, 0, 1);
+    const nT = gN * (voiced ? Math.sqrt(pw / 2) * 10 ** (-hnr / 20) : (sp.noiseAmp ?? 0.3));
+    dnA = (nT - nA) / B; dL = (Lt - L) / B;
+    for (let s = 0; s < B; s++) {
+      const ii = i + s;
+      if (ii >= n || i0 + ii >= d.length) break;
+      let acc = 0;
+      for (let k = 1; k <= KM; k++) {
+        if (amp[k] === 0 && da[k] === 0) continue;
+        const r = re[k] * cr[k] - im[k] * ci[k];
+        im[k] = re[k] * ci[k] + im[k] * cr[k]; re[k] = r;
+        amp[k] += da[k];
+        acc += amp[k] * im[k];
+      }
+      ph1 += (TAU * f) / sr;
+      let g = 1;
+      if (sub && u >= sub.u0 && u <= sub.u1) {
+        // period doubling, the roughness real cats slip into mid-call
+        const w = Math.sin((Math.PI * (u - sub.u0)) / (sub.u1 - sub.u0));
+        g *= 1 + sub.d * w * Math.cos(ph1 / 2 + subPh);
+      }
+      if (am && u >= am.u0 && u <= am.u1) {
+        if (amPh >= TAU) { amPh -= TAU; amJ = 1 + (rnd() - 0.5) * 2 * (am.irr ?? 0.04); }
+        amPh += (TAU * am.rate * amJ) / sr;
+        const edge = Math.min(1, (u - am.u0) / 0.06, (am.u1 - u) / 0.06);
+        const c = 0.5 + 0.5 * Math.cos(amPh);
+        g *= 1 - am.depth * edge * (1 - (am.deep ? c * c * c : c));
+      }
+      const x = rnd() * 2 - 1;
+      const y0 = nk[0] * x + nk[1] * x1 + nk[2] * x2 - nk[3] * y1 - nk[4] * y2;
+      x2 = x1; x1 = x; y2 = y1; y1 = y0;
+      const y3 = lk[0] * y0 + lk[1] * p1 + lk[2] * p2 - lk[3] * q1 - lk[4] * q2;
+      p2 = p1; p1 = y0; q2 = q1; q1 = y3;
+      const y = lk[0] * y3 + lk[1] * r1 + lk[2] * r2 - lk[3] * s1 - lk[4] * s2;
+      r2 = r1; r1 = y3; s2 = s1; s1 = y;
+      nA += dnA; L += dL;
+      const e = Math.min(1, ii / fade, (n - ii) / fade);
+      d[i0 + ii] += (acc * g + y * nA * (am && am.deep ? g : 1)) * L * e * gain;
+    }
+    for (let k = 1; k <= KM; k++) { const m = Math.hypot(re[k], im[k]) || 1; re[k] /= m; im[k] /= m; }
   }
 }
 
-// vowel paths: [u, F1, F2, F3]. "m" is nasal and closed; "i/e" bright;
-// "a" open; "ow" rounded
-// cat vocal tracts are short: formants sit above a person's (measured
-// against ESC-50 cat clips: centroid ~1.7 kHz, energy 1-4 kHz)
-const V = {
-  m: [520, 1500, 3200], i: [950, 2900, 4100], a: [1350, 2400, 3900], o: [1050, 1800, 3500], u: [780, 1350, 3300],
-  closed: [620, 1700, 3400], ek: [1250, 2500, 3800],
-};
-const F = (u, v) => [u, ...v];
+const shapePath = (s) => [[0, s, 0], [1, s, 1]];
+// a per-call pitch path: the shape's measured median, bent by one slow arch
+// and one wiggle (individual meows range ~1.25x; the median is flatter)
+function bendPath(p, rnd, a1 = 0.17, a2 = 0.06) {
+  // the arch leans rise-then-fall (most single calls do), rarely a dip
+  const b1 = (rnd() * 1.3 - 0.3) * a1, b2 = (rnd() * 2 - 1) * a2, ph = rnd() * TAU;
+  return p.map((v, i) => { const u = i / (p.length - 1); return v * (1 + b1 * Math.sin(Math.PI * u) + b2 * Math.sin(TAU * u + ph)); });
+}
+const logn = (rnd, m, s) => m * Math.exp(s * (rnd() + rnd() + rnd() - 1.5) * 1.15);
 
 export function cat(kind, seed, sr) {
   const rnd = mulberry32(seed);
   const j = (x, p = 0.08) => x * (1 + (rnd() - 0.5) * 2 * p);
   if (kind === 'purr') return purr(seed, sr);
-  const d = new Float32Array(Math.ceil(sr * 1.4));
+  const d = new Float32Array(Math.ceil(sr * 1.6));
+  const common = () => ({
+    scale: j(1, 0.07), wobble: j(22, 0.3), jitter: j(9, 0.3), hnr: j(25, 0.08), contrast: 1.4,
+    tilt: (rnd() - 0.5) * 5, // some cats are brighter than the median, some duller
+    breathy: rnd() < 0.35 ? 16 + rnd() * 6 : 0,
+    sub: rnd() < 0.3 ? { u0: 0.25 + rnd() * 0.2, u1: 0.5 + rnd() * 0.25, d: 0.25 + rnd() * 0.25 } : null,
+  });
   if (kind === 'meow') {
-    // plaintive "hey, keep playing": m - i - a - ow, rising then falling
-    const dur = j(0.82, 0.12);
-    voice(d, sr, 0.005, {
-      dur, f0: [[0, j(400)], [0.18, j(510)], [0.38, j(640)], [0.62, j(590)], [1, j(360)]],
-      form: [F(0, V.m), F(0.12, V.i), F(0.42, V.a), F(0.72, V.o), F(1, V.u)],
-      amp: [[0, 0], [0.08, 0.45], [0.16, 1], [0.6, 0.9], [0.86, 0.45], [1, 0]],
-      vib: [5.5, 0.012, 0.3], breath: 0.05, tilt: 0.7,
+    // "hey, keep playing": A or B shape, sometimes the questioning C
+    const r = rnd(), s = r < 0.5 ? 'A' : r < 0.8 ? 'B' : 'C';
+    vox(d, sr, 0.005, {
+      ...common(), dur: clamp(logn(rnd, 0.8, 0.22), 0.55, 1.15), f0: j(s === 'C' ? 640 : 575, 0.1),
+      f0p: bendPath(F0P[s], rnd), lev: LEV[s], env: shapePath(s),
     }, rnd);
   } else if (kind === 'mew') {
-    const dur = j(0.32, 0.1);
-    voice(d, sr, 0.005, {
-      dur, f0: [[0, j(700)], [0.3, j(880)], [1, j(640)]],
-      form: [F(0, V.closed), F(0.28, V.i), F(1, V.a)],
-      amp: [[0, 0], [0.12, 1], [0.7, 0.8], [1, 0]], breath: 0.04,
+    // short and higher: an A shape squeezed into a third of a second
+    vox(d, sr, 0.005, {
+      ...common(), dur: j(0.4, 0.15), f0: j(740, 0.1), f0p: bendPath(F0P.A, rnd, 0.09, 0.04),
+      lev: LEV.A, env: [[0, 'A', 0.05], [0.3, 'A', 0.35], [1, 'A', 1]], sub: null,
     }, rnd);
   } else if (kind === 'mrrow') {
-    // startled protest: a rolled "mrr" opening into "-row"
-    const dur = j(0.6, 0.1);
-    voice(d, sr, 0.005, {
-      dur, f0: [[0, j(420)], [0.3, j(480)], [0.55, j(790)], [1, j(510)]],
-      form: [F(0, V.m), F(0.3, V.closed), F(0.55, V.a), F(1, V.o)],
-      amp: [[0, 0], [0.06, 0.8], [0.3, 0.85], [0.5, 1], [0.85, 0.6], [1, 0]],
-      trill: [27, 0.85, 0, 0.32], vib: [6, 0.01, 0.55], breath: 0.06,
+    // a rolled "mrrr" (measured trills: 24-31 Hz, f0 380-430, dark) that
+    // opens into an "-ow" arch, as in the real mrrows we looked at
+    const tr = j(0.36, 0.12);
+    vox(d, sr, 0.005, {
+      ...common(), dur: clamp(logn(rnd, 0.75, 0.15), 0.6, 0.95), f0: j(470, 0.08),
+      f0p: [0.86, 0.87, 0.88, 0.9, 0.97, 1.06, 1.08, 1.05, 0.99, 0.93, 0.88].map((v) => v * j(1, 0.02)),
+      lev: [-14, -7, -6, -6, -4, -2, -2, -3, -5, -10, -20],
+      env: [[0, 'C', 0.1], [tr, 'C', 0.4], [tr + 0.15, 'A', 0.35], [1, 'A', 1]],
+      am: { rate: j(28, 0.08), depth: 0.85, deep: true, irr: 0.12, u0: 0, u1: tr + 0.05 }, sub: null,
     }, rnd);
   } else if (kind === 'trill') {
-    // the lock-on "brrrp?": closed mouth, rolled, rising like a question
-    const dur = j(0.24, 0.1);
-    voice(d, sr, 0.005, {
-      dur, f0: [[0, j(560)], [1, j(920)]],
-      form: [F(0, V.closed), F(1, [620, 1750, 3200])],
-      amp: [[0, 0], [0.1, 1], [0.8, 0.85], [1, 0]],
-      trill: [j(28, 0.06), 0.9, 0, 1], breath: 0.03, tilt: 0.9,
+    // the lock-on "brrrp?": low, dark, rolled, rising at the end (C)
+    const deep = rnd() < 0.4;
+    vox(d, sr, 0.005, {
+      ...common(), dur: j(0.42, 0.15), f0: j(415, 0.07), f0p: bendPath(F0P.C, rnd, 0.03, 0.02),
+      lev: [-12, -5, -4, -4, -3, -3, -3, -4, -5, -9, -20], env: shapePath('C'), tilt: -4,
+      am: { rate: j(27.5, 0.1), depth: deep ? 0.92 : 0.38, deep, u0: 0, u1: 1 }, sub: null, breathy: 0,
+    }, rnd);
+  } else if (kind === 'mrp') {
+    // the pounce chirp: ~0.15 s, a fast rise then a little fall (published
+    // chirp means: 0.15 s, F0 223-1190 Hz, mean 661 — Schötz 2013)
+    vox(d, sr, 0.004, {
+      ...common(), dur: j(0.15, 0.15), f0: j(980, 0.1), f0p: [0.48, 0.7, 0.88, 0.98, 1, 0.98, 0.95, 0.92, 0.9, 0.88, 0.86],
+      lev: [-16, -6, -2, 0, 0, -1, -2, -3, -5, -8, -16], env: [[0, 'B', 0], [1, 'A', 1]], sub: null,
     }, rnd);
   } else if (kind === 'chatter') {
-    // the prey chatter at a dot: fast "ek-ek-ek" with teeth clicks
-    const nS = 6 + Math.floor(rnd() * 3), gap = j(0.1, 0.06);
+    // the prey chatter at a dot. No recording of it was reachable (none in
+    // either set), so this one is built from the published description —
+    // "very quick stuttering or clicking sounds with the jaws juddering",
+    // low-amplitude, mostly voiceless (Schötz 2013; Tavernier et al. 2020) —
+    // with the voiced bits drawn from the measured chirp and B shape.
+    // Unmeasured: syllable rate (8-11/s here) and the voiced share.
+    const nS = 7 + Math.floor(rnd() * 6), ioi = j(0.1, 0.12), voicedShare = 0.45 + rnd() * 0.35;
+    let t = 0.005;
     for (let s = 0; s < nS; s++) {
-      const t0 = 0.005 + s * gap;
-      addNoise(d, sr, t0, 0.004, 0.25, { type: 'hp', f: 4000, q: 0.7, tau: 0.001 }, rnd);
-      voice(d, sr, t0 + 0.002, {
-        dur: j(0.045, 0.1), f0: [[0, j(950, 0.05)], [1, j(1080, 0.05)]],
-        form: [F(0, [500, 1800, 3400]), F(1, V.ek)],
-        amp: [[0, 0], [0.25, 1], [1, 0]], breath: 0.12, gain: 0.8 - 0.3 * (s / nS),
-      }, rnd);
+      const ph = s / (nS - 1), g = (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, ph * 1.6))) * j(1, 0.15);
+      // the jaw clack: a short tick and a tooth "tock"
+      addNoise(d, sr, t, 0.004, 0.45 * g, { type: 'bp', f: j(3000, 0.2), q: 1.1, tau: 0.0007 }, rnd);
+      addMode(d, sr, t, j(1350, 0.15), 0.14 * g, 0.005);
+      const r = rnd();
+      if (r < 0.15) {
+        // clack only: the jaw juddering shut on nothing
+      } else if (r < 0.15 + voicedShare * 0.85) {
+        vox(d, sr, t + 0.004, {
+          dur: j(0.032, 0.2), f0: j(820, 0.12), f0p: [1.08, 1.04, 0.98, 0.92, 0.88],
+          lev: [-8, 0, -2, -7, -16], env: [[0, 'B', 0.05], [1, 'B', 0.5]], scale: j(1, 0.05),
+          wobble: 8, jitter: 6, jitP: 25, shimP: 1.5, hnr: 14, breathy: 8, gain: 0.5 * g,
+        }, rnd);
+      } else {
+        // voiceless "kh": breath through a closing mouth
+        vox(d, sr, t + 0.003, {
+          dur: j(0.028, 0.2), f0: 700, f0p: [1, 1], lev: [-6, 0, -3, -12], env: shapePath('B'),
+          voiced: 0, noiseAmp: 0.09 * g, wobble: 0, jitter: 0,
+        }, rnd);
+      }
+      t += ioi * (0.88 + rnd() * 0.24);
     }
-  } else if (kind === 'mrp') {
-    // a little effort chirp on the pounce
-    voice(d, sr, 0.003, {
-      dur: j(0.13, 0.1), f0: [[0, j(600)], [1, j(740)]],
-      form: [F(0, V.m), F(1, [700, 1700, 3200])],
-      amp: [[0, 0], [0.2, 1], [1, 0]], breath: 0.06,
-    }, rnd);
   }
   return normalize(d);
 }
 
-// purr: a loopable 2.4 s breath cycle — exhale pulses at ~26 Hz, a softer
-// inhale at ~22 Hz, quiet gaps at both ends so the loop seam is silent
+// purr: one loopable breath cycle, rebuilt from five real purrs. Measured:
+// pulse rate 27-30 Hz; 85-96% of the energy under 60 Hz, harmonics of the
+// pulse rate falling [0,-11,-7,-15,-20,-27,-31,-32] dB; the audible part
+// is pulse-synced breath flutter, modulated only 3-5x (p90/p10 — soft, not
+// gated); breath cycle 0.3-0.9 Hz. The old purr put 71% of its energy at
+// 60-150 Hz in hard-gated 125 Hz buzzes — a motor, not a cat.
+// Phone speakers drop the sub-60 Hz rumble, so the flutter sits at the
+// bright end of the measured range (the recording with the most 60-400 Hz).
 export function purr(seed, sr) {
   const rnd = mulberry32(seed);
-  const len = Math.round(2.4 * sr);
-  const d = new Float32Array(len);
-  const phases = [[0.08, 1.2, 26, 1], [1.38, 2.3, 22, 0.55]];
-  for (const [a, b, rate, amp] of phases) {
-    let t = a;
-    while (t < b) {
-      const u = (t - a) / (b - a);
-      const e = amp * Math.sin(Math.PI * u) ** 0.6;
-      addMode(d, sr, t, 125 + 15 * rnd(), e * 0.8, 0.011);
-      addMode(d, sr, t, 250 + 30 * rnd(), e * 0.35, 0.007);
-      addNoise(d, sr, t, 0.006, e * 0.25, { type: 'lp', f: 700, q: 0.7, tau: 0.002 }, rnd);
-      t += (1 / rate) * (0.94 + 0.12 * rnd());
+  const L = Math.round(2.6 * sr), X = Math.round(0.06 * sr);
+  const d = new Float32Array(L);
+  const H = [0, -11, -7, -15, -20, -27, -31, -32, -35, -38, -41, -44].map((v) => 10 ** (v / 20));
+  // near-coherent phases: each period is one soft pulse, as in the recordings
+  const hp = H.map(() => (rnd() - 0.5) * 0.8);
+  // exhale 0-1.5 s (louder, faster), inhale 1.56-2.54 s
+  const bound = [0, 1.5, 1.56, 2.54, 2.6];
+  const phaseAt = (t) => (t < 1.53 || t >= 2.57 ? 0 : 1);
+  const level = (t) => {
+    // dips (not silence) at the two breath turns
+    const dist = Math.min(Math.abs(t - 1.53), Math.abs(t - 2.57), Math.abs(t + 0.03));
+    const dip = 0.3 + 0.7 * clamp((dist - 0.01) / 0.07, 0, 1) ** 1.5;
+    return (phaseAt(t) === 0 ? 1 : 0.62) * dip;
+  };
+  // pulse times: provisional periods, then scaled so the cycle closes exactly
+  const T = [];
+  let t = 0;
+  while (t < 2.6) { const r = (phaseAt(t) === 0 ? 28.6 : 26.4) * (1 + (rnd() - 0.5) * 0.06); T.push(1 / r); t += 1 / r; }
+  const k = 2.6 / T.reduce((a, b) => a + b, 0);
+  const put = (i, v) => { d[((i % L) + L) % L] += v; };
+  t = 0;
+  for (const p0 of T) {
+    const P = p0 * k, e = level(t);
+    // the rumble: one period-long wavelet per pulse, Hann over two periods
+    // (overlap-add of those is flat), harmonics at the measured levels
+    const a = Math.round((t - P) * sr), b = Math.round((t + P) * sr);
+    for (let i = a; i < b; i++) {
+      const tau = i / sr - t, w = 0.5 + 0.5 * Math.cos((Math.PI * tau) / P);
+      let s = 0;
+      for (let h = 0; h < H.length; h++) s += H[h] * Math.cos((TAU * (h + 1) * tau) / P + hp[h]);
+      put(i, s * w * e * 0.5);
     }
+    t += P;
   }
-  let m = 0;
-  for (let i = 0; i < len; i++) m = Math.max(m, Math.abs(d[i]));
-  for (let i = 0; i < len; i++) d[i] *= 0.8 / (m || 1);
+  // the flutter: breath noise, pulse-synced but soft (p90/p10 ~4); rendered
+  // past the cycle end and crossfaded into its head so the seam is silent
+  const nz = new Float32Array(L + X);
+  const bLo = coef('bp', 260, 0.55, sr), bHi = coef('bp', 800, 0.7, sr), lp = coef('lp', 1300, 0.6, sr);
+  let a1 = 0, a2 = 0, c1 = 0, c2 = 0, e1 = 0, e2 = 0, f1 = 0, f2 = 0, g1 = 0, g2 = 0, h1 = 0, h2 = 0, k1 = 0, k2 = 0, l1 = 0, l2 = 0;
+  // the breath noise goes quiet for ~0.3 s at each turn (the recordings
+  // show it); the rumble only dips
+  const turn = (t) => { const dd = Math.min(Math.abs(t - 1.53), Math.abs(t - 2.57), Math.abs(t + 0.03)); return 0.08 + 0.92 * clamp((dd - 0.05) / 0.14, 0, 1) ** 2; };
+  const pulses = [];
+  t = 0;
+  for (const p0 of T) { pulses.push(t); t += p0 * k; }
+  let pi = 0;
+  for (let i = 0; i < L + X; i++) {
+    const tt = (i / sr) % 2.6;
+    while (pi + 1 < pulses.length && pulses[pi + 1] <= tt) pi++;
+    if (tt < pulses[pi]) pi = 0;
+    const P = (pi + 1 < pulses.length ? pulses[pi + 1] : 2.6) - pulses[pi];
+    const ph = (tt - pulses[pi]) / P;
+    const m = 0.1 + 0.9 * (0.5 + 0.5 * Math.cos(TAU * ph)) ** 4;
+    const x = rnd() * 2 - 1;
+    const y = bLo[0] * x + bLo[1] * a1 + bLo[2] * a2 - bLo[3] * c1 - bLo[4] * c2;
+    a2 = a1; a1 = x; c2 = c1; c1 = y;
+    const z = bHi[0] * x + bHi[1] * e1 + bHi[2] * e2 - bHi[3] * f1 - bHi[4] * f2;
+    e2 = e1; e1 = x; f2 = f1; f1 = z;
+    const inh = phaseAt(tt) === 1 ? 1.5 : 1; // the inhale is breathier
+    // the recordings are dim over 1.5 kHz (4th-order low-pass on the sum)
+    // with faint breath left to ~3 kHz
+    const v = y * 1.5 + z * 0.14;
+    const v1 = lp[0] * v + lp[1] * g1 + lp[2] * g2 - lp[3] * h1 - lp[4] * h2;
+    g2 = g1; g1 = v; h2 = h1; h1 = v1;
+    const v2 = lp[0] * v1 + lp[1] * k1 + lp[2] * k2 - lp[3] * l1 - lp[4] * l2;
+    k2 = k1; k1 = v1; l2 = l1; l1 = v2;
+    nz[i] = (v2 + z * 0.012) * m * level(tt) * turn(tt) * inh;
+  }
+  for (let i = 0; i < L; i++) {
+    if (i < X) { const w = i / X; d[i] += nz[i] * Math.sqrt(w) + nz[L + i] * Math.sqrt(1 - w); }
+    else d[i] += nz[i];
+  }
+  let mx = 0;
+  for (let i = 0; i < L; i++) mx = Math.max(mx, Math.abs(d[i]));
+  for (let i = 0; i < L; i++) d[i] *= 0.8 / (mx || 1);
   return d; // full length: the loop needs the exact cycle
 }
 

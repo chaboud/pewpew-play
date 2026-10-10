@@ -2,7 +2,7 @@
 // The only module in engine/ allowed to hold the wasm instance or call an
 // lk_* export (scripts/check-engine-deps.mjs). Everything it hands out is
 // rows, codes and numbers: the FrameState a render engine is given.
-import { ROW } from '../seam.js?v=k62';
+import { ROW } from '../seam.js?v=k63';
 
 export async function loadCore(url) {
   const w = await WebAssembly.instantiateStreaming(fetch(url), {});

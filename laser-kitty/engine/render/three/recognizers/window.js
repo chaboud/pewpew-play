@@ -1,8 +1,8 @@
 // windows (main.js meshFor @2039): frame, warm daylight panes, muntins; the
 // thin axis picks the wall. Panes sit just outside the frame slab on both
 // faces — centred inside it they vanish (screenshot-caught in main.js).
-import { CLS } from '../../../seam.js?v=k62';
-import { part } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part } from '../kit.js?v=k63';
 
 export default {
   name: 'window',

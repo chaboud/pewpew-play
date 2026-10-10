@@ -3,11 +3,11 @@
 // an engine is picked by name (?engine=three|plan) and loaded on demand.
 // A Unity frontend would be another implementation of the same contract,
 // living in its own project rather than in this list.
-import { assertEngine } from './seam.js?v=k62';
+import { assertEngine } from './seam.js?v=k63';
 
 export const ENGINES = {
-  three: { label: 'three.js (WebGL2)', load: () => import('./render/three/engine.js?v=k62') },
-  plan: { label: 'Plan view (Canvas 2D)', load: () => import('./render/plan/engine.js?v=k62') },
+  three: { label: 'three.js (WebGL2)', load: () => import('./render/three/engine.js?v=k63') },
+  plan: { label: 'Plan view (Canvas 2D)', load: () => import('./render/plan/engine.js?v=k63') },
 };
 
 export async function createEngine(name) {

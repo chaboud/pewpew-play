@@ -1,7 +1,7 @@
 // TVs (main.js meshFor @1123 and @1677): a bezel with an inset glossy
 // screen. Two signatures: the old x-thin set and the z-thin flatscreen.
-import { CLS } from '../../../seam.js?v=k62';
-import { part } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part } from '../kit.js?v=k63';
 
 const screenMat = (k) => k.phong({ emissive: 0x11323e, shininess: 130, specular: 0xaaccdd });
 

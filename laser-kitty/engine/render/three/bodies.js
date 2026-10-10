@@ -13,11 +13,11 @@
 //     member, a cloud rolls off the wreck, its fixtures go dark.
 //   Any other tombstone (a spark burning out, a spent drop) crumbles too.
 import * as THREE from 'three';
-import { ROW, F, CLS, SHAPE, EV, evType, evProp, bornOf } from '../../seam.js?v=k62';
-import { recognize } from './recognizers/index.js?v=k62';
-import { genericParts, inheritedParts } from './materials.js?v=k62';
-import { crumbleAt, growAt, CRUMBLE_S, GROW_S } from './crumble.js?v=k62';
-import { part } from './kit.js?v=k62';
+import { ROW, F, CLS, SHAPE, EV, evType, evProp, bornOf } from '../../seam.js?v=k63';
+import { recognize } from './recognizers/index.js?v=k63';
+import { genericParts, inheritedParts } from './materials.js?v=k63';
+import { crumbleAt, growAt, CRUMBLE_S, GROW_S } from './crumble.js?v=k63';
+import { part } from './kit.js?v=k63';
 
 const _m = new THREE.Matrix4(), _w = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 const _c = new THREE.Color();

@@ -4,18 +4,18 @@
 // from in main.js meshFor, so the registry checks them in the old chain's
 // order and a body the old viewer decorated one way is not claimed by a
 // later, broader signature. Porting a branch = one module + one line here.
-import spark from './spark.js?v=k62';
-import paint from './paint.js?v=k62';
-import { tv, flatscreen } from './tv.js?v=k62';
-import chandelier from './chandelier.js?v=k62';
-import { fridgeDoor, cabinetDoor } from './doors.js?v=k62';
-import { steelPot, mug, plate } from './kitchenware.js?v=k62';
-import cardboard from './cardboard.js?v=k62';
-import { floorLampShade, tableLamp } from './lamps.js?v=k62';
-import neon from './neon.js?v=k62';
-import windowR from './window.js?v=k62';
-import fixture from './fixtures.js?v=k62';
-import bottle from './bottle.js?v=k62';
+import spark from './spark.js?v=k63';
+import paint from './paint.js?v=k63';
+import { tv, flatscreen } from './tv.js?v=k63';
+import chandelier from './chandelier.js?v=k63';
+import { fridgeDoor, cabinetDoor } from './doors.js?v=k63';
+import { steelPot, mug, plate } from './kitchenware.js?v=k63';
+import cardboard from './cardboard.js?v=k63';
+import { floorLampShade, tableLamp } from './lamps.js?v=k63';
+import neon from './neon.js?v=k63';
+import windowR from './window.js?v=k63';
+import fixture from './fixtures.js?v=k63';
+import bottle from './bottle.js?v=k63';
 
 const RECOGNIZERS = [];
 export function register(r) {

@@ -3,7 +3,7 @@
 // cats as dots with a heading, the laser, and the events as rings. It is a
 // debugging view, and the proof that the seam is engine-neutral: the app
 // does not know which engine it is driving.
-import { ROW, F, CLS, SHAPE, LASER, EV, evType, evProp } from '../../seam.js?v=k62';
+import { ROW, F, CLS, SHAPE, LASER, EV, evType, evProp } from '../../seam.js?v=k63';
 
 export function createEngine() { return new PlanEngine(); }
 

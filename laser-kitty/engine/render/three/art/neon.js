@@ -1,7 +1,7 @@
 // art/neon.js — the twenty neon sign faces, design slot k = round(tint*20).
 // Moved verbatim from main.js neonTex (the founder's five signs keep their
 // slots: 3 BAR, 7 COLD BEER, 10 martini, 13 LIVE CATS, 17 OPEN).
-import { makeCanvas } from '../textures.js?v=k62';
+import { makeCanvas } from '../textures.js?v=k63';
 
 export const NEON_GLOW = [0xffb84f, 0xff6f3f, 0x5fe8d8, 0xff4fa0, 0xff6f6f, 0xff5fd0, 0x7fff7f, 0x5fd0ff, 0x5fb0ff, 0xffa040,
   0x5ff0ff, 0xff8fc8, 0x9fff5f, 0xff6f5f, 0xe8c080, 0xffe85f, 0x8fff9f, 0xffb84f, 0xffb050, 0xc080ff];

@@ -5,20 +5,20 @@
 // material table's look, all of it instanced; cats, the laser, cloth;
 // destruction that crumbles instead of popping.
 import * as THREE from 'three';
-import { EffectComposer } from '../../../vendor/EffectComposer.js?v=k62';
-import { N8AOPass } from '../../../vendor/N8AO.js?v=k62';
-import { ROW, F, CLS, LASER } from '../../seam.js?v=k62';
-import { makeKit } from './kit.js?v=k62';
-import { Batches } from './batches.js?v=k62';
-import { Bodies } from './bodies.js?v=k62';
-import { Lighting } from './lights.js?v=k62';
-import { Dust } from './dust.js?v=k62';
-import { Debris } from './debris.js?v=k62';
-import { Laser } from './laser.js?v=k62';
-import { Cats } from './cats.js?v=k62';
-import { Cloths } from './cloth.js?v=k62';
-import { floorTex, concreteTex, checkerTex } from './textures.js?v=k62';
-import { recognizers } from './recognizers/index.js?v=k62';
+import { EffectComposer } from '../../../vendor/EffectComposer.js?v=k63';
+import { N8AOPass } from '../../../vendor/N8AO.js?v=k63';
+import { ROW, F, CLS, LASER } from '../../seam.js?v=k63';
+import { makeKit } from './kit.js?v=k63';
+import { Batches } from './batches.js?v=k63';
+import { Bodies } from './bodies.js?v=k63';
+import { Lighting } from './lights.js?v=k63';
+import { Dust } from './dust.js?v=k63';
+import { Debris } from './debris.js?v=k63';
+import { Laser } from './laser.js?v=k63';
+import { Cats } from './cats.js?v=k63';
+import { Cloths } from './cloth.js?v=k63';
+import { floorTex, concreteTex, checkerTex } from './textures.js?v=k63';
+import { recognizers } from './recognizers/index.js?v=k63';
 
 export function createEngine() { return new ThreeEngine(); }
 

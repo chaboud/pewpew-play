@@ -2,8 +2,8 @@
 // is a light"; the dims pick the style — flush ceiling dome, pendant, shop
 // tube, wall sconce — and every one is a light candidate for the budget.
 import * as THREE from 'three';
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near } from '../kit.js?v=k63';
 
 const WARM = 0xffd9a0;
 

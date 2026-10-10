@@ -8,8 +8,8 @@
 // window.__catlab = {ready, setPose, setSpeed, setYaw}
 
 import * as THREE from 'three';
-import { CatRig, POSES } from './catrig.js?v=k62';
-import { mountNav } from './nav.js?v=k62';
+import { CatRig, POSES } from './catrig.js?v=k63';
+import { mountNav } from './nav.js?v=k63';
 mountNav({ right: '10px', top: '10px' });
 
 const params = new URLSearchParams(location.search);

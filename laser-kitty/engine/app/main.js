@@ -3,12 +3,12 @@
 // fixed-tick loop, and hands the render engine one FrameState a frame.
 // It never imports three and never reaches into render/: it picks an
 // engine from the registry by name (scripts/check-engine-deps.mjs).
-import { loadCore, SimHost } from './sim.js?v=k62';
-import { RoomCamera } from './camera.js?v=k62';
-import { LaserInput, bindLook } from './input.js?v=k62';
-import { createEngine, ENGINES } from '../engines.js?v=k62';
-import { EV, evType, evChain, evScore } from '../seam.js?v=k62';
-import { mountNav } from '../../nav.js?v=k62';
+import { loadCore, SimHost } from './sim.js?v=k63';
+import { RoomCamera } from './camera.js?v=k63';
+import { LaserInput, bindLook } from './input.js?v=k63';
+import { createEngine, ENGINES } from '../engines.js?v=k63';
+import { EV, evType, evChain, evScore } from '../seam.js?v=k63';
+import { mountNav } from '../../nav.js?v=k63';
 
 // the app's room table: engine-neutral art hints a frontend may use
 const ROOMS = ['Living room', 'Great room', 'Bathroom', 'Kitchen', 'Mansion entry', 'Garage', 'Family home', 'Apartments', 'Bar & grill', 'Café'];
@@ -47,7 +47,7 @@ const engineOpts = {
 };
 
 const canvas = document.getElementById('scene');
-const lk = await loadCore(new URL('../../lk_core.wasm?v=k62', import.meta.url));
+const lk = await loadCore(new URL('../../lk_core.wasm?v=k63', import.meta.url));
 const sim = new SimHost(lk);
 const cam = new RoomCamera();
 const input = new LaserInput(document.getElementById('pad'), document.getElementById('thumb'), cam);

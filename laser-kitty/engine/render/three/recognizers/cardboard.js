@@ -1,8 +1,8 @@
 // cardboard (main.js meshFor @1882): every box the sim marks with the
 // 0.12-gloss signature reads as kraft brown with a packing-tape seam.
 import * as THREE from 'three';
-import { CLS } from '../../../seam.js?v=k62';
-import { part, near, hash01 } from '../kit.js?v=k62';
+import { CLS } from '../../../seam.js?v=k63';
+import { part, near, hash01 } from '../kit.js?v=k63';
 
 export default {
   name: 'cardboard',

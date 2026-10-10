@@ -1,8 +1,8 @@
 // welder spark (main.js meshFor @922): the sim bounces tiny dense spheres
 // off an electric break; the view is a white-hot core in an additive glow.
 // Reserved signature: gloss 0.99, r 0.008.
-import { CLS, SHAPE } from '../../../seam.js?v=k62';
-import { part } from '../kit.js?v=k62';
+import { CLS, SHAPE } from '../../../seam.js?v=k63';
+import { part } from '../kit.js?v=k63';
 
 export default {
   name: 'spark',
