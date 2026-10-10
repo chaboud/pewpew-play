@@ -14,7 +14,7 @@
 // beyond what the frame already pays for.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
-import { LIGHTVOL_GLSL } from './lightvol.js?v=k60';
+import { LIGHTVOL_GLSL } from './lightvol.js?v=k61';
 
 // objects on this layer are the glow pass's sources: neon tube faces,
 // fixture glow sprites, the laser dot

@@ -465,6 +465,103 @@ function celRamp() {
   return toonRamp;
 }
 
+
+// ------------------------------------------------------------ shells ---
+// v6: the fur cat — Strollzilla's Jimothy technique (its ADR-0019): the
+// body's surface drawn again in layers, each pushed out along the normal a
+// little further and keeping only the fragments that lie on a strand tall
+// enough to reach it. A strand's cell comes from its BIND-POSE position, so
+// every layer cuts the same strand and nothing swims under the skinning;
+// strands are jittered off their cells, clumped by noise, combed back and
+// down, dark at the root, lighter at the tip, and widen to a soft solid
+// coat once they are smaller than a pixel (an in-game cat is ~80 px tall).
+// each shell redraws the whole coat surface: 12 on a fine pointer, 8 on a
+// phone (Strollzilla runs 6/10/16 by tier)
+export const FUR_SHELLS = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches ? 8 : 12;
+export const FUR = { length: 0.32, density: 36, tip: 0.2 };
+
+// coat length per vertex (canonical units: +z nose, y up): bare nose,
+// short face, ears and paws, a cheek ruff, a full chest and tail
+function furLen(x, y, z) {
+  const ax = Math.abs(x);
+  if (z > 2.0 && y > 2.55 && y < 3.15 && ax < 0.3) return 0.08; // the nose and muzzle front
+  if (y < 0.32) return 0.28; // paws
+  if (y > 3.5) return 0.4; // ears
+  if (z < -2.1) return 1.15; // the tail: a plume
+  if (z > 1.15 && z < 2.0 && y > 2.35 && y < 3.15 && ax > 0.28) return 1.05; // cheek ruff
+  if (z > 0.35 && z < 1.4 && y > 1.45 && y < 2.65) return 0.95; // chest
+  if (ax > 0.3 && y < 1.3) return 0.55; // legs
+  if (z > 1.3 && y > 2.4) return 0.5; // the face
+  return 0.8;
+}
+
+function buildShellGeometry() {
+  // a coarser surface than the body (Strollzilla uses 0.6x); coarser again on a phone
+  const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  const g = weld(buildGeometry(coarse ? 44 : 56, 120000));
+  g.computeVertexNormals();
+  const pos = g.getAttribute('position');
+  const fl = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) fl[i] = furLen(pos.getX(i), pos.getY(i), pos.getZ(i));
+  g.setAttribute('aFur', new THREE.BufferAttribute(fl, 1));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(pos.count * 2), 2));
+  return g;
+}
+
+const SHELL_HASH = `
+  float furHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+  float furNoise(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(furHash(i), furHash(i + vec3(1, 0, 0)), f.x), mix(furHash(i + vec3(0, 1, 0)), furHash(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(furHash(i + vec3(0, 0, 1)), furHash(i + vec3(1, 0, 1)), f.x), mix(furHash(i + vec3(0, 1, 1)), furHash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }`;
+
+// one layer's material. rig: { time, lag } uniforms from CatRig (the same
+// inertia the v5 clumps ride), so the tips trail the cat's motion
+export function shellMaterial(h, rig, vertexColors) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors, color: vertexColors ? 0xffffff : 0xff9d45, roughness: 0.95, metalness: 0 });
+  const U = { uH: { value: h }, uFurLen: { value: FUR.length }, uFurDensity: { value: FUR.density }, uFurTip: { value: FUR.tip } };
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, U, { uFurTime: rig.time, uFurLag: rig.lag });
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uH; uniform float uFurLen; uniform float uFurTime; uniform vec3 uFurLag;
+        attribute float aFur; varying vec3 vFurP; varying vec3 vFurN; varying float vFurK;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        vFurP = position; vFurN = normalize(normal); vFurK = aFur;
+        // out along the bind-pose normal as far as the coat reaches here,
+        // combed back (-z) and down the body, the tips drooping
+        float reach = uFurLen * aFur * uH;
+        vec3 comb = vec3(0.0, -0.6, -0.8);
+        comb -= dot(comb, vFurN) * vFurN;
+        transformed += vFurN * reach + comb * reach * 0.9 * uH;
+        transformed.y -= reach * 0.3 * uH;
+        // the tips trail the motion (CatRig's damped lag) and stir a little
+        float sw = uH * uH * aFur;
+        vec3 stir = vec3(sin(uFurTime * 2.3 + position.x * 3.0), sin(uFurTime * 1.9 + position.z * 2.0), cos(uFurTime * 2.1 + position.y * 2.5)) * 0.035;
+        transformed += (uFurLag * 0.55 + stir) * sw;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform float uH; uniform float uFurDensity; uniform float uFurTip; varying vec3 vFurP; varying vec3 vFurN; varying float vFurK;
+        ${SHELL_HASH}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 q = vFurP * uFurDensity;
+        // a strand's size on screen: under a pixel or two it widens into a soft coat
+        float fw = length(fwidth(q));
+        vec3 cell = floor(q), n = normalize(vFurN);
+        vec3 f = fract(q) - 0.5 - (vec3(furHash(cell + 17.0), furHash(cell + 41.0), furHash(cell + 73.0)) - 0.5) * 0.7;
+        vec3 ft = f - dot(f, n) * n;
+        float clump = furNoise(vFurP * 2.2);
+        float len = (0.35 + 0.65 * furHash(cell)) * (0.55 + 0.6 * clump);
+        float t = uH / max(len, 1e-3);
+        float r = mix(0.48, 0.1, clamp(t, 0.0, 1.0));
+        r = mix(r, 0.75, smoothstep(0.35, 0.9, fw));
+        if (uH > len || length(ft) > r || vFurK < 0.02) discard;
+        diffuseColor.rgb *= mix(0.55, 1.0, t);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.25 + 0.06, uFurTip * smoothstep(0.6, 1.0, t));`);
+  };
+  m.customProgramCacheKey = () => 'cat-fur-shell-v1' + (vertexColors ? '-vc' : '');
+  return m;
+}
+
 // ------------------------------------------------------------ variants ---
 // v3: smooth sculpt. v4: chunky faceted low-poly of the same body.
 // v5: v3's body under long spiky fur, cel-shaded with an ink outline.
@@ -473,6 +570,7 @@ export function buildCatSource(variant) {
   if (cache[variant]) return cache[variant];
   const faceted = variant === 4;
   const furry = variant === 5;
+  const shelled = variant === 6;
   const geo = furry ? buildFurGeometry() : buildGeometry(faceted ? 34 : 88, 120000);
   if (faceted) {
     // flat shading: non-indexed MC output already is; recompute normals
@@ -506,6 +604,19 @@ export function buildCatSource(variant) {
     ink.bind(mesh.skeleton, mesh.bindMatrix);
     mesh.add(ink);
   }
+  if (shelled) {
+    // v3's body under shells of fur (one coarser skinned surface, drawn
+    // FUR_SHELLS times); CatRig gives each layer its own material
+    const fg = buildShellGeometry();
+    skinGeometry(fg);
+    for (let i = 1; i <= FUR_SHELLS; i++) {
+      const layer = new THREE.SkinnedMesh(fg, new THREE.MeshBasicMaterial());
+      layer.name = `fur${i}_0`;
+      layer.userData.furShell = i / FUR_SHELLS;
+      mesh.add(layer);
+      layer.bind(mesh.skeleton, mesh.bindMatrix);
+    }
+  }
   // Sketchfab-style nesting: wrapper x100 so CatRig's SCALE lands the cat
   // at its usual 0.35m
   const wrap = new THREE.Group();
@@ -514,7 +625,7 @@ export function buildCatSource(variant) {
   wrap.add(mesh);
   const scene = new THREE.Group();
   scene.add(wrap);
-  const src = { scene, animations: [buildWalkClip(byKey)] };
+  const src = { scene, animations: [buildWalkClip(byKey)], shellMaterial: shelled ? shellMaterial : null };
   cache[variant] = src;
   return src;
 }

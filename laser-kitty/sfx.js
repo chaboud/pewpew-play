@@ -3,7 +3,7 @@
 // compressor so a bookcase avalanche doesn't clip. Works on a live
 // AudioContext (the bank is built in a worker) or an OfflineAudioContext
 // (the bank is built synchronously — that's how the reel test renders).
-import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k60';
+import { roomIR, ROOM_ACOUSTICS, catalog } from './sfxbank.js?v=k61';
 
 export class SfxEngine {
   constructor(ctx) {
@@ -106,6 +106,33 @@ export class SfxEngine {
     src.start(at ?? ctx.currentTime + when);
     this.stats[key] = (this.stats[key] || 0) + 1;
     return true;
+  }
+
+  // the debris bed (the compound crash's floor): two loops of trickling
+  // grains of different lengths, their level following how much just broke
+  bed(level) {
+    const ctx = this.ctx;
+    if (!this.bedG) {
+      if (!this.has('bed:0') || !this.has('bed:1')) return;
+      this.bedG = ctx.createGain();
+      this.bedG.gain.value = 0;
+      this.bedG.connect(this.dry);
+      const ws = ctx.createGain();
+      ws.gain.value = 0.8;
+      this.bedG.connect(ws).connect(this.wetSend);
+      for (const k of ['bed:0', 'bed:1']) {
+        const src = ctx.createBufferSource();
+        src.buffer = this.bank[k][0];
+        src.loop = true;
+        src.playbackRate.value = 0.94 + Math.random() * 0.12;
+        src.connect(this.bedG);
+        src.start();
+      }
+      this.bedLevel = 0;
+    }
+    if (Math.abs(level - this.bedLevel) < 0.01) return;
+    this.bedLevel = level;
+    this.bedG.gain.setTargetAtTime(level, ctx.currentTime, level > this.bedG.gain.value ? 0.05 : 0.35);
   }
 
   // the purr: one looping voice, faded in and out
