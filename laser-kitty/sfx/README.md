@@ -27,9 +27,10 @@ Then write `sfx/manifest.json`:
 }
 ```
 
-Pool names: `impact`, `crash`, `scratch`, `meow`, `mrrow` (chirp,
-chatter, boing, purr stay synthesized until pools are added for them —
-ask and we wire more). 3–5 variants per pool is the sweet spot; the
+Pool names: `impact`, `crash`, `scratch`, `meow`, `mrrow`. Anything
+without a pool plays from the procedural bank (`sfxbank.js` — modal
+material impacts, shatters, formant cat voices, purr), which is
+license-free by construction; a pool here only replaces it. 3–5 variants per pool is the sweet spot; the
 player hears repeats fast with fewer. OGG or WAV both decode; keep
 files mono and short.
 
