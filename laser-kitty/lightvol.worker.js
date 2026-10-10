@@ -1,7 +1,7 @@
 // lightvol.worker.js — the light grid's refinement loop, off the main
 // thread. Messages in: setup / solid / step; out: result (the packed
 // bytes, transferred back for reuse).
-import { LightGrid } from './lightgrid.js?v=k58';
+import { LightGrid } from './lightgrid.js?v=k60';
 
 const grid = new LightGrid();
 let rows = null, rowCount = 0, solidDirty = false;

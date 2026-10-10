@@ -6,13 +6,15 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k59';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k59';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k60';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k60';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k59';
-import { Career } from './career.js?v=k59';
-import { mountNav } from './nav.js?v=k59';
+import { CatRig } from './catrig.js?v=k60';
+import { Career } from './career.js?v=k60';
+import { mountNav } from './nav.js?v=k60';
+import { SfxEngine, } from './sfx.js?v=k60';
+import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k60';
 
 // career mode (?play=1): the locked-down "actual game" over the same
 // engine. null in Free Play — every hook below is a cheap no-op then.
@@ -25,7 +27,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k59'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k60'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3746,12 +3748,19 @@ function playSample(name, pan, rateJitter = 0.15, gain = 0.55, when = 0) {
   src.start(ac.currentTime + when);
   return true;
 }
+// the engine (sfx.js): procedural bank built in a worker, dry bus + room
+// reverb + compressor. Until the bank lands, the old synth voices below
+// still play — through the same bus, so they get the room too.
+let engine = null;
 function sfxInit() {
   if (ac) return;
   ac = new (window.AudioContext || window.webkitAudioContext)();
-  sfxGain = ac.createGain();
-  sfxGain.gain.value = cfg.sound ? 0.5 : 0;
-  sfxGain.connect(ac.destination);
+  engine = new SfxEngine(ac);
+  engine.master.gain.value = cfg.sound ? 0.7 : 0;
+  engine.setRoom(cfg.room | 0);
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k60', import.meta.url));
+  window.__sfx = engine; // test hook
+  sfxGain = engine.dry;
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -3854,6 +3863,11 @@ function vocal({ f0, peak, end, dur, gain, when = 0 }) {
 let purr = null;
 function setPurr(on) {
   if (!ac) return;
+  if (engine && engine.has('cat:purr')) {
+    if (purr) { purr.pg.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.3); purr.o.stop(ac.currentTime + 0.35); purr.am.stop(ac.currentTime + 0.35); purr = null; }
+    engine.loop('cat:purr', on, { gain: 0.42 });
+    return;
+  }
   if (on && !purr) {
     const o = ac.createOscillator();
     o.type = 'triangle';
@@ -3878,7 +3892,7 @@ function setPurr(on) {
     p.am.stop(ac.currentTime + 0.35);
   }
 }
-const sfx = {
+const synthSfx = {
   // one voice PER falling object: pitch from its size, timbre from its
   // shape, stereo position from where it fell, micro-delay so a bookcase
   // avalanche mixes into clatter instead of one Atari click
@@ -3964,6 +3978,151 @@ const sfx = {
   },
 };
 
+// --- the voices the game calls. Each prefers a user-dropped CC0 sample
+// (sfx/manifest.json), then the procedural bank, then the old synth.
+// Materials come from the sim (lk_body_material) plus the render row:
+// brittle + high gloss = glass, brittle = ceramic, soft, cardboard by its
+// reserved gloss, steel by high gloss, billiard-sized spheres, else wood.
+function soundClass(i, shape, a, b, c, cls, gloss) {
+  const mb = lk.lk_body_material ? lk.lk_body_material(sim, i) : 0;
+  const kind = mb & 3, electric = !!(mb & 4), liquid = !!(mb & 8);
+  const size = shape === 1 ? a : Math.max(a, b, c);
+  let mat;
+  if (kind === 2 || (cls !== 0 && gloss <= 0.1)) mat = 'soft';
+  else if (kind === 1) mat = gloss >= 0.85 ? 'glass' : 'ceramic';
+  else if (Math.abs(gloss - 0.12) < 0.01) mat = 'cardboard';
+  else if (shape === 1 && a < 0.05 && gloss >= 0.8) mat = 'ball';
+  else if (gloss >= 0.65) mat = 'metal';
+  else mat = 'wood';
+  return { mat, size, electric, liquid, brittle: kind === 1 };
+}
+const nearestIdx = (arr, v) => { let bi = 0; for (let k = 1; k < arr.length; k++) if (Math.abs(Math.log(arr[k] / v)) < Math.abs(Math.log(arr[bi] / v))) bi = k; return bi; };
+const jit = (p) => 1 + (Math.random() * 2 - 1) * p;
+const bankOn = () => engine && engine.ready;
+// per-cat voices: a bigger cat speaks lower (rate shifts pitch AND formants)
+const CAT_VOICE = [1.0, 1.13, 0.88, 1.22, 0.94, 1.06, 0.82, 1.17];
+function catPanOf(k) {
+  for (const v of catViews.values()) if (v.k === k) return panOf(v.group);
+  return 0;
+}
+const catLast = {};
+const crashBacklog = [0, 0, 0];
+function catThrottled(kind, k, ms) {
+  const key = kind + k, t = performance.now();
+  if (catLast[key] && t - catLast[key] < ms) return true;
+  catLast[key] = t;
+  return false;
+}
+const sfx = {
+  // a prop falling over: its material's modal hit, pitched by size
+  impact(mesh, delay = 0) {
+    if (!ac) return;
+    const s = mesh?.userData?.snd;
+    if (!bankOn() || !s) return synthSfx.impact(mesh);
+    const pan = panOf(mesh);
+    if (playSample('impact', pan, 0.22, 0.5, delay)) return;
+    const n = hitCluster();
+    // impacts are the bed, not the punchline: they leave the last voices
+    // for breaks and cats (an avalanche of long metal rings once starved
+    // every shatter in the bar)
+    if (n > 16 || engine.voices > engine.maxVoices - 10) return;
+    const key = s.mat === 'ball' ? 'hit:ball:0' : `hit:${s.mat}:${nearestIdx(SND_SIZES, s.size)}`;
+    const ref = s.mat === 'ball' ? 0.035 : SND_SIZES[nearestIdx(SND_SIZES, s.size)];
+    const rate = Math.max(0.8, Math.min(1.25, Math.sqrt(ref / Math.max(0.01, s.size)))) * jit(0.05);
+    const gain = Math.max(0.3, Math.min(1.1, 0.3 + s.size * 1.6));
+    engine.play(key, { pan, gain, rate, when: delay + Math.random() * 0.03 });
+    if (n >= 4 && !throttled('rumble', 1100)) engine.play('hit:wood:3', { pan: 0, gain: 0.55, rate: 0.7 }); // the avalanche bed
+  },
+  // a break: glass, ceramic, or electric gear; a liquid container that
+  // "broke" by spilling splashes instead
+  crash(mesh) {
+    if (!ac) return;
+    if (engine) engine.stats['call:crash'] = (engine.stats['call:crash'] || 0) + 1;
+    const s = mesh?.userData?.snd;
+    const pan = panOf(mesh);
+    if (!bankOn() || !s) return synthSfx.crash(pan);
+    // a burst of breaks spreads over three stereo zones; breaks that land
+    // inside a zone's window fold into the next one as a BIGGER shatter
+    // instead of vanishing (58 bar breaks in a second once played 3)
+    const zone = pan < -0.33 ? 0 : pan > 0.33 ? 2 : 1;
+    if (throttled('crash' + zone, 60)) { crashBacklog[zone]++; return; }
+    const extra = crashBacklog[zone];
+    crashBacklog[zone] = 0;
+    if (playSample('crash', pan, 0.1, 0.6)) return;
+    if (!s.brittle) {
+      if (s.liquid) sfx.splash(pan, 1);
+      sfx.impact(mesh);
+      return;
+    }
+    engine.stats['call:shatter'] = (engine.stats['call:shatter'] || 0) + 1;
+    const kind = s.electric ? 'electric' : s.mat === 'glass' ? 'glass' : 'ceramic';
+    const si = Math.min(SHATTER_SIZES[kind].length - 1, nearestIdx(SHATTER_SIZES[kind], s.size) + (extra >= 6 ? 2 : extra >= 2 ? 1 : 0));
+    engine.play(`shatter:${kind}:${si}`, { pan, gain: Math.min(1.4, 0.8 + s.size * 2 + extra * 0.05), rate: jit(0.06) });
+    if (s.liquid) sfx.splash(pan, s.size > 0.06 ? 1 : 0, 0.04);
+  },
+  // furniture coming apart
+  snap(mesh) {
+    if (!ac) return;
+    if (!bankOn()) { for (let k = 0; k < 4; k++) synthSfx.impact(mesh); return; }
+    const pan = panOf(mesh);
+    engine.play('snap', { pan, gain: 1.3, rate: jit(0.06) });
+    for (let k = 0; k < 3; k++) sfx.impact(mesh, 0.2 + Math.random() * 0.4);
+  },
+  scratch(pan, stage = 0) {
+    if (!ac || throttled('scratch', 110)) return;
+    if (!bankOn()) return synthSfx.scratch(pan);
+    if (playSample('scratch', pan, 0.15, 0.5)) return;
+    engine.play(stage >= 2 ? 'scratch:1' : 'scratch:0', { pan, gain: 0.7, rate: jit(0.08) });
+  },
+  splash(pan, sizeIdx = 1, delay = 0) {
+    if (!bankOn() || throttled('splash', 120)) return;
+    engine.play(`splash:${sizeIdx}`, { pan, gain: 0.75, rate: jit(0.08), when: delay });
+  },
+  spark(pan) {
+    if (!bankOn() || throttled('spark', 160)) return;
+    engine.play('spark', { pan, gain: 0.8, rate: jit(0.1) });
+  },
+  paw(pan) {
+    if (!bankOn() || throttled('paw', 90)) return;
+    engine.play('paw', { pan, gain: 0.35, rate: jit(0.1), wet: 0.5 });
+  },
+  land(pan) {
+    if (!ac) return;
+    if (!bankOn()) return synthSfx.impact(null);
+    engine.play('land', { pan, gain: 0.8, rate: jit(0.08) });
+  },
+  pounce(k) {
+    if (!ac) return;
+    if (!bankOn()) return synthSfx.boing();
+    if (throttled('pounce', 150)) return;
+    const pan = catPanOf(k), r = CAT_VOICE[k % CAT_VOICE.length];
+    engine.play('whoosh', { pan, gain: 0.5, rate: jit(0.1) });
+    if (Math.random() < 0.6) engine.play('cat:mrp', { pan, gain: 0.45, rate: r * jit(0.04) });
+  },
+  // vocals: per cat, panned to where that cat is
+  cat(kind, k = 0, ms = 900) {
+    if (!ac || catThrottled(kind, k, ms)) return;
+    const pool = kind === 'meow' || kind === 'mrrow' ? kind : null;
+    if (pool && playSample(pool, catPanOf(k), 0.12, 0.6)) return;
+    if (!bankOn()) {
+      if (kind === 'trill') return synthSfx.chirp();
+      if (kind === 'chatter') return synthSfx.chatter();
+      if (kind === 'meow' || kind === 'mew') return synthSfx.meow();
+      if (kind === 'mrrow') return synthSfx.mrrow();
+      return;
+    }
+    // cats sit under the destruction: a meow is a line, a mirror is the punchline
+    const gain = kind === 'chatter' ? 0.38 : kind === 'mew' ? 0.4 : kind === 'trill' ? 0.45 : 0.42;
+    engine.play(`cat:${kind}`, { pan: catPanOf(k), gain, rate: CAT_VOICE[k % CAT_VOICE.length] * jit(0.04), wet: 0.8 });
+  },
+  // the old names the rest of the file still calls
+  chirp(k = 0) { sfx.cat('trill', k, 900); },
+  chatter(k = 0) { sfx.cat('chatter', k, 1600); },
+  meow(k = 0) { sfx.cat('meow', k, 4000); },
+  mrrow(k = 0) { sfx.cat('mrrow', k, 700); },
+  boing(k = 0) { sfx.pounce(k); },
+};
+
 // --- comedy layer: mickey-mousing (research/audio.md — sound is half the
 // physics joke) ------------------------------------------------------------
 // dizzy stars for the post-tumble compose-yourself beat
@@ -4019,9 +4178,12 @@ function applyLookMode() {
   }
   document.getElementById('dbg').classList.toggle('on', debugLook);
 }
+let roomBuiltAt = 0;
 function rebuildSim() {
   lk.lk_free(sim);
   sim = newSim();
+  roomBuiltAt = performance.now();
+  if (engine) engine.setRoom(cfg.room | 0);
   layoutRoom();
   for (const m of meshes) if (m) scene.remove(m);
   meshes = [];
@@ -4107,7 +4269,7 @@ soundEl.checked = cfg.sound;
 soundEl.addEventListener('change', () => {
   cfg.sound = soundEl.checked;
   saveCfg();
-  if (sfxGain) sfxGain.gain.value = cfg.sound ? 0.5 : 0;
+  if (engine) engine.master.gain.value = cfg.sound ? 0.7 : 0;
 });
 const popsCk = document.getElementById('s-pops');
 popsCk.checked = cfg.pops;
@@ -4249,14 +4411,21 @@ function frame(now) {
       if (ev === 1) {
         // cat vocals ride the brain's state changes
         const to = code & 0xff;
-        if (to === 1) sfx.chirp(); // lock-on
-        if (to === 3) sfx.chatter(); // windup excitement
-        if (to === 6) sfx.meow(); // bored: "hey, keep playing"
+        const ck = (code >> 8) & 0xff;
+        if (to === 1) sfx.cat('trill', ck, 900); // lock-on: "brrrp?"
+        if (to === 3) sfx.cat('chatter', ck, 1600); // windup: the prey chatter
+        if (to === 6) sfx.cat(Math.random() < 0.7 ? 'meow' : 'mew', ck, 4000); // bored: "hey, keep playing"
+        if (to === 7) sfx.cat('trill', ck, 2500); // zoomies kick off with a trill
       }
-      if (ev === 2) sfx.boing();
+      if (ev === 2) sfx.pounce(code & 0xfff);
       if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1fff]);
-      if (ev === 4) sfx.crash(panOf(meshes[(code >>> 12) & 0x1fff]));
-      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0x1fff]));
+      if (ev === 4) sfx.crash(meshes[(code >>> 12) & 0x1fff]);
+      if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0x1fff]), code & 0xfff);
+      if (ev === 8) {
+        const bm = meshes[(code >>> 12) & 0x1fff];
+        if (((code >> 25) & 0x7) === 1) sfx.spark(panOf(bm));
+        else sfx.paw(panOf(bm));
+      }
       if (ev === 3 || ev === 4) {
         const chain = (code >> 25) & 0x7;
         const label = ev === 4 ? 'CRASH ' : '';
@@ -4282,7 +4451,7 @@ function frame(now) {
         if (m) {
           burstPuffs(m.position);
           burstPuffs(m.position);
-          for (let k = 0; k < 4; k++) sfx.impact(m); // many-parts clatter (+ rumble bed)
+          sfx.snap(m); // splinters, the crack, the pieces hitting the floor
         }
       } else if (ev === 8) {
         // comedy garnish: paw prints (kind 0) and spark showers (kind 1).
@@ -4405,7 +4574,8 @@ function frame(now) {
         // hard landing: tumble roll, dizzy stars, a bonk
         view.tumbleT = 0;
         view.starT = 2.0;
-        sfx.impact(view.group);
+        sfx.land(panOf(view.group));
+        if (Math.random() < 0.5) sfx.cat('mrrow', view.k, 2500);
       }
       if (st === 7 && now - (view.lastPuff ?? 0) > 110) {
         // zoomies kick up dust
@@ -4502,6 +4672,9 @@ function frame(now) {
         meshes[i] = clothDummy; // skinned by its patch, not per-particle
       } else {
         meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5], data[o + 7]);
+        meshes[i].userData.snd = soundClass(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 13]);
+        // a puddle born mid-play is a spill landing: splash
+        if (meshes[i].userData.puddle && now - roomBuiltAt > 2000) sfx.splash(-data[o + 5] / 3, data[o + 2] > 0.12 ? 2 : data[o + 2] > 0.06 ? 1 : 0);
         // spawned pieces (flag carries parent rec + 1) inherit the parent
         // mesh's color — TV shards look like the TV, not a fresh rainbow
         if (data[o] === 2 && !meshes[i].userData.spark) {
