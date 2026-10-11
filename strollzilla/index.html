@@ -100,8 +100,16 @@
     #fps { position: fixed; top: 4px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #6f7890; white-space: pre; text-align: center; }
     #boot-last { color: #ffb8a8; font-size: 12px; line-height: 1.35; cursor: pointer; }
     #boot-last.hidden { display: none; }
-    #fresh-row { display: block; margin: 10px 0 2px; font-size: 13px; color: #c9cbd6; }
-    #fresh-row input { vertical-align: middle; margin-right: 6px; }
+    #fresh-row { display: block; margin: 0 0 2px; font-size: 13px; color: #c9cbd6; max-width: 420px; }
+    #fresh-row input { vertical-align: middle; margin-right: 6px; width: 18px; height: 18px; }
+    #fresh-row.fixed { color: #8a93ad; }
+    /* the next new run's size (app/run-size.ts), under the kaiju */
+    #size-row { width: min(560px, 100%); display: flex; flex-direction: column; gap: 2px; text-align: left; font-size: 13px; color: #d7dbe6; }
+    #size-row .sz-head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+    #size-row .sz-head b { color: #ffd23a; font-size: 15px; }
+    #size-row .sz-head small { flex: 1; color: #6f7890; font-size: 12px; }
+    #size-row .sz-head button { padding: 5px 10px; font-size: 12px; }
+    #size-row input { width: 100%; height: 30px; accent-color: #ffd23a; touch-action: pan-y; }
     /* destructive and rare: small and quiet, under everything else */
     #btn-log { font-size: 12px; padding: 8px 12px; margin-bottom: 8px; }
     #btn-log.alarm { background: #6b1d1d; border-color: #c44; color: #fff; font-weight: bold; }
@@ -143,7 +151,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-BmSiiSGr.js"></script>
+  <script type="module" crossorigin src="./assets/main-rLqim9O1.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-BaxAQ6qw.js">
   <link rel="modulepreload" crossorigin href="./assets/ropes-Dlz-IX-S.js">
   <link rel="modulepreload" crossorigin href="./assets/pose-BvaW_UiY.js">
@@ -158,6 +166,7 @@
     <div id="cities"></div>
     <button id="btn-continue" class="hidden">Continue</button>
     <div id="kaiju-pick"></div>
+    <div id="size-row"></div>
     <div id="where">
       <button id="btn-couch">Start in this city</button>
       <form id="addr-form">
@@ -166,7 +175,6 @@
       </form>
       <div id="addr-results"></div>
       <button id="btn-here" class="secondary">Start where I am</button>
-      <label id="fresh-row"><input type="checkbox" id="fresh"> Start fresh: forget the wreck saved where you start</label>
     </div>
     <div id="how" class="hidden">
       <p id="how-where"></p>
@@ -174,6 +182,8 @@
       <button id="btn-how-walk" class="secondary">Walk it: your real steps (GPS)</button>
       <button id="btn-how-back" class="secondary">back</button>
     </div>
+    <!-- outside both: it is set before the place and still there at couch or walk (founder, 2026-10-11) -->
+    <label id="fresh-row"><input type="checkbox" id="fresh"> <span id="fresh-text">Start fresh: forget the wreck saved where you start</span></label>
     <button id="btn-log" class="secondary hidden">Copy the last run's log</button>
     <button id="btn-reset" class="secondary">Reset: clear saved runs, wreckage and the maps built for you</button>
     <p>Pick where, then how. A new place is built for you the first time (about a minute), then kept. Walking copies your real steps from wherever the kaiju starts; from where you stand, it follows you. Keep the screen on while walking.</p>
