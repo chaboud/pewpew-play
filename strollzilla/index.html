@@ -50,6 +50,8 @@
     #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; font-size: 13px; line-height: 1.45; text-shadow: 0 1px 2px #000; }
     #hud .big { font-size: clamp(20px, 6.4vw, 30px); font-weight: 700; color: #ffd23a; }
     #hud > div:first-child { min-width: 0; }
+    /* the compass rose (app/compass.ts): small and faint under the score, heading-up */
+    #compass { display: block; width: 40px; height: 40px; margin-top: 4px; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.5)); }
     #hud .right { text-align: right; flex-shrink: 0; width: min-content; display: flex; flex-direction: column; align-items: flex-end; }
     /* the buttons never wrap: a gear dropped to a line of its own sat under the open panel and could not close it */
     #hud .btns { display: flex; flex-wrap: nowrap; gap: 6px; margin-top: 6px; }
@@ -151,7 +153,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-DHQMyxC_.js"></script>
+  <script type="module" crossorigin src="./assets/main-BXyLRJo8.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/atmosphere-eOGdo9mh.js">
   <link rel="modulepreload" crossorigin href="./assets/ropes-BO0mBCe2.js">
   <link rel="modulepreload" crossorigin href="./assets/pose-NiuzrLkf.js">
@@ -205,6 +207,7 @@
     <div>
       <div class="big" id="hud-score">$0</div>
       <div id="hud-cells"></div>
+      <div id="hud-compass"></div>
     </div>
     <div class="right">
       <div id="hud-dist">0 m</div>
