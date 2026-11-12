@@ -4,11 +4,11 @@
 <meta charset="utf-8" />
 <meta name="robots" content="noindex, nofollow" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>laser-kitty · cat lab</title>
+<title>Laser v. Kitty · cat lab</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #14121a; }
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; }
-  #ui { position: fixed; top: 10px; left: 10px; z-index: 5; width: 210px;
+  #ui { position: fixed; top: 10px; left: 10px; z-index: 5; width: 210px; max-height: calc(100% - 44px); overflow-y: auto;
         background: rgba(24,21,32,0.94); border: 1px solid #3a3644; border-radius: 12px;
         padding: 12px 14px; color: #cfd4e6; font: 500 12px system-ui, sans-serif; }
   #ui h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.14em; color: #9ad; }
@@ -25,7 +25,7 @@
 <body>
 <canvas id="scene"></canvas>
 <div id="ui">
-  <h3>CAT LAB · V2 RIG</h3>
+  <h3>CAT LAB</h3>
   <label>Model</label>
   <div class="row"><select id="c-model" style="flex:1">
     <option value="2">v2 &middot; toon cat (CC-BY)</option>
@@ -33,6 +33,40 @@
     <option value="4">v4 &middot; faceted</option>
     <option value="5">v5 &middot; long-hair (cel)</option>
     <option value="6">v6 &middot; fur (shells)</option>
+    <option value="7">v7 &middot; the character cat</option>
+  </select></div>
+  <label>Body type (v7)</label>
+  <div class="row"><select id="c-build" style="flex:1">
+    <option value="0">standard</option>
+    <option value="1">chonk</option>
+    <option value="2">lanky</option>
+    <option value="3">kitten</option>
+    <option value="-1">as the game deals them (by coat)</option>
+  </select></div>
+  <label>Expression (v7)</label>
+  <div class="row"><select id="c-mood" style="flex:1">
+    <option value="">auto (from the pose)</option>
+    <option value="calm">calm &middot; sitting</option>
+    <option value="alert">alert &middot; locked on</option>
+    <option value="stalk">stalk</option>
+    <option value="windup">windup</option>
+    <option value="pounce">pounce</option>
+    <option value="recover">recover</option>
+    <option value="bored">bored</option>
+    <option value="zoomies">zoomies</option>
+    <option value="search">search</option>
+    <option value="swat">swat</option>
+    <option value="content">content &middot; purr, groom</option>
+    <option value="pleased">pleased &middot; wander</option>
+    <option value="squint">squint &middot; stretch</option>
+  </select></div>
+  <label>Line-up</label>
+  <div class="row"><select id="c-lineup" style="flex:1">
+    <option value="">one cat</option>
+    <option value="builds">v7 &middot; every body type</option>
+    <option value="coats">every coat</option>
+    <option value="versions">v3 &middot; v6 &middot; v7</option>
+    <option value="moods">v7 &middot; every expression</option>
   </select></div>
   <label>Coat</label>
   <div class="row"><select id="c-coat" style="flex:1">
@@ -76,6 +110,6 @@
   "postprocessing": "./vendor/pp-stub.js"
 }}
 </script>
-<script type="module" src="catlab.js?v=k63"></script>
+<script type="module" src="catlab.js?v=k64"></script>
 </body>
 </html>

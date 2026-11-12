@@ -6,6 +6,11 @@
 // tuning, 3-minute visits, score = the damage you bank, stars gate the
 // next room. All state in localStorage ('lk-career'); no server.
 //
+// The visit itself (the locked room, the clock, the in-run menu) is
+// run.js, shared with Story (story.js) — the front door since the civil
+// trial arrived. Career is what it always was: the arcade score ladder
+// and the medals, reached from the docket.
+//
 // The medal bus consumes the SAME sim event stream the HUD does — pure
 // counters over event codes plus two per-frame observations (puddle
 // decals on screen, every-cat-loafing) — so the detection logic ports to
@@ -13,6 +18,8 @@
 //
 // Thresholds are PROVISIONAL (marked in the wiki): tuned to feel, not
 // measurement. The founder playtests them down or up.
+
+import { RunShell } from './run.js?v=k64';
 
 const ROOMS = [
   { room: 0, name: 'Living Room', cats: 1, stars: [2000, 5000, 10000],
@@ -24,7 +31,6 @@ const ROOMS = [
   { room: 1, name: 'Great Room', cats: 3, stars: [3000, 8000, 16000],
     blurb: 'Three cats. The piano, the bar cart, the heirloom clock. Good luck.' },
 ];
-const RUN_SECONDS = 180;
 
 const MEDALS = [
   { id: 'deposit', name: 'Security Deposit', desc: 'Bank 1,000 in one visit',
@@ -50,13 +56,6 @@ const MEDALS = [
 ];
 
 const css = `
-#panel.open { z-index: 45; }
-#ck-overlay { position: fixed; inset: 0; z-index: 40; display: flex;
-  align-items: center; justify-content: center; flex-direction: column;
-  background: rgba(14,12,20,0.86); color: #e6e2f0;
-  font: 500 14px system-ui, sans-serif; padding: 18px; text-align: center; }
-#ck-overlay h1 { font-size: 26px; margin: 0 0 4px; color: #ffe86b; letter-spacing: 0.04em; }
-#ck-overlay .sub { color: #9ad; font-size: 12px; letter-spacing: 0.12em; margin-bottom: 18px; }
 .ck-card { width: min(340px, 86vw); margin: 7px 0; padding: 12px 14px; border-radius: 12px;
   border: 1px solid #3a3644; background: rgba(30,27,38,0.95); text-align: left; }
 .ck-card.locked { opacity: 0.45; }
@@ -64,13 +63,6 @@ const css = `
 .ck-card .bl { color: #a9a4b8; font-size: 12px; margin-top: 2px; }
 .ck-card .bst { color: #9ad; font-size: 11px; margin-top: 5px; }
 .ck-stars { letter-spacing: 0.1em; color: #ffd75e; }
-.ck-btn { margin-top: 14px; padding: 10px 22px; border-radius: 10px; border: 1px solid #53c8d8;
-  background: rgba(40,80,90,0.5); color: #bff2fa; font: 700 15px system-ui, sans-serif; }
-.ck-btn.dim { border-color: #3a3644; color: #8a8798; background: rgba(30,27,38,0.8); }
-#ck-timer { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 52px); left: 0; right: 0;
-  text-align: center; z-index: 5; pointer-events: none;
-  font: 700 17px ui-monospace, monospace; color: #7dffd0; text-shadow: 0 2px 5px #000; }
-#ck-timer.low { color: #ff7d6b; }
 #ck-toasts { position: fixed; top: calc(env(safe-area-inset-top, 8px) + 52px); right: 10px; z-index: 41;
   pointer-events: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .ck-toast { padding: 4px 9px; border-radius: 12px; border: 1px solid #ffd75e;
@@ -86,50 +78,30 @@ function loadSave() {
 }
 
 export class Career {
-  // api: { setRoom(room, cats), score(), pause(on) } supplied by main.js
+  // api: { setRoom(room, cats), score() } supplied by main.js
   constructor(api) {
     this.api = api;
     this.save = loadSave();
-    this.state = 'map';
     this.runIdx = 0;
-    this.timeLeft = 0;
     this.stats = null;
+    this.shell = new RunShell(api, {
+      pauseTitle: () => ROOMS[this.runIdx].name,
+      quitLabel: 'Return to main menu',
+      onQuit: () => this.showMap(),
+      onTimeUp: () => this.endRun(),
+    });
     const style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
     this.toasts = document.createElement('div');
     this.toasts.id = 'ck-toasts';
     document.body.appendChild(this.toasts);
-    this.timerEl = document.createElement('div');
-    this.timerEl.id = 'ck-timer';
-    document.body.appendChild(this.timerEl);
-    // career hides the sandbox chrome: no tuning, no debug, no free reset
-    for (const id of ['gear', 'dbg', 'reset']) {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    }
-    // the settings panel doubles as career's graphics menu: gameplay
-    // tuning rows are hidden, render rows stay (founder: "a menu that
-    // allows for graphics settings change and a return to main menu")
-    for (const id of ['s-room', 's-cats', 's-weight', 's-strength', 's-gravity', 's-destruct']) {
-      const el = document.getElementById(id);
-      const row = el && el.closest('.row');
-      if (row) {
-        row.style.display = 'none';
-        if (row.previousElementSibling && row.previousElementSibling.tagName === 'LABEL') row.previousElementSibling.style.display = 'none';
-      }
-    }
-    this.menuBtn = document.createElement('button');
-    this.menuBtn.id = 'ck-menu';
-    this.menuBtn.className = 'ctl';
-    this.menuBtn.innerHTML = '&#9776;';
-    this.menuBtn.style.left = '10px';
-    this.menuBtn.style.display = 'none';
-    this.menuBtn.onclick = () => this.showMenu();
-    document.body.appendChild(this.menuBtn);
     this.showMap();
     window.__career = this; // test hook (skip(), state)
   }
+
+  // 'map' | 'run' | 'paused' | 'end'
+  get state() { return this.shell.state; }
 
   persist() { try { localStorage.setItem('lk-career', JSON.stringify(this.save)); } catch {} }
 
@@ -143,20 +115,10 @@ export class Career {
     return score >= s[2] ? 3 : score >= s[1] ? 2 : score >= s[0] ? 1 : 0;
   }
 
-  overlay() {
-    if (!this.ov) {
-      this.ov = document.createElement('div');
-      this.ov.id = 'ck-overlay';
-      document.body.appendChild(this.ov);
-    }
-    this.ov.style.display = 'flex';
-    return this.ov;
-  }
-
   showMap() {
-    this.state = 'map';
-    this.timerEl.textContent = '';
-    const ov = this.overlay();
+    this.shell.state = 'map';
+    this.shell.timerEl.textContent = '';
+    const ov = this.shell.overlay();
     const rows = ROOMS.map((r, i) => {
       const locked = i >= this.save.unlocked;
       const best = this.save.best[i] || 0;
@@ -169,10 +131,11 @@ export class Career {
       </div>`;
     }).join('');
     const got = Object.keys(this.save.medals).length;
-    ov.innerHTML = `<h1>LASER KITTY</h1>
+    ov.innerHTML = `<h1>LASER v. KITTY</h1>
       <div class="sub">CAREER &middot; ${got}/${MEDALS.length} MEDALS &middot; LIFETIME ${this.save.total.toLocaleString()}</div>
       ${rows}
-      <div style="display:flex;gap:8px"><button class="ck-btn dim" id="ck-free">Free Play</button>
+      <div style="display:flex;gap:8px"><button class="ck-btn dim" id="ck-story">Story</button>
+      <button class="ck-btn dim" id="ck-free">Free Play</button>
       <button class="ck-btn dim" id="ck-lab">Cat Lab</button></div>`;
     ov.querySelectorAll('.ck-card').forEach((el) => {
       el.onclick = () => {
@@ -180,6 +143,7 @@ export class Career {
         if (i < this.save.unlocked) this.startRun(i);
       };
     });
+    ov.querySelector('#ck-story').onclick = () => { location.href = 'play.html'; };
     ov.querySelector('#ck-free').onclick = () => { location.href = 'index.html'; };
     ov.querySelector('#ck-lab').onclick = () => { location.href = 'catlab.html'; };
   }
@@ -187,39 +151,8 @@ export class Career {
   startRun(idx) {
     this.runIdx = idx;
     this.stats = this.freshStats();
-    this.timeLeft = RUN_SECONDS;
-    this.state = 'run';
-    this.ov.style.display = 'none';
-    this.menuBtn.style.display = '';
-    this.api.setRoom(ROOMS[idx].room, ROOMS[idx].cats);
-  }
-
-  // in-run menu: pauses the clock (the overlay also blocks the pad)
-  showMenu() {
-    if (this.state !== 'run') return;
-    this.state = 'paused';
-    const panel = document.getElementById('panel');
-    const ov = this.overlay();
-    ov.innerHTML = `<h1>PAUSED</h1>
-      <div class="sub">${ROOMS[this.runIdx].name} &middot; ${this.timerEl.textContent} left</div>
-      <div style="display:flex;flex-direction:column;gap:8px;width:min(300px,80vw)">
-        <button class="ck-btn" id="ck-resume">Resume</button>
-        <button class="ck-btn dim" id="ck-gfx">Graphics settings</button>
-        <button class="ck-btn dim" id="ck-quit">Return to main menu</button>
-      </div>`;
-    ov.querySelector('#ck-resume').onclick = () => {
-      if (panel) panel.classList.remove('open');
-      ov.style.display = 'none';
-      this.state = 'run';
-    };
-    ov.querySelector('#ck-gfx').onclick = () => {
-      if (panel) panel.classList.toggle('open');
-    };
-    ov.querySelector('#ck-quit').onclick = () => {
-      if (panel) panel.classList.remove('open');
-      this.menuBtn.style.display = 'none';
-      this.showMap();
-    };
+    this.shell.load(ROOMS[idx].room, ROOMS[idx].cats);
+    this.shell.go();
   }
 
   // -- feeds from main.js ------------------------------------------------
@@ -244,17 +177,13 @@ export class Career {
 
   frame(dtMs, obs) {
     if (this.state !== 'run' || !this.stats) return;
-    this.timeLeft -= dtMs / 1000;
     this.stats.score = this.api.score();
     if (obs) {
       this.stats.maxPuddles = Math.max(this.stats.maxPuddles, obs.puddles || 0);
       if (obs.cats > 0 && obs.loafing === obs.cats) this.stats.allLoaf = true;
     }
     this.checkMedals();
-    const t = Math.max(0, this.timeLeft);
-    this.timerEl.textContent = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-    this.timerEl.classList.toggle('low', t < 30);
-    if (this.timeLeft <= 0) this.endRun();
+    this.shell.tick(dtMs); // calls endRun when the clock runs out
   }
 
   checkMedals() {
@@ -274,8 +203,6 @@ export class Career {
   }
 
   endRun() {
-    this.state = 'end';
-    this.menuBtn.style.display = 'none';
     const idx = this.runIdx;
     const score = this.stats.score;
     const stars = this.starsFor(idx, score);
@@ -288,7 +215,7 @@ export class Career {
     this.persist();
     const r = ROOMS[idx];
     const nextUnlocked = idx + 1 < ROOMS.length && this.save.unlocked > idx + 1;
-    const ov = this.overlay();
+    const ov = this.shell.overlay();
     ov.innerHTML = `<h1>TIME!</h1>
       <div class="sub">${r.name}</div>
       <div style="font:800 40px system-ui;color:#ffe86b">${score.toLocaleString()}</div>
@@ -307,5 +234,5 @@ export class Career {
   }
 
   // test hook: fast-forward the clock
-  skip(seconds = RUN_SECONDS) { this.timeLeft -= seconds; }
+  skip(seconds) { this.shell.skip(seconds); }
 }

@@ -1,9 +1,11 @@
 // nav.js — the hamburger every page shares (founder: "add the hamburger
 // to the playground and other pages so we can access them from the main
 // menu and get back to it"). One button, one overlay, a link per page.
-// Career mode brings its own ☰ (pause menu) and skips this one.
+// The game modes (Story, Career) bring their own ☰ (pause menu) and skip
+// this one. play.html is the front door: story mode's docket.
 const LINKS = [
-  ['Main menu (Career)', 'play.html'],
+  ['Laser v. Kitty (main menu)', 'play.html'],
+  ['Career', 'career.html'],
   ['Free Play', 'index.html'],
   ['Cat Lab', 'catlab.html'],
   ['Engine preview', 'engine.html'],

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="robots" content="noindex, nofollow" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>laser-kitty grey-box</title>
+<title>Laser v. Kitty</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #14121a; touch-action: none; overscroll-behavior: none; }
   #scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; }
@@ -80,6 +80,9 @@
     <option value="7">Apartments</option>
     <option value="8">Bar &amp; grill</option>
     <option value="9">Caf&eacute;</option>
+    <option value="10">Red Dot Rampage</option>
+    <option value="11">Museum</option>
+    <option value="12">Yoga studio</option>
   </select></div>
   <label>Cats</label>
   <div class="row"><input type="range" id="s-cats" min="1" max="64" step="1"><span class="val" id="v-cats"></span></div>
@@ -118,6 +121,16 @@
   <div class="row"><input type="range" id="s-bounce" min="0" max="3" step="0.1"><span class="val" id="v-bounce"></span></div>
   <label>Glow</label>
   <div class="row"><input type="range" id="s-glowstr" min="0" max="3" step="0.1"><span class="val" id="v-glowstr"></span></div>
+  <label style="margin-top:10px">Backdrop</label>
+  <div class="row"><select id="s-backdrop" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;"></select></div>
+  <label>Style</label>
+  <div class="row"><select id="s-style" style="flex:1;background:#241f31;color:#cfd4e6;border:1px solid #3a3644;border-radius:6px;padding:4px;"></select></div>
+  <label>Tilt-shift</label>
+  <div class="row"><input type="range" id="s-tilt" min="0" max="1.5" step="0.05"><span class="val" id="v-tilt"></span></div>
+  <label>Ink outline (classic)</label>
+  <div class="row"><input type="range" id="s-outline" min="0" max="1" step="0.05"><span class="val" id="v-outline"></span></div>
+  <label>Punch</label>
+  <div class="row"><input type="range" id="s-punch" min="0" max="1" step="0.05"><span class="val" id="v-punch"></span></div>
   <label>Shadow strength</label>
   <div class="row"><input type="range" id="s-shstr" min="0.2" max="1" step="0.05"><span class="val" id="v-shstr"></span></div>
   <label>SSAO strength</label>
@@ -138,6 +151,7 @@
     <option value="v4">V4 &middot; faceted</option>
     <option value="v5">V5 &middot; long-hair (cel)</option>
     <option value="v6">V6 &middot; fur (shells)</option>
+    <option value="v7">V7 &middot; the character cat</option>
   </select></div>
   <label class="row"><input type="checkbox" id="s-sound"> Sound</label>
   <label>Cats (voices, purrs, paws)</label>
@@ -146,7 +160,7 @@
   <div class="row"><input type="range" id="s-volfx" min="0" max="2" step="0.05"><span class="val" id="v-volfx"></span></div>
   <label class="row"><input type="checkbox" id="s-pops"> Score pop-ups</label>
   <button id="s-defaults" style="width:100%;margin-top:10px;padding:6px;border-radius:8px;border:1px solid #3a3644;background:#241f31;color:#cfd4e6;font:600 12px system-ui,sans-serif;">Reset to defaults</button>
-  <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live &middot; build <b id="buildtag">k63</b></div>
+  <div class="note">cats &amp; weight rebuild the room &middot; strength &amp; gravity apply live &middot; build <b id="buildtag">k64</b></div>
 </div>
 <div id="hud">
   <div id="score">0</div>
@@ -164,6 +178,6 @@
   "postprocessing": "./vendor/pp-stub.js"
 }}
 </script>
-<script type="module" src="main.js?v=k63"></script>
+<script type="module" src="main.js?v=k64"></script>
 </body>
 </html>
