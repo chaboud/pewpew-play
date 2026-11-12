@@ -207,7 +207,7 @@ function skinGeometry(geo) {
 // synthesized diagonal gait, 0.83s like the v2 clip so the stride
 // matcher's constants carry. t=0.21 is a planted passing frame (the
 // stand layer freezes there).
-function buildWalkClip(byKey) {
+function buildWalkClip(byKey, rp = BONE_DEF[0][1]) {
   const DUR = 0.83;
   const N = 24;
   const times = new Float32Array(N + 1);
@@ -244,7 +244,6 @@ function buildWalkClip(byKey) {
   addQuatTrack('head', (ph) => [Math.sin(ph * 2 + OFF) * 0.03, 0, 0]);
   // root bob: position track (the clip owns translations, like the v2 clip)
   const rootPos = new Float32Array((N + 1) * 3);
-  const rp = BONE_DEF[0][1];
   for (let k = 0; k <= N; k++) {
     const ph = (k / N) * Math.PI * 2;
     rootPos[k * 3] = rp[0];
@@ -561,6 +560,9 @@ export function shellMaterial(h, rig, vertexColors) {
   m.customProgramCacheKey = () => 'cat-fur-shell-v1' + (vertexColors ? '-vc' : '');
   return m;
 }
+
+// the pieces v7 (catgen7.js: a different sculpt on the same recipe) reuses
+export { smin, sdSphere, sdCapsule, buildWalkClip };
 
 // ------------------------------------------------------------ variants ---
 // v3: smooth sculpt. v4: chunky faceted low-poly of the same body.

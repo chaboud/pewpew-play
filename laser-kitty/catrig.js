@@ -9,6 +9,11 @@
 //
 // Shared by the game (main.js, cat version v2) and the cat lab
 // (catlab.html) so poses tuned in the lab ARE the shipping poses.
+//
+// The house-built cats ride the same driver: v3-v6 (catgen.js) and v7
+// (catgen7.js) hand it a gltf-shaped source built in code. v7 also brings
+// body types, its own contact points and pose corrections, and a face —
+// each a small optional hook on the source, so the older cats don't change.
 
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
@@ -125,12 +130,17 @@ function coatGeometry(baseGeo, c) {
   const key = `${baseGeo.uuid}:${c}`;
   if (coatGeoCache.has(key)) return coatGeoCache.get(key);
   const geo = baseGeo.clone();
-  const pos = geo.attributes.position;
+  // v7's builds don't fit the reference box: each vertex says where its
+  // landmark sits in it (`coatPos`), and may carry a `tint` the coat is
+  // blended toward (rgb, weight) — the pink of an inner ear
+  const pos = geo.attributes.coatPos || geo.attributes.position;
+  const tint = geo.attributes.tint;
   const col = new Float32Array(pos.count * 3);
   // bind-pose bounds (probe-measured): x +-0.9, y 0..3.7, z -3.4..2.4
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const v = coatColor(c, x / 0.9, y / 3.7, (z + 3.4) / 5.8, x, y, z);
+    let v = coatColor(c, x / 0.9, y / 3.7, (z + 3.4) / 5.8, x, y, z);
+    if (tint && tint.getW(i) > 0) v = mix3(v, [tint.getX(i), tint.getY(i), tint.getZ(i)], tint.getW(i));
     // colors are authored as sRGB intents; vertex colors feed the shader
     // linearly, so convert or every dark reads washed out (gamma lifted
     // a 0.45 stripe to 0.70 — invisible against the 0.95 base)
@@ -309,16 +319,29 @@ export class CatRig {
   }
 
   // v2 loads the CC-BY glb; v3+ are house-built in code (catgen) and mimic
-  // the loaded shape, so the rest of this class doesn't know the difference
+  // the loaded shape, so the rest of this class doesn't know the difference.
+  // v7 (catgen7) is a second sculpt that comes in several builds: its
+  // source hands the constructor one build per cat.
   static source(variant) {
+    if (variant === 7) {
+      return import('./catgen7.js?v=k64').then((m) => m.buildCat7Source());
+    }
     if (variant >= 3) {
-      return import('./catgen.js?v=k63').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k64').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
 
-  // coat: index into COAT_NAMES (null = the model's own orange)
-  constructor(gltf, parent, coat) {
+  // coat: index into COAT_NAMES (null = the model's own orange).
+  // opts.build: which body a multi-build source (v7) gives this cat; left
+  // out, cats take builds in turn by the same ordinal that picks the coat.
+  constructor(gltf, parent, coat, opts = {}) {
+    if (gltf.forBuild) gltf = gltf.forBuild(opts.build ?? coat ?? 0);
+    this.build = gltf.build ?? 0;
+    this.contacts = gltf.contacts || CONTACTS;
+    // a body whose proportions make a shared table entry land wrong (v7's
+    // short thick forelegs in the loaf) supplies its own: pose -> bone -> euler
+    this.poseFix = gltf.poseFix || null;
     this.group = new THREE.Group(); // world placement (game sets pos/yaw)
     this.inner = skClone(gltf.scene); // scaled model, feet on GROUND_Y
     this.inner.scale.setScalar(SCALE);
@@ -356,7 +379,8 @@ export class CatRig {
           o.receiveShadow = true;
           if (coat != null && o.isSkinnedMesh) {
             o.geometry = coatGeometry(o.geometry, coat % COAT_NAMES.length);
-            o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
+            // v7's face keeps its own material: the coat only colours its lids
+            if (!o.userData.face) o.material = coatMaterial(o.material, coat % COAT_NAMES.length);
           }
         }
         // v5 fur sways in the vertex shader: this rig's own material
@@ -370,6 +394,10 @@ export class CatRig {
         }
       }
     });
+
+    // v7: the body's rim, this rig's own face material, and the driver
+    // that turns brain state into eyes, ears, whiskers and tail
+    this.expr = gltf.attach ? gltf.attach(this, coat) : null;
 
     // standing root height (reference only; carriage height is measured)
     const root = this.bones.root || this.bones.torso;
@@ -489,10 +517,13 @@ export class CatRig {
     applyRest();
   }
 
-  // s: {speed, pose, dot (THREE.Vector3 world | null), pitch, tumble01}
+  // s: {speed, pose, dot (THREE.Vector3 world | null), pitch, tumble01,
+  //     st, act (the sim's brain state and ambient act: v7's expression),
+  //     mood (the lab forcing one)}
   // pose one of: null|crouch|sit|loaf|groom|stretch|swat|windup|pounce
   update(dt, s) {
     this.phase += dt;
+    if (this.expr) this.expr.restore(this); // take back last frame's ear and tail deltas before any layer reads them
     if (this.fur) this.#swayFur(dt, s);
     const table = POSES[s.pose] || null;
     const wantAlpha = table ? 1 : 0;
@@ -519,12 +550,13 @@ export class CatRig {
     // other and the whole cat hung on it — the founder's floor-clipping
     // report). Nothing from the clip may leak through a held pose.
     const a = this.alpha;
+    const fix = this.poseFix && this.poseFix[s.pose];
     if (table && a > 0.005) {
       for (const key in this.bones) {
         const bone = this.bones[key];
         const rest = this.rest[key];
         if (!rest) continue;
-        const d = table[key];
+        const d = (fix && fix[key]) || table[key];
         let dx = d ? d[0] : 0, dy = d ? d[1] : 0, dz = d ? d[2] : 0;
         // living cycles inside held poses
         if (s.pose === 'groom') {
@@ -567,6 +599,7 @@ export class CatRig {
         const bone = this.bones[key];
         if (!bone) continue;
         const isTail = key.startsWith('tail');
+        if (this.expr && !isTail && key !== 'spine02') continue; // v7's ears belong to its expression
         this._q.setFromEuler(this._e.set(
           isTail ? 0 : Math.sin(this.phase * rate + off) * amt,
           0,
@@ -590,6 +623,7 @@ export class CatRig {
     // body for those.
     let ty = 0;
     let tp = 0;
+    let gaze = null; // where the dot sits off the nose once the head has turned (v7's eyes lead the head)
     if (s.dot && s.pose !== 'pounce') {
       this.group.worldToLocal(this._look.copy(s.dot));
       const yaw = Math.atan2(this._look.x, this._look.z);
@@ -599,6 +633,7 @@ export class CatRig {
       if (s.pose === 'windup') w *= 0.4; // the butt-wiggle fights the tracker
       ty = Math.max(-0.45, Math.min(0.45, yaw)) * w;
       tp = Math.max(-0.3, Math.min(0.4, pitch)) * w;
+      if (Math.abs(yaw) < 1.7) gaze = [yaw - (this.lookY ?? 0), pitch - (this.lookP ?? 0)];
     }
     const cap = 5 * dt;
     const ease = Math.min(1, dt * 9);
@@ -613,6 +648,8 @@ export class CatRig {
         bone.quaternion.copy(this._q);
       }
     }
+
+    if (this.expr) this.expr.update(dt, s, this, gaze);
 
     // carriage attitude: each pose's _pitch is baked from a lab sweep
     // that balances the front and rear contact heights (a runtime
@@ -637,7 +674,7 @@ export class CatRig {
     if (grounded) {
       this.inner.updateMatrixWorld(true); // bake this frame's pose first
       let lowest = Infinity;
-      for (const [key, dropOff] of CONTACTS) {
+      for (const [key, dropOff] of this.contacts) {
         const bone = this.bones[key];
         if (!bone) continue;
         bone.getWorldPosition(this._look);

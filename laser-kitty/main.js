@@ -6,19 +6,26 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k63';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k63';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k64';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k64';
+// presentation: the backdrop the room sits in, the drawing style, the
+// tilt-shift (looks.js). Story mode drives it through setPresentation.
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k64';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k63';
-import { Career } from './career.js?v=k63';
-import { mountNav } from './nav.js?v=k63';
-import { SfxEngine, } from './sfx.js?v=k63';
-import { SIZES as SND_SIZES, SHATTER_SIZES } from './sfxbank.js?v=k63';
+import { CatRig } from './catrig.js?v=k64';
+import { mountNav } from './nav.js?v=k64';
+import { SfxEngine, } from './sfx.js?v=k64';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k64';
+// the newer rooms keep their look in their own module (rooms/*.js): this
+// file only asks "does this room's art want this body?" before its own
+// recognizer chain, so a room can be authored without touching meshFor
+import { ROOM_ART } from './rooms/index.js?v=k64';
 
-// career mode (?play=1): the locked-down "actual game" over the same
-// engine. null in Free Play — every hook below is a cheap no-op then.
-let career = null;
+// the game modes (?story=1 the civil trial, ?play=1 Career): the
+// locked-down "actual game" over the same engine. null in Free Play —
+// every hook below is a cheap no-op then.
+let game = null;
 const ckCodes = [];
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
@@ -27,11 +34,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k63'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k64'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, catVolume: 1, fxVolume: 1, pops: false };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, catVolume: 1, fxVolume: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -127,6 +134,13 @@ let n8ao = null;
 let haze = null;
 let aoActive = false;
 let postActive = false;
+// the look pass (style, tilt-shift, grade) joins the chain last, and only
+// when some option is off its default; the backdrop lives in the scene
+const presentation = installPresentation({
+  scene, camera, hemi, sun, kit: { toonMat, makeCanvas },
+  coarse: matchMedia('(pointer: coarse)').matches,
+  base: cfg, onChain: () => applyAO(),
+});
 function aoWanted() {
   if (cfg.ao === 'on') return true;
   if (cfg.ao === 'off') return false;
@@ -144,19 +158,20 @@ function hazeWanted() {
 function hazeDensity() {
   const r = cfg.room | 0;
   // per metre: a 9 m view ray through the bar keeps ~70% transmittance
-  return r === 8 ? 0.028 : r === 9 ? 0.016 : r === 4 ? 0.013 : 0.01;
+  return ROOM_ART[r]?.look?.haze ?? (r === 8 ? 0.028 : r === 9 ? 0.016 : r === 4 ? 0.013 : 0.01);
 }
 function applyAO() {
-  // rebuilds the whole post chain: [N8AO?] -> [haze?]; nothing wanted =
-  // plain renderer.render
-  const wantAO = aoWanted(), wantHaze = hazeWanted();
+  // rebuilds the whole post chain: [N8AO?] -> [haze?] -> [look?]; nothing
+  // wanted = plain renderer.render
+  const wantAO = aoWanted(), wantHaze = hazeWanted(), wantLook = presentation.wantsPass();
   if (composer) {
     for (const p of composer.passes) p.dispose?.();
     composer.passes.length = 0;
     n8ao = null;
     haze = null;
+    presentation.dropPass();
   }
-  if ((wantAO || wantHaze) && !composer) {
+  if ((wantAO || wantHaze || wantLook) && !composer) {
     composer = new EffectComposer(renderer);
     composer.setPixelRatio(renderer.getPixelRatio());
     const { w, h } = viewSize();
@@ -191,6 +206,17 @@ function applyAO() {
     const { w, h } = viewSize();
     haze.setSize(w * pr, h * pr);
   }
+  if (wantLook) {
+    // depth comes from whoever already rendered the scene this frame; alone,
+    // the pass renders it itself
+    const look = presentation.makePass();
+    look.hasInput = !!(n8ao || haze);
+    look.depthSource = () => (n8ao && n8ao.beautyRenderTarget ? n8ao.beautyRenderTarget.depthTexture : haze && haze.sceneTarget ? haze.sceneTarget.depthTexture : null);
+    composer.addPass(look);
+    const pr = renderer.getPixelRatio();
+    const { w, h } = viewSize();
+    look.setSize(w * pr, h * pr);
+  }
   aoActive = wantAO && !!n8ao;
   postActive = !!composer && composer.passes.length > 0;
 }
@@ -220,7 +246,7 @@ function lightFrame(now, data, count) {
   if (now >= volNextVoxel) { lightVol.voxelize(data, count); volNextVoxel = now + 2000; }
   hazeEmitters.length = 0;
   for (const m of meshes) {
-    if (!m || !m.userData.emitter || !m.parent) continue;
+    if (!m || !m.userData.emitter || !m.parent || !m.visible) continue; // a shattered lamp stops lighting the haze
     const e = m.userData.emitter;
     m.getWorldPosition(hazeTmp);
     hazeEmitters.push({ pos: hazeTmp.clone(), color: e.color, strength: e.strength * 1.2 * (m.userData.flicker ?? 1) });
@@ -243,7 +269,7 @@ function hazeFrame(now) {
   haze.uniforms.uTime.value = now * 0.001;
   haze.uniforms.uDensity.value = hazeDensity() * cfg.hazeStrength;
   // the bar's smoke is lit by its signs, not the sun
-  haze.uniforms.uSun.value = (cfg.room | 0) === 8 ? 0.3 : (cfg.room | 0) === 9 ? 0.6 : 1;
+  haze.uniforms.uSun.value = ROOM_ART[cfg.room | 0]?.look?.sun ?? ((cfg.room | 0) === 8 ? 0.3 : (cfg.room | 0) === 9 ? 0.6 : 1);
   haze.glowOn = cfg.glowStrength > 0;
   haze.glowStrength = cfg.glowStrength;
   for (const m of meshes) if (m && m.userData.neonSprite) m.userData.neonSprite.visible = !haze.glowOn;
@@ -808,6 +834,14 @@ function rebuildCloths() {
     for (let k = 0; k < cols * rows; k++) clothSet.add(first + k);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cols * rows * 3), 3));
+    // uv spans the sheet (u along the top row, v down it) for rooms that
+    // paint their fabric (rooms/README.md `cloth`)
+    const uv = new Float32Array(cols * rows * 2);
+    for (let k = 0; k < cols * rows; k++) {
+      uv[k * 2] = (k % cols) / (cols - 1);
+      uv[k * 2 + 1] = 1 - Math.floor(k / cols) / (rows - 1);
+    }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     const idx = [];
     for (let j = 0; j < rows - 1; j++) {
       for (let i = 0; i < cols - 1; i++) {
@@ -859,7 +893,8 @@ function updateCloths(data) {
   for (const cp of clothPatches) {
     if (!cp.tinted) {
       const tint = data[cp.first * 15 + 14];
-      cp.mesh.material.color.setHSL((tint * 2.83) % 1, 0.42, 0.55);
+      // a newer room may dress its own fabric; otherwise the tint is its hue
+      if (!ROOM_ART[cfg.room | 0]?.cloth?.(roomKit(), cp, tint)) cp.mesh.material.color.setHSL((tint * 2.83) % 1, 0.42, 0.55);
       cp.tinted = true;
     }
     const attr = cp.mesh.geometry.attributes.position;
@@ -913,13 +948,33 @@ function liquidStyle(mat, tint) {
   }
 }
 
+// what a room-art module may use from this file (rooms/README.md)
+let roomKitCache = null;
+function roomKit() {
+  roomKitCache ??= {
+    THREE, toonMat, makeCanvas, glowSprite, liquidStyle, roughen, artTex, neonTex, bodyColor,
+    woodTex, fabricTex, floorTex, concreteTex, checkerTex, ringMat, NEON_GLOW, GLOW_LAYER,
+    animParts, pendingLights,
+    // the named exhibit a body belongs to ({ id, name, price } from the
+    // sim's tables), or null — for price tags and plaques
+    exhibit: (i) => {
+      const id = lk.lk_body_exhibit(sim, i);
+      return id ? { id, name: exhibitName(id), price: lk.lk_exhibit_price(id) } : null;
+    },
+  };
+  return roomKitCache;
+}
 function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
   const h = ((i * 2654435761) >>> 0) / 4294967296;
   const color = bodyColor(i, cls, [a, b, c], py);
-  let m = null;
+  const art = ROOM_ART[cfg.room | 0];
+  const body = art ? { i, shape, a, b, c, cls, px, py, pz, gloss, tint, h, color } : null;
+  let m = art?.mesh?.(roomKit(), body) ?? null;
   // decorated bodies: recognized by their sim dims, built as Groups (the
   // render loop drives position/quaternion the same way)
-  if (cls === 2 && shape === 1 && a < 0.011 && gloss > 0.985) {
+  if (m) {
+    // the room's own art claimed it
+  } else if (cls === 2 && shape === 1 && a < 0.011 && gloss > 0.985) {
     // welder spark: white-hot core in an additive glow (electric gear
     // death throes; the sim bounces them, we just shine)
     m = new THREE.Group();
@@ -2763,12 +2818,14 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
   else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
   if (fuzzy) roughen(geo, 0.14); // yarn, plush toys, foliage
-  let mat;
+  let mat = art?.material?.(roomKit(), body) ?? null;
   const painting = cls === 0 && (a < 0.025 || c < 0.025) && Math.max(a, b, c) < 0.6 && py > 0.9;
   const book =
     cls === 2 && shape === 0 && gloss < 0.4 && b >= 0.06 && b <= 0.12 &&
     Math.min(a, c) <= 0.035 && Math.max(a, c) <= 0.07;
-  if (cls === 0 && a > 2 && b < 0.2) {
+  if (mat) {
+    // the room's own art dressed it (floor, walls, plain props)
+  } else if (cls === 0 && a > 2 && b < 0.2) {
     // the floor slab: wood by default, concrete in the garage,
     // checkerboard in the cafe
     const fr2 = cfg.room | 0;
@@ -3101,6 +3158,8 @@ function buildDecor(hx, hz, kind) {
       }
     }
   }
+  // a newer room's own dressing (windows, signage, track lights...)
+  ROOM_ART[kind]?.decor?.(roomKit(), decor, hx, hz);
   scene.add(decor);
 }
 
@@ -3115,7 +3174,12 @@ function requestCatRig() {
   catRigRequested = cfg.catver;
   catRigGltf = null; // rigs already built keep their model; new cats get the new one
   const variant = parseInt(cfg.catver.slice(1), 10) || 2;
-  CatRig.source(variant).then((g) => { catRigGltf = g; }).catch((e) => console.error('cat rig load failed', e));
+  CatRig.source(variant).then((g) => {
+    // v7 comes in body types, polygonized on first use: do the ones this
+    // room will need now, at load, not as each cat first appears
+    g.warm?.(cfg.cats);
+    catRigGltf = g;
+  }).catch((e) => console.error('cat rig load failed', e));
 }
 // sim brain state (+ ambient act) -> v2 pose table name; null = locomote
 function v2Pose(st, act, crouch) {
@@ -3593,7 +3657,21 @@ function layoutRoom() {
   concreteTex.repeat.set(Math.max(1, Math.round(roomHX * 0.6)), Math.max(1, Math.round(roomHZ * 0.6)));
   checkerTex.repeat.set(Math.max(2, Math.round(roomHX * 1.2)), Math.max(2, Math.round(roomHZ * 1.2)));
   buildDecor(roomHX, roomHZ, cfg.room | 0);
+  // the backdrop is built around the model and takes over the sky, the fog
+  // and the tint of the two lights set above
+  presentation.layout({ room: r, hx: roomHX, hz: roomHZ, top: roomTop(), back: -EYE.z - roomHZ });
   applyLook();
+}
+// the highest static surface: the wall tops (the rooms have no ceiling)
+function roomTop() {
+  const n = lk.lk_body_count(sim);
+  const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), n * FLOATS_PER_BODY);
+  let top = 2.8;
+  for (let i = 0; i < n; i++) {
+    const o = i * FLOATS_PER_BODY;
+    if (d[o] === 0 && d[o + 1] === 0) top = Math.max(top, d[o + 6] + d[o + 3]);
+  }
+  return top;
 }
 
 function updateLaserRay() {
@@ -3760,7 +3838,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k63', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k64', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.bus.fx.d;
   sfxCatGain = engine.bus.cats.d;
@@ -4010,6 +4088,35 @@ function soundClass(i, shape, a, b, c, cls, gloss) {
 const nearestIdx = (arr, v) => { let bi = 0; for (let k = 1; k < arr.length; k++) if (Math.abs(Math.log(arr[k] / v)) < Math.abs(Math.log(arr[bi] / v))) bi = k; return bi; };
 const jit = (p) => 1 + (Math.random() * 2 - 1) * p;
 const bankOn = () => engine && engine.ready;
+// Some things are instruments, not materials: a mesh may name its own voice
+// with userData.voice — gong, chime, bowl, bead, bone, stone, rubber
+// (VOICE_SIZES in sfxbank.js) — and its impacts then play hit:<voice>:<size>
+// instead of the material class, its breaks break:<voice> where the bank
+// has one. The voices arrive after the core bank, so until its key is in a
+// voiced mesh sounds like its material.
+// per voice: [min ms between plays, gain, rate jitter, extra staggered plays]
+const VOICE_PLAY = { gong: [450, 1.0, 0.02, 0], bowl: [300, 0.8, 0.02, 0], chime: [140, 0.7, 0.03, 0], bead: [45, 0.5, 0.1, 2], bone: [0, 0.8, 0.07, 0], stone: [0, 0.9, 0.08, 0], rubber: [90, 0.9, 0.06, 0] };
+function voiceOf(mesh) {
+  const v = mesh?.userData?.voice;
+  return v && VOICE_SIZES[v] ? v : null;
+}
+// plays the mesh's own voice; false if it has none (or its key is not in yet)
+function voicedImpact(mesh, s, pan, delay, scale = 1) {
+  const v = voiceOf(mesh);
+  if (!v) return false;
+  const sizes = VOICE_SIZES[v], si = nearestIdx(sizes, s.size), key = `hit:${v}:${si}`;
+  if (!engine.has(key)) return false;
+  const [gap, g, jr, more] = VOICE_PLAY[v];
+  // a struck gong is one event however many contacts the solver reports
+  if (gap && throttled('voice:' + v, gap)) return true;
+  if (engine.voices > engine.maxVoices - 6) return true;
+  const rate = Math.max(0.75, Math.min(1.3, Math.sqrt(sizes[si] / Math.max(0.005, s.size))));
+  engine.play(key, { pan, gain: g * scale, rate: rate * jit(jr), when: delay });
+  // a curtain of beads is never one click
+  for (let k = 0; k < more; k++) engine.play(key, { pan: pan + (Math.random() - 0.5) * 0.3, gain: g * scale * (0.5 + 0.4 * Math.random()), rate: rate * jit(jr), when: delay + 0.05 + k * 0.07 + Math.random() * 0.05 });
+  if (v === 'bone' || v === 'stone') feedDestruction(0.15 + s.size);
+  return true;
+}
 // per-cat voices: a bigger cat speaks lower (rate shifts pitch AND formants)
 const CAT_VOICE = [1.0, 1.13, 0.88, 1.22, 0.94, 1.06, 0.82, 1.17];
 function catPanOf(k) {
@@ -4044,6 +4151,7 @@ const sfx = {
     const s = mesh?.userData?.snd;
     if (!bankOn() || !s) return synthSfx.impact(mesh);
     const pan = panOf(mesh);
+    if (voicedImpact(mesh, s, pan, delay)) return;
     if (playSample('impact', pan, 0.22, 0.5, delay)) return;
     const n = hitCluster();
     // impacts are the bed, not the punchline: they leave the last voices
@@ -4073,12 +4181,22 @@ const sfx = {
     if (throttled('crash' + zone, 60)) { crashBacklog[zone]++; return; }
     const extra = crashBacklog[zone];
     crashBacklog[zone] = 0;
+    // a voiced thing that has its own way of coming apart (a skeleton, a
+    // rock stack) uses it; a brittle one with only a ring (a ceramic bowl)
+    // rings once more under its shatter
+    const voice = voiceOf(mesh);
+    if (voice && engine.has(`break:${voice}`)) {
+      engine.play(`break:${voice}`, { pan, gain: Math.min(1.3, 0.8 + s.size + extra * 0.05), rate: jit(0.06) });
+      feedDestruction(0.6 + extra * 0.2);
+      return;
+    }
     if (playSample('crash', pan, 0.1, 0.6)) return;
     if (!s.brittle) {
       if (s.liquid) sfx.splash(pan, 1);
       sfx.impact(mesh);
       return;
     }
+    if (voice) voicedImpact(mesh, s, pan, 0, 0.6);
     engine.stats['call:shatter'] = (engine.stats['call:shatter'] || 0) + 1;
     const kind = s.electric ? 'electric' : s.mat === 'glass' ? 'glass' : 'ceramic';
     const si = Math.min(SHATTER_SIZES[kind].length - 1, nearestIdx(SHATTER_SIZES[kind], s.size) + (extra >= 6 ? 2 : extra >= 2 ? 1 : 0));
@@ -4093,6 +4211,15 @@ const sfx = {
     if (!ac) return;
     if (!bankOn()) { for (let k = 0; k < 4; k++) synthSfx.impact(mesh); return; }
     const pan = panOf(mesh);
+    // a compound made of bones or stones falls apart as bones or stones,
+    // not as splintering furniture
+    const voice = voiceOf(mesh);
+    if (voice && engine.has(`break:${voice}`)) {
+      engine.play(`break:${voice}`, { pan, gain: 1.2, rate: jit(0.06) });
+      for (let k = 0; k < 2; k++) sfx.impact(mesh, 0.3 + Math.random() * 0.5);
+      feedDestruction(1.2);
+      return;
+    }
     // the compound crash: splinters and the crack, the pieces' own falls,
     // then the bits settling
     engine.play('snap', { pan, gain: 1.3, rate: jit(0.06) });
@@ -4341,6 +4468,32 @@ bindSlider('bounce', 'bounce', (v) => v.toFixed(1));
 bindSlider('volcat', 'catVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('cats', v); });
 bindSlider('volfx', 'fxVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('fx', v); });
 bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
+// presentation rows: all default to today's look
+const fillSelect = (id, kinds, key, onPick) => {
+  const el = document.getElementById(id);
+  for (const [value, label] of kinds) el.add(new Option(label, value));
+  el.value = cfg[key];
+  el.addEventListener('change', () => {
+    cfg[key] = el.value;
+    if (onPick) onPick();
+    saveCfg();
+    presentation.setBase(cfg);
+  });
+};
+const offOr = (v) => (v === 0 ? 'OFF' : v.toFixed(2));
+bindSlider('tilt', 'tilt', offOr, () => presentation.setBase(cfg));
+bindSlider('outline', 'outline', offOr, () => presentation.setBase(cfg));
+bindSlider('punch', 'punch', offOr, () => presentation.setBase(cfg));
+fillSelect('s-backdrop', BACKDROP_KINDS, 'backdrop', () => {
+  // the exhibit is meant to be seen as a miniature: picking it brings the
+  // tilt-shift up with it if it was off (the slider still turns it down)
+  if (cfg.backdrop === 'court' && cfg.tilt === 0) {
+    cfg.tilt = 1;
+    document.getElementById('s-tilt').value = 1;
+    document.getElementById('v-tilt').textContent = offOr(1);
+  }
+});
+fillSelect('s-style', STYLE_KINDS, 'style');
 bindSlider('aostr', 'aoStrength', (v) => v.toFixed(1), (v) => {
   if (n8ao) n8ao.configuration.intensity = v;
 });
@@ -4364,21 +4517,79 @@ catverEl.addEventListener('change', () => {
 });
 if (cfg.catver !== 'v1') requestCatRig();
 
-if (!new URLSearchParams(location.search).has('play')) {
-  mountNav({ left: '114px' }); // after reset + toss
-} else {
-  career = new Career({
-    setRoom: (room, cats) => {
-      cfg.room = room;
-      cfg.cats = cats;
-      cfg.destruct = 1.0; // career tuning is fixed; never saved to lk-settings
-      cfg.strength = 1;
-      cfg.gravity = 1;
-      rebuildSim();
-      retune();
-    },
-    score: () => lk.lk_score(sim),
-  });
+// --- dollars of damage: the sim keeps the ledger (core/src/damages.rs);
+// frontends read totals and rows. Story mode's claim form is built on this.
+const utf8 = new TextDecoder();
+const exhibitNames = new Map();
+function exhibitName(id) {
+  if (!id) return null;
+  if (!exhibitNames.has(id)) {
+    const ptr = lk.lk_exhibit_name(id);
+    exhibitNames.set(id, ptr ? utf8.decode(new Uint8Array(lk.memory.buffer, ptr, lk.lk_exhibit_name_len(id))) : null);
+  }
+  return exhibitNames.get(id);
+}
+const CAUSES = ['moved', 'toppled', 'broken', 'severed', 'scratched', 'spill', 'plumbing', 'pawprint'];
+const damages = {
+  total: () => lk.lk_damages(sim),
+  inventory: () => lk.lk_inventory(sim),
+  count: () => lk.lk_ledger_len(sim),
+  // rows [from, count): { rec, cause, dollars, exhibit (id or 0), name,
+  // material bits, and the body's class and gloss as the sim reports them
+  // now } — enough for a claim form to file an unnamed thing under a heading
+  rows(from = 0) {
+    const n = lk.lk_ledger_len(sim), out = [];
+    if (from >= n) return out;
+    const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
+    for (let k = from; k < n; k++) {
+      const rec = lk.lk_ledger_rec(sim, k), ex = lk.lk_body_exhibit(sim, rec), o = rec * FLOATS_PER_BODY;
+      out.push({ rec, cause: CAUSES[lk.lk_ledger_cause(sim, k)], dollars: lk.lk_ledger_dollars(sim, k), exhibit: ex, name: exhibitName(ex), material: lk.lk_body_material(sim, rec), cls: d[o], gloss: d[o + 13] });
+    }
+    return out;
+  },
+  exhibitName,
+  exhibitPrice: (id) => lk.lk_exhibit_price(id),
+};
+{
+  const qs = new URLSearchParams(location.search);
+  if (qs.has('story') || qs.has('play')) {
+    const api = {
+      setRoom: (room, cats) => {
+        cfg.room = room;
+        cfg.cats = cats;
+        cfg.destruct = 1.0; // a run's tuning is fixed; never saved to lk-settings
+        cfg.strength = 1;
+        cfg.gravity = 1;
+        rebuildSim();
+        retune();
+      },
+      score: () => lk.lk_score(sim),
+      damages,
+      // story stages a flashback as a lettered exhibit on the evidence
+      // table, in miniature; drawing style and the Classic dials keep
+      // following the player's settings. null hands the look back.
+      presentation: (o) => setPresentation(o && { tiltShift: 1, ...o }),
+      // what a room is worth, without disturbing the one on screen (a
+      // throwaway build): story strikes some star thresholds from it
+      appraise: (room, cats) => {
+        const s = lk.lk_new_cfg(SEED, 0, cats, 1, room);
+        const v = lk.lk_inventory(s);
+        lk.lk_free(s);
+        return v;
+      },
+    };
+    // loaded on demand: Free Play fetches neither mode, Career never
+    // fetches the courtroom
+    if (qs.has('story')) {
+      const { Story } = await import('./story.js?v=k64');
+      game = new Story(api);
+    } else {
+      const { Career } = await import('./career.js?v=k64');
+      game = new Career(api);
+    }
+  } else {
+    mountNav({ left: '114px' }); // after reset + toss
+  }
 }
 
 // arrow keys pan too (founder): held arrows glide the vantage. Signs
@@ -4413,7 +4624,23 @@ const DT = 1000 / 60;
 // raises it so headless playtests on software GL (~3fps) still run
 // real-time sim seconds per wall second
 const ACC_CAP = new URLSearchParams(location.search).has('test') ? 400 : 100;
+let parked = false;
 function frame(now) {
+  // a mode holding an opaque screen (story's courtroom) parks the sim and
+  // the renderer behind it: nothing to see, and a phone's battery to spare
+  if (game && game.frozen) {
+    if (!parked) {
+      // the looping sounds are driven per frame: silence them on the way in
+      parked = true;
+      setPurr(false);
+      destructionEnergy = 0;
+      if (bankOn()) engine.bed(0);
+    }
+    last = now;
+    requestAnimationFrame(frame);
+    return;
+  }
+  parked = false;
   const frameDt = Math.min(now - last, ACC_CAP);
   acc = Math.min(acc + frameDt, ACC_CAP);
   last = now;
@@ -4442,7 +4669,7 @@ function frame(now) {
     const n = lk.lk_event_count(sim);
     for (let i = 0; i < n; i++) {
       const code = lk.lk_event(sim, i);
-      if (career) ckCodes.push(code);
+      if (game) ckCodes.push(code);
       const ev = code >>> 28; // type moved up when prop grew to 13 bits
       if (ev === 1) {
         // cat vocals ride the brain's state changes
@@ -4685,6 +4912,7 @@ function frame(now) {
           view.rig.update(frameDt / 1000, {
             speed: spd,
             pose: v2Pose(st, act, crouch),
+            st, act, // v7 reads the brain state itself: pupils, lids, ears, whiskers, tail
             dot: dot.visible ? dot.position : null,
             tumble01: view.tumbleT,
             // real vertical motion = the sim owns the height; the rig's
@@ -4830,7 +5058,8 @@ function frame(now) {
     }
   }
 
-  scoreEl.textContent = lk.lk_score(sim);
+  // story counts dollars where the other modes count score
+  scoreEl.textContent = game && game.hudScore ? game.hudScore(frameDt) : lk.lk_score(sim);
   if (lightOverlays.length) {
     const off = lk.lk_lights_off(sim);
     lightOverlays.forEach((ov, zi) => (ov.visible = (off & (1 << zi)) !== 0));
@@ -4886,19 +5115,20 @@ function frame(now) {
   }
   updateCloths(data);
   updateRings(data);
-  if (career) {
+  if (game) {
     for (const c of ckCodes) {
       let dims = null;
       const p = (c >>> 12) & 0x1fff;
       if ((c >>> 28) === 4 && p < count) dims = [data[p * 15 + 2], data[p * 15 + 3], data[p * 15 + 4]];
-      career.event(c, dims);
+      game.event(c, dims);
     }
     ckCodes.length = 0;
-    career.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
+    game.frame(frameDt, { puddles: ckPuddles, cats: ckCats, loafing: ckLoaf });
   }
   bedFrame();
   lightFrame(now, data, lk.lk_body_count(sim));
   hazeFrame(now);
+  presentation.frame(now, { cats: debugCats, dot: dot.visible ? dot.position : null, haze });
   if (postActive) composer.render();
   else renderer.render(scene, camera);
 
@@ -4931,8 +5161,15 @@ layoutRoom();
 stateEl.textContent = 'PAD = LASER · DRAG ROOM = LOOK';
 requestAnimationFrame(frame);
 
-// test hook (PewPew pattern): lets an automated driver aim at world points
+// test hook (PewPew pattern): lets an automated driver aim at world points;
+// `damages` (above, by the game modes) rides along for the claim-form checks
 window.__lk = {
+  damages,
+  // story mode's seam (looks.js): { backdrop, style, tiltShift, exhibit,
+  // outline, punch }, any subset; null hands the look back to the settings
+  setPresentation,
+  presentation,
+  renderer,
   aimPad(wx, wy, wz) {
     // the laser leaves the BELT, not the camera: aiming exactly at a
     // world point means finding where the belt->target line crosses the
@@ -4958,6 +5195,16 @@ window.__lk = {
   score: () => lk.lk_score(sim),
   sfx,
   setPurr,
+  // sound audit: a body's sound class and voice; pass a name to give the
+  // mesh that voice (what a room module does with userData.voice), and
+  // hit(i) to play its impact as a topple would
+  voice: (i, name) => {
+    const m = meshes[i];
+    if (!m) return null;
+    if (name !== undefined) m.userData.voice = name;
+    return { voice: m.userData.voice ?? null, snd: m.userData.snd ?? null };
+  },
+  hit: (i) => sfx.impact(meshes[i]),
   // facing audit (the moonwalk bug): for each v2 cat, the heading of its
   // head-minus-tail bone vector vs its velocity heading — aligned means
   // the cat runs nose-first
@@ -4976,7 +5223,32 @@ window.__lk = {
     }
     return out;
   },
+  // every cat: brain state, ambient act, where it is on screen, and (v7) its
+  // body type and current mood — for catching a stalk or a pounce on camera
+  cats: () => {
+    const { w, h } = viewSize();
+    return [...catViews.values()].map((view) => {
+      const v = view.group.position.clone().project(camera);
+      return {
+        k: view.k, st: view.lastSt, pos: view.prev && [...view.prev],
+        screen: [Math.round(((v.x + 1) / 2) * w), Math.round(((-v.y + 1) / 2) * h)],
+        build: view.rig?.build, mood: view.rig?.expr?.mood,
+      };
+    });
+  },
   pan: () => [panX, panY],
+  // frame a zone at once (pan in world metres, zoom as the pinch would, look
+  // in radians): headless GL is far too slow to wait for the eased camera
+  view: (px = 0, py = 0, z = 1, yaw = HOME_YAW, pitch = HOME_PITCH) => {
+    panXT = px; panYT = py; clampPan();
+    panX = panXT; panY = panYT;
+    zoom = zoomT = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+    lookYaw = yawT = Math.max(-YAW_LIM, Math.min(YAW_LIM, yaw));
+    lookPitch = pitchT = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch));
+    resize();
+    applyLook();
+    return [panX, panY, zoom];
+  },
   zoom: () => zoom,
   laser: () => [...new Float32Array(lk.memory.buffer, lk.lk_laser(sim), 10)],
   rings: () => {

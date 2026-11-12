@@ -4,7 +4,7 @@
 // sim says where the dot is, which way the surface faces, how wide the
 // spill is (its gloss law) and how bright.
 import * as THREE from 'three';
-import { LASER } from '../../seam.js?v=k63';
+import { LASER } from '../../seam.js?v=k64';
 
 function canvasTex(size, draw) {
   const c = document.createElement('canvas');
