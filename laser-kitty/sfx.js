@@ -8,7 +8,7 @@
 // neither slider. Works on a live AudioContext (the bank is built in a
 // worker) or an OfflineAudioContext (the bank is built synchronously —
 // that's how the reel test renders).
-import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog } from './sfxbank.js?v=k64';
+import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog } from './sfxbank.js?v=k65';
 
 // how much of each courtroom sound goes to the courtroom's reverb when the
 // caller does not say: a gavel is in the room, a ka-ching over gameplay is

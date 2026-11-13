@@ -611,7 +611,7 @@ export function chime(size, seed, sr) {
 
 // a singing bowl struck with a padded mallet: long and almost pure. Ratios,
 // levels and decays are from five strikes of one real bowl (a public-domain
-// recording, measured late in k64): 1 : 2.78 : 4.94 : 7.39, the second
+// recording, measured late in k65): 1 : 2.78 : 4.94 : 7.39, the second
 // partial 2-9 dB under the first and ringing 6-8 s, the fourth gone in
 // 0.6 s; the fundamental rings 20-45 s there and is faded here. Each
 // partial is a pair a hair apart — no bowl is round — so it beats: the real
@@ -1371,8 +1371,8 @@ export function roomIR(rt60, bright, sr, seed = 1) {
 }
 // room index -> [rt60, brightness]: tiles ring, carpet and couches eat it
 export const ROOM_ACOUSTICS = [[0.45, 0.45], [0.75, 0.5], [1.0, 0.9], [0.6, 0.7], [1.5, 0.65], [1.25, 0.75], [0.55, 0.5], [0.55, 0.5], [0.75, 0.45], [0.6, 0.6],
-  [0.95, 0.75], // 10 Red Dot Rampage: polished concrete and glass
-  [1.6, 0.7], // 11 museum: stone and height
+  [1.15, 0.6], // 10 Red Dot Rampage: a big showroom, but wood underfoot and a floor full of upholstery
+  [1.9, 0.72], // 11 museum: six stone rooms under a high ceiling
   [0.65, 0.5], // 12 studio: sprung wood, mats and cushions
 ];
 // the courtroom the ui:* sounds sit in: panelled, high, a carpeted aisle

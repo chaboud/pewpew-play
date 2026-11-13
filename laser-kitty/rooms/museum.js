@@ -1,28 +1,64 @@
 // The museum (room 11). The sim side is core/src/room_museum.rs;
 // this module is how its bodies look. Contract: rooms/README.md.
 //
-// Recognition follows the builder's rule: GLOSS names the family, TINT the
-// variant inside it (which picture, which bone). Brittle families are also
-// matched on dims, because a shard inherits its parent's gloss and tint —
-// a shard falls through to `shard()` and is drawn as a chip of the same
-// stuff. Everything a visitor would look at faces -z, toward the open
-// front; seen from there +x is on the LEFT.
+// Six rooms in a row, 32 m of them. Recognition follows the builder's rule:
+// GLOSS names the family, TINT the variant inside it (which picture, which
+// limb). Brittle families are also matched on dims, because a shard
+// inherits its parent's gloss and tint — a shard falls through to `shard()`
+// and is drawn as a chip of the same stuff. Everything a visitor would look
+// at faces -z, toward the open front; seen from there +x is on the LEFT.
+//
+// The works are the canon, redrawn here in code. The rule the builder
+// applied (nobody checked it with a lawyer): only works whose maker died
+// before 1955 or which were published before 1930, each drawn afresh and
+// none sampled; nothing still in copyright is depicted or named.
+//
+// Draw calls are the budget: 530 bodies at five meshes each is more than a
+// phone wants. So a body is built from primitives the old way and then
+// FUSED (`fuse`): everything untextured in it becomes one vertex-coloured
+// mesh, or two if some of it shines.
 
-// atmosphere: a hushed room with a little dust in the light
-export const look = { haze: 0.014, sun: 0.85 };
+// framing and light: one room to a phone screen, the rest a pan away. Lit
+// by its own lanterns and picture lights, so the sun and the fill come
+// down; the grid of the light volume coarsens to cover 32 m.
+export const look = {
+  haze: 0.012, sun: 0.6,
+  sunLight: 0.8, ambient: 1.0,
+  eyeBack: 2.5, eyeY: 2.25,
+  panX: 0.92, panY: [-1.0, 2.6],
+  ceil: 5.8, voxelScale: 1.9,
+  // each room's centre, left to right as the visitor sees them
+  stops: [
+    { x: 13, name: 'Moderns' }, { x: 6.7, name: 'Paintings' }, { x: 0, name: 'Great Hall' },
+    { x: -6, name: 'Antiquities' }, { x: -10.9, name: 'Natural History' }, { x: -14.6, name: 'Shop' },
+  ],
+};
 
-// room_museum.rs: where the skeleton's compound origin stands (ribs need
-// to know which side of the spine they are on)
-const REX_Z = 1.95;
-const RAIL_Y = 3.05;
+// room_museum.rs: where the walls stand, the skeleton's origin (ribs need
+// to know which side of the spine they are on), the picture rail
+const HX = 16, WALL_TOP = 5.6;
+const REX_Z = 1.9;
+const RAIL_Y = 3.3;
+// left to right as the visitor sees them (+x first)
+const ROOMS = [
+  { name: 'MODERNS', x1: 16, x0: 10, wall: 0xe4e0d6, dado: 0xbdb8ac },
+  { name: 'PAINTINGS', x1: 10, x0: 3.4, wall: 0x7a2630, dado: 0x4a161d },
+  { name: 'THE GREAT HALL', x1: 3.4, x0: -3.4, wall: 0xd6c9a8, dado: 0xa8997a },
+  { name: 'ANTIQUITIES', x1: -3.4, x0: -8.6, wall: 0x24505a, dado: 0x16343b },
+  { name: 'NATURAL HISTORY', x1: -8.6, x0: -13.2, wall: 0x5f6a3a, dado: 0x3d4526 },
+  { name: 'SHOP & CLOAKROOM', x1: -13.2, x0: -16, wall: 0xd9a441, dado: 0x9a6f22 },
+];
+const roomAt = (x) => ROOMS.find((r) => x <= r.x1 && x > r.x0) ?? ROOMS[2];
 
 // gloss families (room_museum.rs G_*)
 const G = {
-  stone: 0.61, pillar: 0.62, light: 0.64, counter: 0.59, canvas: 0.52, frame: 0.53, wire: 0.77, hook: 0.76,
-  glass: 0.88, bone: 0.44, armature: 0.71, ceramic: 0.56, marble: 0.57, terracotta: 0.46, treasure: 0.78,
-  crown: 0.79, brass: 0.70, rope: 0.07, armour: 0.72, meteorite: 0.68, geode: 0.48, globe: 0.42, wood: 0.41,
-  leather: 0.08, cushion: 0.09, chair: 0.36, paper: 0.16, card: 0.17, carousel: 0.69, thermos: 0.67,
-  sign: 0.38, extinguisher: 0.66, acrylic: 0.89, snowGlobe: 0.90, plush: 0.06,
+  wall: 0.63, lantern: 0.60, stone: 0.61, pillar: 0.62, light: 0.64, counter: 0.59, canvas: 0.52, frame: 0.53,
+  wire: 0.77, hook: 0.76, glass: 0.88, bone: 0.44, armature: 0.71, ceramic: 0.56, marble: 0.57, david: 0.54,
+  venus: 0.55, thinker: 0.73, victory: 0.58, discobolus: 0.47, sphinx: 0.51, moai: 0.49, rosetta: 0.43,
+  terracotta: 0.46, treasure: 0.78, crown: 0.79, brass: 0.70, rope: 0.07, armour: 0.72, meteorite: 0.68,
+  geode: 0.48, globe: 0.42, wood: 0.41, leather: 0.08, cushion: 0.09, coat: 0.10, chair: 0.36, umbrella: 0.37,
+  paper: 0.16, card: 0.17, carousel: 0.69, thermos: 0.67, sign: 0.38, extinguisher: 0.66, mobile: 0.75,
+  acrylic: 0.89, snowGlobe: 0.90, plush: 0.06,
 };
 const near = (x, y, t = 0.004) => Math.abs(x - y) < t;
 const fam = (b, g) => Math.abs(b.gloss - g) < 0.004;
@@ -175,143 +211,595 @@ function paintRedDot(g, W, H) {
   g.stroke();
 }
 
-function paintHaystacks(g, W, H) {
-  const sky = g.createLinearGradient(0, 0, 0, H * 0.6);
-  sky.addColorStop(0, '#9db9d6');
-  sky.addColorStop(1, '#f3d3b0');
-  g.fillStyle = sky;
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = '#7f8fb4';
-  poly(g, [0, H * 0.5, W * 0.3, H * 0.42, W * 0.6, H * 0.47, W, H * 0.4, W, H * 0.58, 0, H * 0.58]);
-  g.fillStyle = '#c7b56a';
-  g.fillRect(0, H * 0.56, W, H * 0.44);
-  const r = rng(29);
-  const dab = (x, y, w, h, c) => {
-    g.fillStyle = c;
-    g.save();
-    g.translate(x, y);
-    g.rotate(-0.5 + r());
-    g.fillRect(-w / 2, -h / 2, w, h);
-    g.restore();
-  };
-  for (let k = 0; k < 260; k++) dab(r() * W, H * (0.57 + r() * 0.43), 10 + r() * 14, 3 + r() * 3, ['#d9c46f', '#b9a654', '#e6d894', '#a9b46a', '#d6a86a'][(r() * 5) | 0]);
-  for (let k = 0; k < 90; k++) dab(r() * W, r() * H * 0.45, 12 + r() * 16, 3 + r() * 3, ['#b9cde2', '#f6e3c8', '#e9c9c0', '#a9c0dc'][(r() * 4) | 0]);
-  // the haystacks. Possibly.
-  for (const [cx, cy, s] of [[0.33, 0.66, 1], [0.7, 0.62, 0.72]]) {
-    g.fillStyle = 'rgba(90,80,120,0.35)';
-    ell(g, W * (cx + 0.07 * s), H * (cy + 0.11 * s), W * 0.2 * s, H * 0.05 * s);
-    g.fillStyle = '#c98a45';
-    g.beginPath();
-    g.moveTo(W * (cx - 0.16 * s), H * (cy + 0.1 * s));
-    g.quadraticCurveTo(W * (cx - 0.15 * s), H * (cy - 0.14 * s), W * cx, H * (cy - 0.2 * s));
-    g.quadraticCurveTo(W * (cx + 0.15 * s), H * (cy - 0.14 * s), W * (cx + 0.16 * s), H * (cy + 0.1 * s));
-    g.closePath();
-    g.fill();
-    for (let k = 0; k < 60; k++) {
-      const a = r() * Math.PI;
-      const rr = r();
-      dab(W * (cx + Math.cos(a) * 0.14 * s * rr), H * (cy + 0.08 * s - Math.sin(a) * 0.26 * s * rr), 9 * s + r() * 8, 3, ['#e6b05c', '#b9743a', '#f0c878', '#8f6a8a', '#d9944a'][(r() * 5) | 0]);
-    }
-  }
-}
-
-function paintAdmiral(g, W, H) {
-  g.fillStyle = '#3a2a22';
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = '#4c382c';
-  g.fillRect(W * 0.68, 0, W * 0.2, H);
-  // coat, epaulettes, a great deal of braid
-  g.fillStyle = '#1d2a4a';
-  poly(g, [W * 0.08, H, W * 0.16, H * 0.62, W * 0.4, H * 0.54, W * 0.6, H * 0.54, W * 0.84, H * 0.62, W * 0.92, H]);
-  g.fillStyle = '#e9e2d0';
-  poly(g, [W * 0.42, H * 0.55, W * 0.58, H * 0.55, W * 0.54, H * 0.78, W * 0.46, H * 0.78]);
-  g.fillStyle = '#d6aa3c';
-  for (const sx of [-1, 1]) {
-    ell(g, W * (0.5 + sx * 0.3), H * 0.63, W * 0.11, H * 0.035);
-    for (let k = 0; k < 5; k++) g.fillRect(W * (0.5 + sx * 0.3) - W * 0.09 + k * W * 0.04, H * 0.64, W * 0.02, H * 0.05);
-    for (let k = 0; k < 4; k++) ell(g, W * (0.5 + sx * 0.12), H * (0.66 + k * 0.08), W * 0.02, W * 0.02);
-  }
-  // the face: florid, and not pleased
-  g.fillStyle = '#e2a98c';
-  ell(g, W * 0.5, H * 0.38, W * 0.17, H * 0.16);
-  g.fillStyle = '#d98f7a';
-  ell(g, W * 0.39, H * 0.42, W * 0.045, H * 0.03);
-  ell(g, W * 0.61, H * 0.42, W * 0.045, H * 0.03);
-  g.fillStyle = '#e9e6de';
-  ell(g, W * 0.33, H * 0.4, W * 0.04, H * 0.06);
-  ell(g, W * 0.67, H * 0.4, W * 0.04, H * 0.06);
-  g.fillStyle = '#2a2420';
-  ell(g, W * 0.43, H * 0.36, W * 0.02, H * 0.012);
-  ell(g, W * 0.57, H * 0.36, W * 0.02, H * 0.012);
-  g.strokeStyle = '#e9e6de';
-  g.lineWidth = W * 0.03;
+// --- the canon. Every one is redrawn here, by hand, in flat shapes: enough
+// of each picture to know it across a room, nothing traced or sampled. ---
+function stroke(g, w, col, pts) {
+  g.strokeStyle = col;
+  g.lineWidth = w;
   g.lineCap = 'round';
   g.beginPath();
-  g.moveTo(W * 0.36, H * 0.31);
-  g.lineTo(W * 0.47, H * 0.335);
-  g.moveTo(W * 0.64, H * 0.31);
-  g.lineTo(W * 0.53, H * 0.335);
+  g.moveTo(pts[0], pts[1]);
+  for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
   g.stroke();
-  g.fillStyle = '#c98a72';
-  poly(g, [W * 0.49, H * 0.37, W * 0.53, H * 0.44, W * 0.47, H * 0.44]);
-  g.strokeStyle = '#7a3a30';
-  g.lineWidth = W * 0.018;
+}
+// the blue crags and the road that goes nowhere, behind both sitters
+function dreamLandscape(g, W, H) {
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#93a98f');
+  sky.addColorStop(0.5, '#b7b488');
+  sky.addColorStop(1, '#6a6541');
+  g.fillStyle = sky;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#6f9191';
+  poly(g, [0, H * 0.42, W * 0.1, H * 0.3, W * 0.2, H * 0.38, W * 0.3, H * 0.26, W * 0.42, H * 0.44, 0, H * 0.5]);
+  poly(g, [W, H * 0.4, W * 0.88, H * 0.27, W * 0.76, H * 0.36, W * 0.66, H * 0.3, W * 0.58, H * 0.45, W, H * 0.52]);
+  g.fillStyle = '#86907a';
+  g.fillRect(0, H * 0.47, W, H * 0.2);
+  g.strokeStyle = '#c9c39a';
+  g.lineWidth = W * 0.022;
   g.beginPath();
-  g.moveTo(W * 0.42, H * 0.5);
-  g.quadraticCurveTo(W * 0.5, H * 0.465, W * 0.58, H * 0.5);
+  g.moveTo(W * 0.06, H * 0.62);
+  g.bezierCurveTo(W * 0.2, H * 0.52, W * 0.08, H * 0.48, W * 0.22, H * 0.42);
   g.stroke();
-  // the hat
-  g.fillStyle = '#15151c';
+  g.strokeStyle = '#8fb0a8';
   g.beginPath();
-  g.moveTo(W * 0.14, H * 0.27);
-  g.quadraticCurveTo(W * 0.5, H * -0.02, W * 0.86, H * 0.27);
-  g.quadraticCurveTo(W * 0.5, H * 0.2, W * 0.14, H * 0.27);
+  g.moveTo(W * 0.95, H * 0.6);
+  g.bezierCurveTo(W * 0.78, H * 0.55, W * 0.92, H * 0.5, W * 0.8, H * 0.46);
+  g.stroke();
+}
+
+function paintMona(g, W, H) {
+  dreamLandscape(g, W, H);
+  // the gown and the dark veil of hair
+  g.fillStyle = '#262a22';
+  ell(g, W * 0.5, H * 1.04, W * 0.5, H * 0.46);
+  g.fillStyle = '#2a1c12';
+  ell(g, W * 0.5, H * 0.34, W * 0.215, H * 0.2);
+  poly(g, [W * 0.29, H * 0.34, W * 0.22, H * 0.7, W * 0.78, H * 0.7, W * 0.71, H * 0.34]);
+  // throat and breast, the neckline cut straight across
+  g.fillStyle = '#d8b582';
+  poly(g, [W * 0.4, H * 0.46, W * 0.6, H * 0.46, W * 0.7, H * 0.68, W * 0.3, H * 0.68]);
+  g.fillStyle = '#33301f';
+  g.beginPath();
+  g.moveTo(W * 0.24, H * 0.7);
+  g.quadraticCurveTo(W * 0.5, H * 0.6, W * 0.76, H * 0.7);
+  g.lineTo(W * 0.8, H * 0.82);
+  g.lineTo(W * 0.2, H * 0.82);
   g.fill();
-  g.strokeStyle = '#d6aa3c';
-  g.lineWidth = W * 0.014;
+  // the face: a long pale oval, high forehead, no eyebrows to speak of
+  g.fillStyle = '#e4c896';
+  ell(g, W * 0.5, H * 0.345, W * 0.128, H * 0.155);
+  g.fillStyle = 'rgba(120,84,40,0.28)';
+  ell(g, W * 0.585, H * 0.36, W * 0.05, H * 0.13);
+  g.fillStyle = '#3a2a1a';
+  for (const sx of [-1, 1]) ell(g, W * (0.5 + sx * 0.058) - W * 0.008, H * 0.33, W * 0.024, H * 0.008);
+  stroke(g, W * 0.008, '#b08e5c', [W * 0.5, H * 0.34, W * 0.488, H * 0.4, W * 0.505, H * 0.405]);
+  // the smile
+  g.strokeStyle = '#8a4a36';
+  g.lineWidth = W * 0.01;
   g.beginPath();
-  g.moveTo(W * 0.16, H * 0.265);
-  g.quadraticCurveTo(W * 0.5, H * 0.2, W * 0.84, H * 0.265);
+  g.moveTo(W * 0.452, H * 0.438);
+  g.quadraticCurveTo(W * 0.5, H * 0.456, W * 0.552, H * 0.43);
   g.stroke();
-  g.fillStyle = '#b3262a';
-  ell(g, W * 0.5, H * 0.15, W * 0.035, W * 0.035);
-  varnish(g, W, H, 0.45);
+  // the hands, one over the other
+  g.fillStyle = '#e0c28e';
+  ell(g, W * 0.45, H * 0.86, W * 0.15, H * 0.04, -0.1);
+  ell(g, W * 0.57, H * 0.885, W * 0.13, H * 0.036, 0.14);
+  varnish(g, W, H, 0.5);
+}
+
+function paintPearl(g, W, H) {
+  g.fillStyle = '#12110e';
+  g.fillRect(0, 0, W, H);
+  // the jacket, the white collar
+  g.fillStyle = '#8a6a2c';
+  poly(g, [W * 0.06, H, W * 0.18, H * 0.74, W * 0.48, H * 0.62, W * 0.8, H * 0.76, W * 0.94, H]);
+  g.fillStyle = '#e9e4d6';
+  poly(g, [W * 0.33, H * 0.67, W * 0.56, H * 0.63, W * 0.54, H * 0.72, W * 0.36, H * 0.75]);
+  // the yellow tail of the turban, down her back
+  g.fillStyle = '#d9b23c';
+  poly(g, [W * 0.6, H * 0.16, W * 0.76, H * 0.26, W * 0.8, H * 0.72, W * 0.66, H * 0.68]);
+  g.fillStyle = '#b9922c';
+  poly(g, [W * 0.7, H * 0.3, W * 0.76, H * 0.3, W * 0.78, H * 0.7, W * 0.72, H * 0.69]);
+  // the face, turned back over the shoulder
+  g.fillStyle = '#e8c79c';
+  ell(g, W * 0.44, H * 0.43, W * 0.18, H * 0.2);
+  g.fillStyle = 'rgba(90,60,30,0.3)';
+  ell(g, W * 0.56, H * 0.46, W * 0.07, H * 0.16);
+  // the turban
+  g.fillStyle = '#2f5fa8';
+  ell(g, W * 0.5, H * 0.25, W * 0.225, H * 0.15);
+  poly(g, [W * 0.27, H * 0.3, W * 0.62, H * 0.22, W * 0.66, H * 0.36, W * 0.3, H * 0.36]);
+  g.fillStyle = '#6f97d6';
+  ell(g, W * 0.42, H * 0.2, W * 0.09, H * 0.05, -0.3);
+  // eyes that have just found you, and the mouth a little open
+  g.fillStyle = '#f4efe2';
+  ell(g, W * 0.345, H * 0.42, W * 0.034, H * 0.016);
+  ell(g, W * 0.49, H * 0.42, W * 0.034, H * 0.016);
+  g.fillStyle = '#2a2018';
+  ell(g, W * 0.335, H * 0.42, W * 0.017, H * 0.015);
+  ell(g, W * 0.48, H * 0.42, W * 0.017, H * 0.015);
+  g.fillStyle = '#b8473a';
+  ell(g, W * 0.4, H * 0.545, W * 0.04, H * 0.016);
+  g.fillStyle = '#e9a79a';
+  ell(g, W * 0.395, H * 0.54, W * 0.015, H * 0.006);
+  // the pearl
+  g.fillStyle = '#b9b4a6';
+  ell(g, W * 0.6, H * 0.585, W * 0.04, W * 0.046);
+  g.fillStyle = '#fbf8ee';
+  ell(g, W * 0.59, H * 0.575, W * 0.022, W * 0.026);
+  varnish(g, W, H, 0.25);
+}
+
+function paintBirth(g, W, H) {
+  g.fillStyle = '#cfe0d6';
+  g.fillRect(0, 0, W, H * 0.42);
+  g.fillStyle = '#9cc2b4';
+  g.fillRect(0, H * 0.42, W, H * 0.58);
+  // the little V-shaped waves
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 12; i++) {
+    const x = W * (0.04 + i * 0.085 + (j % 2) * 0.04), y = H * (0.48 + j * 0.065);
+    stroke(g, 1.6, '#eef6ee', [x - 6, y - 3, x, y, x + 6, y - 3]);
+  }
+  // the shore and its dark trees, on the right
+  g.fillStyle = '#6f8f5a';
+  poly(g, [W * 0.78, H, W * 0.86, H * 0.7, W, H * 0.62, W, H]);
+  g.fillStyle = '#2f4f34';
+  for (const [x, y] of [[0.9, 0.2], [0.96, 0.3], [0.86, 0.34]]) {
+    g.fillRect(W * x, H * y, W * 0.012, H * 0.45);
+    ell(g, W * x, H * y, W * 0.06, H * 0.12);
+  }
+  // the winds, entwined, blowing from the left
+  g.fillStyle = '#8fa6c9';
+  ell(g, W * 0.17, H * 0.32, W * 0.13, H * 0.1, -0.5);
+  g.fillStyle = '#4f6f9a';
+  poly(g, [W * 0.02, H * 0.1, W * 0.2, H * 0.2, W * 0.1, H * 0.34]);
+  g.fillStyle = '#e9c9a8';
+  ell(g, W * 0.21, H * 0.27, W * 0.035, H * 0.06);
+  ell(g, W * 0.26, H * 0.22, W * 0.03, H * 0.055);
+  stroke(g, 2, '#f6f6ee', [W * 0.26, H * 0.3, W * 0.4, H * 0.36]);
+  stroke(g, 2, '#f6f6ee', [W * 0.25, H * 0.34, W * 0.38, H * 0.42]);
+  // the attendant, hurrying in with a red cloak
+  g.fillStyle = '#f2ede0';
+  poly(g, [W * 0.72, H * 0.34, W * 0.8, H * 0.34, W * 0.84, H * 0.9, W * 0.7, H * 0.9]);
+  g.fillStyle = '#e9c9a8';
+  ell(g, W * 0.76, H * 0.28, W * 0.028, H * 0.055);
+  g.fillStyle = '#b8473a';
+  poly(g, [W * 0.6, H * 0.3, W * 0.74, H * 0.36, W * 0.7, H * 0.62, W * 0.62, H * 0.5]);
+  // the shell
+  g.fillStyle = '#e9dcc6';
+  g.beginPath();
+  g.moveTo(W * 0.5, H * 0.97);
+  g.bezierCurveTo(W * 0.26, H * 0.95, W * 0.3, H * 0.74, W * 0.5, H * 0.76);
+  g.bezierCurveTo(W * 0.7, H * 0.74, W * 0.74, H * 0.95, W * 0.5, H * 0.97);
+  g.fill();
+  for (let k = -3; k <= 3; k++) stroke(g, 1.5, '#b9a686', [W * 0.5, H * 0.96, W * (0.5 + k * 0.055), H * 0.78]);
+  // her: pale, weight on one foot, and a great deal of hair
+  g.fillStyle = '#f0d8bc';
+  ell(g, W * 0.5, H * 0.2, W * 0.032, H * 0.06);
+  poly(g, [W * 0.465, H * 0.27, W * 0.535, H * 0.27, W * 0.55, H * 0.5, W * 0.53, H * 0.82, W * 0.49, H * 0.82, W * 0.455, H * 0.5]);
+  g.fillStyle = '#c98a3c';
+  g.beginPath();
+  g.moveTo(W * 0.48, H * 0.15);
+  g.bezierCurveTo(W * 0.56, H * 0.1, W * 0.6, H * 0.2, W * 0.57, H * 0.34);
+  g.bezierCurveTo(W * 0.66, H * 0.42, W * 0.6, H * 0.56, W * 0.5, H * 0.58);
+  g.bezierCurveTo(W * 0.46, H * 0.5, W * 0.56, H * 0.4, W * 0.53, H * 0.26);
+  g.closePath();
+  g.fill();
+  stroke(g, W * 0.012, '#f0d8bc', [W * 0.47, H * 0.3, W * 0.44, H * 0.4, W * 0.5, H * 0.36]);
+}
+
+function paintStarry(g, W, H) {
+  g.fillStyle = '#1f3f8a';
+  g.fillRect(0, 0, W, H);
+  const r = rng(61);
+  // the sky is all short strokes, going round
+  for (let k = 0; k < 420; k++) {
+    const x = r() * W, y = r() * H * 0.72;
+    const a = Math.sin(x * 0.02) + Math.cos(y * 0.03) + (r() - 0.5) * 0.5;
+    g.strokeStyle = ['#2f5fb4', '#16306e', '#4f86d6', '#7fb0e6', '#24489a'][(r() * 5) | 0];
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + Math.cos(a) * 11, y + Math.sin(a) * 11);
+    g.stroke();
+  }
+  // the great swirl through the middle
+  for (let k = 0; k < 5; k++) {
+    g.strokeStyle = k % 2 ? '#a8c8ee' : '#e9e6c0';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(W * 0.47, H * 0.36, W * (0.03 + k * 0.022), 0.4 + k * 0.5, 5.2 + k * 0.5);
+    g.stroke();
+    g.beginPath();
+    g.arc(W * 0.64, H * 0.42, W * (0.02 + k * 0.016), 3.4 + k * 0.4, 8.0 + k * 0.4);
+    g.stroke();
+  }
+  // eleven stars and a moon, each in its own halo
+  const star = (x, y, s, col) => {
+    for (let k = 3; k >= 1; k--) {
+      g.strokeStyle = ['#fff6c0', '#e9d86a', '#a8c8a0'][k - 1];
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.arc(W * x, H * y, s * (0.4 + k * 0.32), 0, 6.3);
+      g.stroke();
+    }
+    g.fillStyle = col;
+    ell(g, W * x, H * y, s * 0.45, s * 0.45);
+  };
+  for (const [x, y, s] of [[0.3, 0.12, 9], [0.42, 0.07, 7], [0.55, 0.14, 8], [0.68, 0.08, 7], [0.2, 0.3, 8], [0.33, 0.44, 11], [0.76, 0.26, 7], [0.14, 0.08, 6]]) star(x, y, s, '#fff2a8');
+  star(0.88, 0.14, 19, '#f2b23c');
+  g.fillStyle = '#1f3f8a';
+  ell(g, W * 0.865, H * 0.13, 10, 11);
+  // the hills, the village, the steeple
+  g.fillStyle = '#24407a';
+  poly(g, [0, H * 0.74, W * 0.3, H * 0.62, W * 0.55, H * 0.7, W * 0.8, H * 0.58, W, H * 0.66, W, H, 0, H]);
+  g.fillStyle = '#16264e';
+  poly(g, [W * 0.2, H, W * 0.3, H * 0.78, W * 0.7, H * 0.76, W, H * 0.82, W, H]);
+  for (let k = 0; k < 9; k++) {
+    const x = W * (0.34 + k * 0.07), y = H * (0.8 + (k % 3) * 0.04);
+    g.fillStyle = '#22335e';
+    g.fillRect(x, y, W * 0.05, H * 0.07);
+    g.fillStyle = '#f2c84a';
+    g.fillRect(x + W * 0.015, y + H * 0.025, W * 0.014, H * 0.02);
+  }
+  g.fillStyle = '#16264e';
+  poly(g, [W * 0.535, H * 0.84, W * 0.55, H * 0.6, W * 0.565, H * 0.84]);
+  // the cypress, like a black flame
+  g.fillStyle = '#10201c';
+  g.beginPath();
+  g.moveTo(W * 0.1, H);
+  g.bezierCurveTo(W * 0.04, H * 0.7, W * 0.16, H * 0.5, W * 0.15, H * 0.14);
+  g.bezierCurveTo(W * 0.2, H * 0.5, W * 0.27, H * 0.74, W * 0.25, H);
+  g.fill();
+  stroke(g, 2, '#2f5a3c', [W * 0.13, H * 0.9, W * 0.16, H * 0.6, W * 0.155, H * 0.3]);
+}
+
+function paintScream(g, W, H) {
+  // the sky, in bands that will not lie flat
+  for (let k = 0; k < 9; k++) {
+    g.strokeStyle = ['#e2562a', '#f29a2c', '#f2c84a', '#d9401c', '#f2a03c'][k % 5];
+    g.lineWidth = H * 0.05;
+    g.beginPath();
+    g.moveTo(-10, H * (0.03 + k * 0.042));
+    g.bezierCurveTo(W * 0.3, H * (-0.01 + k * 0.042), W * 0.6, H * (0.08 + k * 0.042), W + 10, H * (0.02 + k * 0.042));
+    g.stroke();
+  }
+  // the fjord and the far shore
+  g.fillStyle = '#2f4f8a';
+  g.fillRect(0, H * 0.38, W, H * 0.3);
+  for (let k = 0; k < 4; k++) {
+    g.strokeStyle = k % 2 ? '#1f2f5e' : '#5f86b8';
+    g.lineWidth = H * 0.03;
+    g.beginPath();
+    g.moveTo(W * 0.5, H * (0.44 + k * 0.05));
+    g.bezierCurveTo(W * 0.7, H * (0.4 + k * 0.05), W * 0.8, H * (0.56 + k * 0.04), W + 10, H * (0.48 + k * 0.05));
+    g.stroke();
+  }
+  g.fillStyle = '#2a3a2a';
+  poly(g, [W * 0.55, H * 0.62, W, H * 0.5, W, H, W * 0.75, H]);
+  // the bridge, running away to the left, and the two who keep walking
+  g.fillStyle = '#8a5a34';
+  poly(g, [0, H * 0.4, W * 0.62, H, 0, H]);
+  for (const t of [0, 0.3, 0.62]) stroke(g, H * 0.014, '#4a2c1a', [0, H * (0.4 - t * 0.12) + H * t * 0.5, W * (0.62 + t * 0.3), H]);
+  stroke(g, H * 0.02, '#c98a4a', [0, H * 0.36, W * 0.72, H]);
+  g.fillStyle = '#1a1a26';
+  g.fillRect(W * 0.05, H * 0.3, W * 0.035, H * 0.12);
+  g.fillRect(W * 0.11, H * 0.31, W * 0.035, H * 0.12);
+  // the figure
+  g.fillStyle = '#20202c';
+  g.beginPath();
+  g.moveTo(W * 0.38, H);
+  g.bezierCurveTo(W * 0.36, H * 0.8, W * 0.5, H * 0.74, W * 0.5, H * 0.62);
+  g.bezierCurveTo(W * 0.62, H * 0.74, W * 0.72, H * 0.84, W * 0.66, H);
+  g.fill();
+  g.fillStyle = '#e9d8a8';
+  g.beginPath();
+  g.ellipse(W * 0.52, H * 0.55, W * 0.085, H * 0.1, 0, 0, 6.3);
+  g.fill();
+  poly(g, [W * 0.46, H * 0.62, W * 0.58, H * 0.62, W * 0.55, H * 0.7, W * 0.49, H * 0.7]);
+  // hands to the face
+  ell(g, W * 0.42, H * 0.6, W * 0.03, H * 0.075, 0.2);
+  ell(g, W * 0.62, H * 0.6, W * 0.03, H * 0.075, -0.2);
+  g.fillStyle = '#2a2018';
+  ell(g, W * 0.49, H * 0.53, W * 0.016, H * 0.014);
+  ell(g, W * 0.55, H * 0.53, W * 0.016, H * 0.014);
+  ell(g, W * 0.52, H * 0.6, W * 0.022, H * 0.036);
+}
+
+function paintKiss(g, W, H) {
+  g.fillStyle = '#7a5a1c';
+  g.fillRect(0, 0, W, H);
+  const r = rng(77);
+  for (let k = 0; k < 500; k++) {
+    g.fillStyle = `rgba(${200 + r() * 50},${160 + r() * 50},${40 + r() * 40},${0.25 + r() * 0.4})`;
+    g.fillRect(r() * W, r() * H, 2 + r() * 2, 2 + r() * 2);
+  }
+  // the meadow they kneel on, all flowers
+  g.fillStyle = '#3f7a3c';
+  g.beginPath();
+  g.moveTo(0, H);
+  g.lineTo(0, H * 0.82);
+  g.bezierCurveTo(W * 0.3, H * 0.74, W * 0.6, H * 0.8, W * 0.8, H * 0.9);
+  g.lineTo(W * 0.8, H);
+  g.fill();
+  for (let k = 0; k < 70; k++) {
+    g.fillStyle = ['#e9d86a', '#d94f6a', '#8f6ad9', '#f2f2e6', '#e98a2c'][(r() * 5) | 0];
+    ell(g, r() * W * 0.78, H * (0.8 + r() * 0.2), 3, 3);
+  }
+  // the one golden shape they make
+  g.fillStyle = '#e2b53a';
+  g.beginPath();
+  g.moveTo(W * 0.3, H * 0.9);
+  g.bezierCurveTo(W * 0.2, H * 0.5, W * 0.34, H * 0.16, W * 0.52, H * 0.1);
+  g.bezierCurveTo(W * 0.76, H * 0.14, W * 0.8, H * 0.5, W * 0.7, H * 0.92);
+  g.closePath();
+  g.fill();
+  // his side: black and white oblongs. Hers: rounds of colour.
+  for (let k = 0; k < 26; k++) {
+    g.fillStyle = k % 3 ? '#1b1a1e' : '#f2efe2';
+    g.fillRect(W * (0.3 + r() * 0.18), H * (0.24 + r() * 0.5), W * 0.03, H * 0.045);
+  }
+  for (let k = 0; k < 30; k++) {
+    g.fillStyle = ['#d94f3a', '#3f7ac9', '#8f4fa8', '#f2efe2', '#3f9a5a'][(r() * 5) | 0];
+    const x = W * (0.52 + r() * 0.17), y = H * (0.36 + r() * 0.5);
+    ell(g, x, y, W * 0.022, W * 0.022);
+    g.fillStyle = '#e2b53a';
+    ell(g, x, y, W * 0.008, W * 0.008);
+  }
+  // his head, bent over; her face, turned up and level, eyes closed
+  g.fillStyle = '#2a1c14';
+  ell(g, W * 0.49, H * 0.17, W * 0.085, H * 0.07, -0.3);
+  g.fillStyle = '#c99a72';
+  ell(g, W * 0.5, H * 0.21, W * 0.05, H * 0.04, -0.3);
+  g.fillStyle = '#f0d8bc';
+  ell(g, W * 0.58, H * 0.26, W * 0.07, H * 0.05, 0.25);
+  stroke(g, 1.6, '#6a4a34', [W * 0.56, H * 0.25, W * 0.6, H * 0.262]);
+  g.fillStyle = '#b8473a';
+  ell(g, W * 0.6, H * 0.285, W * 0.014, H * 0.007);
+  g.fillStyle = '#c9622c';
+  ell(g, W * 0.64, H * 0.22, W * 0.06, H * 0.05, 0.3);
+  for (let k = 0; k < 7; k++) {
+    g.fillStyle = ['#d94f6a', '#3f7ac9', '#f2f2e6'][k % 3];
+    ell(g, W * (0.6 + r() * 0.09), H * (0.19 + r() * 0.06), 3, 3);
+  }
+  // her hand at his neck, her feet over the edge of the flowers
+  g.fillStyle = '#f0d8bc';
+  ell(g, W * 0.46, H * 0.27, W * 0.03, H * 0.022, 0.6);
+  ell(g, W * 0.68, H * 0.93, W * 0.03, H * 0.022);
+}
+
+function paintGrid(g, W, H) {
+  g.fillStyle = '#f2efe6';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#d3231c';
+  g.fillRect(W * 0.3, 0, W * 0.7, H * 0.62);
+  g.fillStyle = '#1f3f9a';
+  g.fillRect(0, H * 0.72, W * 0.3, H * 0.28);
+  g.fillStyle = '#f2c21c';
+  g.fillRect(W * 0.86, H * 0.86, W * 0.14, H * 0.14);
+  g.fillStyle = '#15151a';
+  const t = W * 0.035;
+  g.fillRect(W * 0.3 - t / 2, 0, t, H);
+  g.fillRect(0, H * 0.62 - t / 2, W, t);
+  g.fillRect(0, H * 0.26 - t / 2, W * 0.3, t);
+  g.fillRect(0, H * 0.72 - t / 2, W * 0.3, t);
+  g.fillRect(W * 0.86 - t / 2, H * 0.62, t, H * 0.38);
+  g.fillRect(W * 0.86, H * 0.86 - t / 2, W * 0.14, t);
+}
+
+function paintWave(g, W, H) {
+  g.fillStyle = '#eadcb8';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#b9b29a';
+  g.fillRect(0, 0, W, H * 0.3);
+  g.fillStyle = '#eadcb8';
+  ell(g, W * 0.6, H * 0.3, W * 0.5, H * 0.12);
+  // the mountain, small, a long way off
+  g.fillStyle = '#3f5f8a';
+  poly(g, [W * 0.52, H * 0.7, W * 0.62, H * 0.5, W * 0.72, H * 0.7]);
+  g.fillStyle = '#f6f2e6';
+  poly(g, [W * 0.595, H * 0.555, W * 0.62, H * 0.5, W * 0.645, H * 0.555, W * 0.63, H * 0.57, W * 0.62, H * 0.555, W * 0.608, H * 0.57]);
+  // the sea
+  g.fillStyle = '#1f3f72';
+  g.beginPath();
+  g.moveTo(0, H);
+  g.lineTo(0, H * 0.62);
+  g.bezierCurveTo(W * 0.3, H * 0.9, W * 0.6, H * 0.6, W, H * 0.78);
+  g.lineTo(W, H);
+  g.fill();
+  // the wave: rearing up on the left, curling over to the right
+  g.fillStyle = '#24508f';
+  g.beginPath();
+  g.moveTo(0, H);
+  g.lineTo(0, H * 0.3);
+  g.bezierCurveTo(W * 0.14, H * 0.02, W * 0.5, H * 0.02, W * 0.58, H * 0.3);
+  g.bezierCurveTo(W * 0.42, H * 0.2, W * 0.3, H * 0.34, W * 0.34, H * 0.6);
+  g.bezierCurveTo(W * 0.36, H * 0.8, W * 0.5, H * 0.9, W * 0.5, H);
+  g.fill();
+  for (let k = 0; k < 5; k++) {
+    g.strokeStyle = '#8fb0d6';
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.moveTo(W * (0.03 + k * 0.045), H * 0.95);
+    g.bezierCurveTo(W * (0.02 + k * 0.05), H * 0.5, W * (0.12 + k * 0.05), H * (0.2 + k * 0.03), W * (0.3 + k * 0.04), H * (0.14 + k * 0.035));
+    g.stroke();
+  }
+  // the foam, and its claws
+  g.fillStyle = '#f6f2e6';
+  g.beginPath();
+  g.moveTo(0, H * 0.32);
+  g.bezierCurveTo(W * 0.14, H * 0.0, W * 0.5, H * 0.0, W * 0.6, H * 0.32);
+  g.bezierCurveTo(W * 0.5, H * 0.12, W * 0.2, H * 0.1, 0, H * 0.4);
+  g.fill();
+  for (let k = 0; k < 9; k++) {
+    const a = 0.2 + k * 0.33, x = W * (0.36 + 0.22 * Math.cos(a) * 0.9), y = H * (0.2 + 0.1 * Math.sin(a));
+    ell(g, x + W * 0.05, y + H * 0.02, W * 0.035, H * 0.03, a);
+    for (let c = 0; c < 3; c++) ell(g, x + W * (0.07 + c * 0.012), y + H * (0.06 + c * 0.02), W * 0.009, H * 0.014);
+  }
+  // the boats, low in the trough
+  g.fillStyle = '#e2c88a';
+  for (const [x, y, rot] of [[0.56, 0.84, -0.15], [0.84, 0.74, 0.1]]) {
+    g.save();
+    g.translate(W * x, H * y);
+    g.rotate(rot);
+    g.beginPath();
+    g.ellipse(0, 0, W * 0.15, H * 0.035, 0, 0, Math.PI);
+    g.fill();
+    g.restore();
+  }
+  // the cartouche
+  g.fillStyle = '#f6f2e6';
+  g.fillRect(W * 0.05, H * 0.05, W * 0.05, H * 0.2);
+  g.fillStyle = '#2a2a3a';
+  for (let k = 0; k < 6; k++) g.fillRect(W * 0.062, H * (0.065 + k * 0.03), W * 0.026, H * 0.016);
+}
+
+function paintGothic(g, W, H) {
+  g.fillStyle = '#b9d0e2';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#5f8a4f';
+  for (const x of [0.06, 0.18, 0.9]) ell(g, W * x, H * 0.3, W * 0.1, H * 0.09);
+  // the house, and the window the picture is named for
+  g.fillStyle = '#efe9d9';
+  poly(g, [W * 0.2, H * 0.48, W * 0.5, H * 0.1, W * 0.8, H * 0.48]);
+  g.fillRect(W * 0.2, H * 0.44, W * 0.6, H * 0.3);
+  g.fillStyle = '#8a8478';
+  poly(g, [W * 0.16, H * 0.48, W * 0.5, H * 0.07, W * 0.84, H * 0.48, W * 0.8, H * 0.48, W * 0.5, H * 0.13, W * 0.2, H * 0.48]);
+  g.fillStyle = '#3a4a5a';
+  g.beginPath();
+  g.moveTo(W * 0.45, H * 0.42);
+  g.lineTo(W * 0.45, H * 0.27);
+  g.quadraticCurveTo(W * 0.5, H * 0.17, W * 0.55, H * 0.27);
+  g.lineTo(W * 0.55, H * 0.42);
+  g.fill();
+  stroke(g, 1.5, '#efe9d9', [W * 0.5, H * 0.2, W * 0.5, H * 0.42]);
+  stroke(g, 1.5, '#efe9d9', [W * 0.45, H * 0.32, W * 0.55, H * 0.32]);
+  // her: hair pulled back, a brown apron, a cameo at the collar
+  g.fillStyle = '#4a3424';
+  poly(g, [W * 0.04, H, W * 0.1, H * 0.66, W * 0.42, H * 0.66, W * 0.46, H]);
+  g.fillStyle = '#1b1a1e';
+  poly(g, [W * 0.14, H * 0.66, W * 0.38, H * 0.66, W * 0.3, H * 0.74, W * 0.22, H * 0.74]);
+  g.fillStyle = '#efe9d9';
+  poly(g, [W * 0.2, H * 0.64, W * 0.32, H * 0.64, W * 0.26, H * 0.7]);
+  g.fillStyle = '#c9622c';
+  ell(g, W * 0.26, H * 0.675, W * 0.014, H * 0.012);
+  g.fillStyle = '#e6c3a0';
+  ell(g, W * 0.26, H * 0.5, W * 0.085, H * 0.13);
+  g.fillStyle = '#b9965a';
+  ell(g, W * 0.26, H * 0.39, W * 0.085, H * 0.04);
+  // him: bald, round glasses, a dark jacket over overalls
+  g.fillStyle = '#1b1a1e';
+  poly(g, [W * 0.5, H, W * 0.54, H * 0.62, W * 0.9, H * 0.62, W * 0.98, H]);
+  g.fillStyle = '#3f5a7a';
+  poly(g, [W * 0.63, H, W * 0.64, H * 0.7, W * 0.8, H * 0.7, W * 0.82, H]);
+  g.fillStyle = '#efe9d9';
+  poly(g, [W * 0.66, H * 0.6, W * 0.78, H * 0.6, W * 0.76, H * 0.7, W * 0.68, H * 0.7]);
+  g.fillStyle = '#e6c3a0';
+  ell(g, W * 0.72, H * 0.42, W * 0.085, H * 0.155);
+  g.strokeStyle = '#3a3a3a';
+  g.lineWidth = 1.6;
+  for (const sx of [-1, 1]) {
+    g.beginPath();
+    g.arc(W * (0.72 + sx * 0.04), H * 0.41, W * 0.028, 0, 6.3);
+    g.stroke();
+  }
+  stroke(g, 2, '#7a4a3a', [W * 0.69, H * 0.5, W * 0.75, H * 0.5]);
+  stroke(g, 2, '#7a4a3a', [W * 0.23, H * 0.56, W * 0.29, H * 0.56]);
+  g.fillStyle = '#2a2018';
+  for (const x of [0.225, 0.295]) ell(g, W * x, H * 0.49, W * 0.012, H * 0.008);
+  for (const x of [0.68, 0.76]) ell(g, W * x, H * 0.41, W * 0.01, H * 0.007);
+  // the pitchfork, held like a verdict
+  stroke(g, W * 0.018, '#6a4a30', [W * 0.5, H, W * 0.5, H * 0.56]);
+  for (const dx of [-0.045, 0, 0.045]) stroke(g, W * 0.012, '#3a3a40', [W * (0.5 + dx), H * 0.6, W * (0.5 + dx), H * 0.34]);
+  stroke(g, W * 0.012, '#3a3a40', [W * 0.455, H * 0.6, W * 0.545, H * 0.6]);
+  g.fillStyle = '#e6c3a0';
+  ell(g, W * 0.5, H * 0.8, W * 0.04, H * 0.03);
+}
+
+function paintWhistler(g, W, H) {
+  g.fillStyle = '#8f8f88';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#5a4a3a';
+  g.fillRect(0, H * 0.82, W, H * 0.18);
+  g.fillStyle = '#6f6f68';
+  g.fillRect(0, H * 0.78, W, H * 0.04);
+  // the curtain, with its little flowers
+  g.fillStyle = '#23242c';
+  g.fillRect(0, 0, W * 0.22, H * 0.86);
+  const r = rng(13);
+  g.fillStyle = '#8f8a9a';
+  for (let k = 0; k < 40; k++) ell(g, r() * W * 0.2 + 3, r() * H * 0.82, 2, 2);
+  // the picture on the wall
+  g.fillStyle = '#1b1a1e';
+  g.fillRect(W * 0.36, H * 0.14, W * 0.24, H * 0.26);
+  g.fillStyle = '#cfcabb';
+  g.fillRect(W * 0.385, H * 0.175, W * 0.19, H * 0.19);
+  g.fillStyle = '#8f8f88';
+  g.fillRect(W * 0.42, H * 0.22, W * 0.12, H * 0.1);
+  // the sitter, in profile, facing left: one black shape
+  g.fillStyle = '#131318';
+  g.beginPath();
+  g.moveTo(W * 0.56, H * 0.36);
+  g.bezierCurveTo(W * 0.74, H * 0.36, W * 0.8, H * 0.6, W * 0.86, H * 0.95);
+  g.lineTo(W * 0.36, H * 0.95);
+  g.bezierCurveTo(W * 0.42, H * 0.74, W * 0.56, H * 0.66, W * 0.56, H * 0.36);
+  g.fill();
+  // the chair's back leg, the footstool
+  stroke(g, 3, '#3a2a1c', [W * 0.84, H * 0.7, W * 0.87, H * 0.97]);
+  g.fillStyle = '#3a2a1c';
+  g.fillRect(W * 0.26, H * 0.9, W * 0.16, H * 0.06);
+  // the face and the lace cap, its ties hanging
+  g.fillStyle = '#e2c8a8';
+  ell(g, W * 0.6, H * 0.27, W * 0.045, H * 0.085);
+  poly(g, [W * 0.555, H * 0.27, W * 0.535, H * 0.3, W * 0.56, H * 0.31]);
+  g.fillStyle = '#f2efe6';
+  ell(g, W * 0.64, H * 0.24, W * 0.05, H * 0.08);
+  poly(g, [W * 0.63, H * 0.3, W * 0.67, H * 0.3, W * 0.66, H * 0.48, W * 0.62, H * 0.46]);
+  g.fillStyle = '#2a2018';
+  ell(g, W * 0.585, H * 0.255, W * 0.007, H * 0.006);
+  // hands in her lap, on a handkerchief
+  g.fillStyle = '#f2efe6';
+  ell(g, W * 0.5, H * 0.62, W * 0.06, H * 0.035);
+  g.fillStyle = '#e2c8a8';
+  ell(g, W * 0.5, H * 0.61, W * 0.035, H * 0.02);
 }
 
 function paintSunflowers(g, W, H) {
-  g.fillStyle = '#d9b63c';
+  g.fillStyle = '#e9c93c';
   g.fillRect(0, 0, W, H);
-  g.fillStyle = '#c59a2c';
-  g.fillRect(0, H * 0.72, W, H * 0.28);
-  g.fillStyle = '#8a8f4a';
-  poly(g, [W * 0.36, H * 0.92, W * 0.33, H * 0.62, W * 0.67, H * 0.62, W * 0.64, H * 0.92]);
-  g.fillStyle = '#b9b56a';
-  g.fillRect(W * 0.33, H * 0.62, W * 0.34, H * 0.1);
-  // every head has given up
-  const heads = [[0.22, 0.5, 1.9], [0.42, 0.3, 0.3], [0.62, 0.36, -0.5], [0.8, 0.56, -1.9], [0.5, 0.52, 3.1]];
-  for (const [hx, hy, droop] of heads) {
-    g.strokeStyle = '#5f6a2a';
-    g.lineWidth = W * 0.025;
-    g.beginPath();
-    g.moveTo(W * 0.5, H * 0.64);
-    g.quadraticCurveTo(W * (0.5 + (hx - 0.5) * 0.6), H * (hy - 0.16), W * hx, H * hy);
-    g.stroke();
+  g.fillStyle = '#d9a82c';
+  g.fillRect(0, H * 0.74, W, H * 0.26);
+  stroke(g, 2, '#3f5a8a', [0, H * 0.74, W, H * 0.74]);
+  // the vase, two yellows, signed
+  g.fillStyle = '#f2df7a';
+  poly(g, [W * 0.36, H * 0.74, W * 0.34, H * 0.62, W * 0.66, H * 0.62, W * 0.64, H * 0.74]);
+  g.fillStyle = '#d9a82c';
+  g.beginPath();
+  g.moveTo(W * 0.36, H * 0.74);
+  g.bezierCurveTo(W * 0.3, H * 0.94, W * 0.7, H * 0.94, W * 0.64, H * 0.74);
+  g.fill();
+  stroke(g, 1.5, '#3f5a8a', [W * 0.43, H * 0.8, W * 0.5, H * 0.79, W * 0.56, H * 0.81]);
+  // a dozen or so heads, some full, some gone to seed
+  const heads = [[0.5, 0.2, 1], [0.28, 0.3, 1], [0.72, 0.28, 0], [0.4, 0.42, 0], [0.62, 0.44, 1], [0.2, 0.5, 0], [0.8, 0.5, 1], [0.5, 0.56, 1], [0.33, 0.6, 1], [0.68, 0.62, 0]];
+  for (const [hx, hy, full] of heads) {
+    stroke(g, W * 0.02, '#5f7a2a', [W * 0.5, H * 0.64, W * hx, H * hy]);
     g.save();
     g.translate(W * hx, H * hy);
-    g.rotate(droop);
-    g.fillStyle = '#d98a1c';
-    for (let k = 0; k < 9; k++) {
+    g.fillStyle = full ? '#e98a1c' : '#c9a02c';
+    const n = full ? 14 : 9;
+    for (let k = 0; k < n; k++) {
       g.save();
-      g.rotate((k / 9) * Math.PI * 2);
-      if (k % 3 !== 1) ell(g, 0, -W * 0.1, W * 0.028, W * 0.06);
+      g.rotate((k / n) * Math.PI * 2);
+      ell(g, 0, -W * (full ? 0.09 : 0.065), W * 0.022, W * (full ? 0.05 : 0.03));
       g.restore();
     }
-    g.fillStyle = '#4a3418';
-    ell(g, 0, 0, W * 0.07, W * 0.065);
+    g.fillStyle = full ? '#6a4a1c' : '#8a7a2c';
+    ell(g, 0, 0, W * (full ? 0.055 : 0.07), W * (full ? 0.055 : 0.07));
+    g.fillStyle = '#3f5a2a';
+    ell(g, 0, 0, W * 0.02, W * 0.02);
     g.restore();
   }
-  g.fillStyle = '#d98a1c';
-  for (const [px, py, a] of [[0.2, 0.86, 0.4], [0.75, 0.9, -0.6], [0.84, 0.8, 1.2], [0.14, 0.76, -1]]) ell(g, W * px, H * py, W * 0.035, W * 0.014, a);
 }
 
 // the tapestry: mille-fleurs, three cats, and their quarry
@@ -428,32 +916,43 @@ function lib(kit) {
   L = {
     stone: toonMat(0xd9d2c2),
     stoneShade: toonMat(0xb7ae9c),
-    walnut: toonMat(0x4a3024, { map: kit.woodTex }),
+    walnut: toonMat(0x4a3024),
     gilt: phong(0xc79a35, 60, 0xffe9a8),
     giltPale: phong(0xe9cb6a, 80, 0xfff3c8),
-    brass: kit.ringMat,
+    brass: phong(0xc9a542, 80, 0xfff0b0),
     bone: toonMat(0xe9dec2),
     boneShade: toonMat(0xc7b792),
     steel: phong(0xaab2bd, 120, 0xe8eef5),
     iron: phong(0x3f3d42, 50, 0x8f9aa8),
     velvet: toonMat(0x8f1d2a),
     black: toonMat(0x1b1a1e),
-    dark: new THREE.MeshBasicMaterial({ color: 0x14110f }),
+    dark: toonMat(0x14110f),
     glow: new THREE.MeshBasicMaterial({ color: 0xfff0d2 }),
     marble: toonMat(0xf1eee6),
     terracotta: toonMat(0xb5673f),
     jade: phong(0x4fa67c, 110, 0xdff5e8),
     gold: phong(0xe0b03a, 110, 0xfff0b0),
     enamel: phong(0x1f3f9a, 130),
+    // what every fused body is drawn with: colour rides the vertices
+    vtoon: toonMat(0xffffff, { vertexColors: true }),
+    vphong: new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 70, specular: 0x8f8f80 }),
     pictures: {
-      90: pic(256, 320, paintPortrait),
-      91: pic(256, 256, paintRedDot),
-      92: pic(320, 216, paintHaystacks),
-      93: pic(224, 288, paintAdmiral),
-      94: pic(200, 260, paintSunflowers),
+      80: pic(256, 336, paintMona),
+      81: pic(256, 320, paintPortrait),
+      82: pic(224, 272, paintPearl),
+      83: pic(384, 248, paintBirth),
+      84: pic(384, 304, paintStarry),
+      85: pic(224, 288, paintScream),
+      86: pic(256, 256, paintKiss),
+      87: pic(256, 256, paintGrid),
+      88: pic(256, 256, paintRedDot),
+      89: pic(352, 248, paintWave),
+      90: pic(224, 280, paintGothic),
+      91: pic(320, 264, paintWhistler),
+      93: pic(200, 260, paintSunflowers),
     },
   };
-  L.cards = [L.pictures[90], L.pictures[91], L.pictures[92], L.pictures[93], L.pictures[94], pic(160, 224, paintRexCard)];
+  L.cards = [L.pictures[80], L.pictures[84], L.pictures[85], L.pictures[89], L.pictures[81], pic(160, 224, paintRexCard)];
   L.streak = makeCanvas(64, 64, (g) => {
     const s = g.createLinearGradient(0, 64, 64, 0);
     s.addColorStop(0.3, 'rgba(255,255,255,0)');
@@ -482,20 +981,208 @@ function add(THREE, m, geo, mat, x = 0, y = 0, z = 0) {
   m.add(o);
   return o;
 }
-// a small flat sign facing -z
-function plaque(kit, w, h, tex, x, y, z) {
-  const { THREE } = kit;
-  const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), kit.toonMat(0xffffff, { map: tex }));
-  p.rotation.y = Math.PI;
+
+// ------------------------------------------------------------------ labels ---
+// Every card, plaque and sign is one cell of one texture: [title, lines,
+// style]. One material for all of them, and the ones on the walls are one
+// mesh.
+const LABELS = {
+  mona: ['Mona Lisa', ['oil on poplar · c. 1503', 'priceless; please do not ask'], 'card'],
+  cat: ['Portrait of a Cat, Smiling', ['oil on poplar · artist unknown', 'the smile is also unexplained'], 'card'],
+  pearl: ['Girl with a Pearl Earring', ['oil on canvas · c. 1665'], 'card'],
+  birth: ['The Birth of Venus', ['tempera on canvas · c. 1485'], 'card'],
+  starry: ['The Starry Night', ['oil on canvas · 1889'], 'card'],
+  scream: ['The Scream', ['tempera and crayon · 1893', 'quiet, please'], 'card'],
+  kiss: ['The Kiss', ['oil and gold leaf · 1908'], 'card'],
+  grid: ['Composition', ['after Mondrian', 'this way up'], 'card'],
+  reddot: ['Untitled (Red Dot)', ['acrylic on canvas · 1974', 'please do not chase'], 'card'],
+  wave: ['The Great Wave', ['woodblock print · c. 1831', 'one of several thousand'], 'card'],
+  gothic: ['American Gothic', ['oil on beaverboard · 1930'], 'card'],
+  whistler: ['Arrangement in Grey', ['and Black No. 1', "(the artist's mother)"], 'card'],
+  sunflowers: ['Sunflowers', ['1888 · awaiting a hook'], 'card'],
+  give: ['DONATIONS', ['suggested: generous'], 'card'],
+  notart: ['NOT AN EXHIBIT', ['fire extinguisher', 'please do not admire'], 'card'],
+  david: ['DAVID', ['marble · 1504 · fig leaf later'], 'brass'],
+  thinker: ['THE THINKER', ['bronze · still thinking'], 'brass'],
+  venus: ['VENUS DE MILO', ['arms missing on arrival'], 'brass'],
+  disco: ['DISCOBOLUS', ['Roman copy · do not catch'], 'brass'],
+  victory: ['WINGED VICTORY', ['Samothrace · head not recovered'], 'brass'],
+  nefertiti: ['NEFERTITI', ['limestone · c. 1345 BC'], 'brass'],
+  rosetta: ['THE ROSETTA STONE', ['196 BC · previously broken'], 'brass'],
+  sphinx: ['SPHINX', ['red granite · nose attached'], 'brass'],
+  urn: ['CANOPIC URN', ['sealed · contents undisturbed'], 'brass'],
+  jade: ['JADE CAT', ['Han dynasty'], 'brass'],
+  meteorite: ['IRON METEORITE', ['61 kg · do not lift'], 'brass'],
+  geode: ['AMETHYST GEODE', ['cathedral cut'], 'brass'],
+  egg: ['IMPERIAL EGG', ['enamel and gold · surprise missing'], 'brass'],
+  crown: ['CORONATION CROWN', ['of a duchy since dissolved'], 'brass'],
+  touch: ['PLEASE', ['do not touch'], 'brass'],
+  rex: ['FELIS REX', ['Late Cretaceous · identification disputed'], 'brass'],
+  attendants: ['EIGHT ATTENDANTS', ['terracotta · in procession'], 'brass'],
+  moai: ['MOAI', ['Rapa Nui · hat separate'], 'brass'],
+  warriors: ['WARRIORS', ['terracotta · Qin dynasty', 'at attention'], 'brass'],
+  shop: ['GIFT SHOP', ['exit through here', 'all breakages must be paid for'], 'sign'],
+  cloak: ['CLOAKROOM', ["coats left at owner's risk"], 'sign'],
+};
+ROOMS.forEach((r, i) => {
+  if (i > 0) LABELS[`left${i}`] = [`‹  ${ROOMS[i - 1].name}`, [], 'arrow'];
+  if (i < ROOMS.length - 1) LABELS[`right${i}`] = [`${ROOMS[i + 1].name}  ›`, [], 'arrow'];
+});
+const LABEL_STYLE = { card: ['#2b2118', '#efe6cf'], brass: ['#2a1d08', '#d2ad55'], sign: ['#efe6cf', '#2f5a4e'], arrow: ['#f2e6c0', '#3a2a1c'] };
+function atlas(kit) {
+  const lb = lib(kit);
+  if (lb.atlas) return lb.atlas;
+  const keys = Object.keys(LABELS);
+  const cols = 8, cw = 256, ch = 128, rows = Math.ceil(keys.length / cols);
+  const uv = {};
+  const tex = kit.makeCanvas(cols * cw, rows * ch, (g) => {
+    keys.forEach((k, i) => {
+      const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
+      const [title, lines, style] = LABELS[k];
+      const [ink, paper] = LABEL_STYLE[style];
+      g.save();
+      g.translate(cx, cy);
+      g.beginPath();
+      g.rect(0, 0, cw, ch);
+      g.clip();
+      if (style === 'arrow') {
+        g.fillStyle = paper;
+        g.fillRect(0, 0, cw, ch);
+        g.strokeStyle = '#c9a542';
+        g.lineWidth = 6;
+        g.strokeRect(5, 5, cw - 10, ch - 10);
+        g.fillStyle = ink;
+        g.textAlign = 'center';
+        g.font = 'bold 34px Georgia, serif';
+        g.fillText(title, cw / 2, ch * 0.6, cw * 0.86);
+      } else {
+        paintLabel(g, cw, ch, title, lines, ink, paper);
+      }
+      g.restore();
+      uv[k] = [cx / (cols * cw), 1 - (cy + ch) / (rows * ch), (cx + cw) / (cols * cw), 1 - cy / (rows * ch)];
+    });
+  });
+  lb.atlas = { uv, mat: kit.toonMat(0xffffff, { map: tex }) };
+  return lb.atlas;
+}
+// a label's quad, facing -z (or along x: `yaw` turns it)
+function labelGeo(kit, key, w, h, yaw = Math.PI) {
+  const [u0, v0, u1, v1] = atlas(kit).uv[key] ?? atlas(kit).uv.touch;
+  const geo = new kit.THREE.PlaneGeometry(w, h).toNonIndexed();
+  const src = new kit.THREE.PlaneGeometry(w, h);
+  // PlaneGeometry's own uvs are 0..1: squeeze them into the cell
+  const a = geo.attributes.uv;
+  for (let i = 0; i < a.count; i++) a.setXY(i, u0 + a.getX(i) * (u1 - u0), v0 + a.getY(i) * (v1 - v0));
+  src.dispose();
+  geo.rotateY(yaw);
+  return geo;
+}
+// a label on a body (kept out of the fuse: it is textured)
+function plaque(kit, m, key, w, h, x, y, z) {
+  const p = new kit.THREE.Mesh(labelGeo(kit, key, w, h), atlas(kit).mat);
   p.position.set(x, y, z);
+  m.add(p);
   return p;
 }
-const labelCache = new Map();
-function labelTex(kit, key, title, lines, ink, paper) {
-  if (!labelCache.has(key)) labelCache.set(key, kit.makeCanvas(256, 128, (g) => paintLabel(g, 256, 128, title, lines, ink, paper)));
-  return labelCache.get(key);
+
+// --------------------------------------------------------------- sculpture ---
+// Primitives poured into one vertex-coloured geometry: a statue's limb, a
+// plinth, a wall's worth of mouldings, each one draw call.
+class Sculpt {
+  constructor(THREE) {
+    this.T = THREE;
+    this.p = [];
+    this.n = [];
+    this.c = [];
+    this.M = new THREE.Matrix4();
+    this.col = new THREE.Color();
+  }
+  get count() { return this.p.length; }
+  // an already-placed, non-indexed geometry
+  push(g, color) {
+    const col = color.isColor ? color : this.col.set(color);
+    const pos = g.attributes.position.array, nor = g.attributes.normal.array;
+    for (let i = 0; i < pos.length; i += 3) {
+      this.p.push(pos[i], pos[i + 1], pos[i + 2]);
+      this.n.push(nor[i], nor[i + 1], nor[i + 2]);
+      this.c.push(col.r, col.g, col.b);
+    }
+    g.dispose();
+    return this;
+  }
+  put(geo, color, x = 0, y = 0, z = 0, rot = null, scale = null) {
+    const T = this.T;
+    const g = geo.index ? geo.toNonIndexed() : geo;
+    if (g !== geo) geo.dispose();
+    const q = new T.Quaternion();
+    if (rot) q.setFromEuler(new T.Euler(rot[0], rot[1], rot[2]));
+    this.M.compose(new T.Vector3(x, y, z), q, scale ? new T.Vector3(scale[0], scale[1], scale[2]) : new T.Vector3(1, 1, 1));
+    g.applyMatrix4(this.M);
+    return this.push(g, color);
+  }
+  box(w, h, d, color, x = 0, y = 0, z = 0, rot = null) { return this.put(new this.T.BoxGeometry(w, h, d), color, x, y, z, rot); }
+  ball(r, color, x = 0, y = 0, z = 0, scale = null, rot = null, seg = 10) { return this.put(new this.T.SphereGeometry(r, seg, Math.max(5, seg - 3)), color, x, y, z, rot, scale); }
+  cyl(rt, rb, h, color, x = 0, y = 0, z = 0, rot = null, seg = 10) { return this.put(new this.T.CylinderGeometry(rt, rb, h, seg), color, x, y, z, rot); }
+  cone(r, h, color, x = 0, y = 0, z = 0, rot = null, seg = 6) { return this.put(new this.T.ConeGeometry(r, h, seg), color, x, y, z, rot); }
+  // a limb from a to b, ra thick at a and rb at b, a joint at each end
+  tube(a, b, ra, rb, color, seg = 7, joints = true) {
+    const T = this.T;
+    const A = new T.Vector3(a[0], a[1], a[2]), B = new T.Vector3(b[0], b[1], b[2]);
+    const d = B.clone().sub(A), len = d.length();
+    const q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), d.normalize());
+    const g = new T.CylinderGeometry(rb, ra, len, seg).toNonIndexed();
+    this.M.compose(A.add(B).multiplyScalar(0.5), q, new T.Vector3(1, 1, 1));
+    g.applyMatrix4(this.M);
+    this.push(g, color);
+    if (joints) {
+      this.ball(ra * 1.03, color, a[0], a[1], a[2], null, null, 7);
+      this.ball(rb * 1.03, color, b[0], b[1], b[2], null, null, 7);
+    }
+    return this;
+  }
+  mesh(mat) {
+    const T = this.T;
+    const g = new T.BufferGeometry();
+    g.setAttribute('position', new T.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('normal', new T.Float32BufferAttribute(this.n, 3));
+    g.setAttribute('color', new T.Float32BufferAttribute(this.c, 3));
+    return new T.Mesh(g, mat);
+  }
+  // as a body: a Group holding the one mesh
+  group(kit, shiny = false) {
+    const m = new this.T.Group();
+    if (this.count) m.add(this.mesh(shiny ? lib(kit).vphong : lib(kit).vtoon));
+    return m;
+  }
 }
-const brassLabel = (kit, key, title, lines) => labelTex(kit, key, title, lines, '#2a1d08', '#d2ad55');
+// Fuse a Group built from separate meshes: whatever is plain (one colour,
+// opaque, no texture, not on the glow layer) is poured into one matte mesh
+// and one shiny one. Textured faces, glass and lamps stay as they are.
+function fuse(kit, root) {
+  if (!root || !root.isGroup) return root;
+  const { THREE } = kit;
+  const lb = lib(kit);
+  root.updateMatrixWorld(true);
+  const matte = new Sculpt(THREE), shiny = new Sculpt(THREE);
+  const gone = [];
+  root.traverse((o) => {
+    if (!o.isMesh || o.userData.keep) return;
+    const mt = o.material;
+    if (Array.isArray(mt) || mt.map || mt.transparent || mt.vertexColors || o.layers.mask !== 1 || !mt.color) return;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    if (!g.attributes.normal) g.computeVertexNormals();
+    g.applyMatrix4(o.matrixWorld);
+    (mt.isMeshPhongMaterial ? shiny : matte).push(g, mt.color);
+    gone.push(o);
+  });
+  for (const o of gone) {
+    o.parent.remove(o);
+    o.geometry.dispose();
+  }
+  if (matte.count) root.add(matte.mesh(lb.vtoon));
+  if (shiny.count) root.add(shiny.mesh(lb.vphong));
+  return root;
+}
 
 // a chip of whatever broke: plain box or ball, fresh material (main.js
 // copies the parent's colour onto it)
@@ -639,94 +1326,527 @@ function boneMesh(kit, b) {
   return m;
 }
 
+// ------------------------------------------------- the building, the canon ---
+const C = {
+  marble: 0xf3f0e8, marbleShade: 0xd8d4c8, marbleDeep: 0xb4ae9e, leaf: 0x5a9a44,
+  bronze: 0x55523a, bronzeLit: 0x72805a, bronzeDark: 0x3a3828,
+  granite: 0xb06f5e, graniteDark: 0x8a5246, basalt: 0x6a665f, basaltDark: 0x4a4743, socket: 0x2a2826, scoria: 0x9a4332,
+  terra: 0xa9714f, terraDark: 0x84563a, stone: 0xd9d2c2, stoneShade: 0xb7ae9c, walnut: 0x4a3024, walnutDark: 0x33201a,
+  brass: 0xc9a542, gold: 0xe0b03a, lapis: 0x2f4f9a, skin: 0xc98a5e, slate: 0x3a3c42, cream: 0xe6dcc4,
+};
+// which piece stands on which plinth (room_museum.rs), for the brass label
+const PLINTHS = [
+  [0, 1.3, 'david'], [1.25, -0.45, 'thinker'], [2.5, 1.6, 'disco'], [-2.45, 1.6, 'venus'], [-6, 1.3, 'victory'],
+  [-4.75, 0.5, 'nefertiti'], [-7.6, 0.9, 'rosetta'], [-5.4, -1.3, 'sphinx'], [-6.4, -1.3, 'urn'], [-7.3, -1.3, 'jade'],
+  [-12.45, -0.5, 'meteorite'], [-12.55, 0.75, 'geode'], [-2.7, 0.3, 'egg'], [1.95, 0.75, 'crown'],
+];
+const plinthLabel = (x, z) => (PLINTHS.find(([px, pz]) => Math.abs(px - x) < 0.1 && Math.abs(pz - z) < 0.1) ?? [0, 0, 'touch'])[2];
+
+function building(kit, b, lb, v) {
+  const { THREE } = kit;
+  if (b.cls !== 0) return null;
+  const s = new Sculpt(THREE);
+  if (fam(b, G.stone)) {
+    if (b.shape === 2) {
+      // a plinth's round shaft: drum, base ring, and its brass label
+      const r = b.b, H = 2 * b.a + 2 * b.b;
+      const wood = v === 92;
+      s.cyl(r * 0.94, r * 0.98, H - 0.024, wood ? C.walnut : C.stone, 0, -0.012, 0, null, 18);
+      s.cyl(r * 1.06, r * 1.12, 0.05, wood ? C.walnutDark : C.stoneShade, 0, -H / 2 + 0.025, 0, null, 18);
+      if (wood) s.cyl(r, r, 0.014, C.brass, 0, H / 2 - 0.07, 0, null, 18);
+      const m = s.group(kit);
+      const w = Math.min(0.24, r * 1.15);
+      plaque(kit, m, plinthLabel(b.px, b.pz), w, w / 2, 0, H * 0.12, -(r * 0.985));
+      return m;
+    }
+    if (v === 80) {
+      // the dais: stone step, a red runner on top, the name on the riser
+      s.box(b.a * 2, b.b * 2, b.c * 2, C.stoneShade);
+      s.box(b.a * 2 - 0.12, 0.006, b.c * 2 - 0.12, 0x8f1d2a, 0, b.b + 0.002, 0);
+      const m = s.group(kit);
+      plaque(kit, m, 'rex', 0.22, 0.11, 0.2, 0, -(b.c + 0.002));
+      return m;
+    }
+    if (v === 81) {
+      s.box(b.a * 2, b.b * 2, b.c * 2, C.stone);
+      s.box(b.a * 2 + 0.03, 0.03, b.c * 2 + 0.03, C.stoneShade, 0, -b.b + 0.015, 0);
+      const m = s.group(kit);
+      plaque(kit, m, 'attendants', 0.36, 0.18, 0, 0.0, -(b.c + 0.002));
+      return m;
+    }
+    // a cap slab: stone on a plinth, walnut on a vitrine base
+    return s.box(b.a * 2, b.b * 2, b.c * 2, v >= 96 ? C.walnut : C.stoneShade).group(kit);
+  }
+  if (fam(b, G.light)) {
+    // picture light: a brass tube on two arms off the wall, glowing down
+    // (into the haze and the light volume; the lanterns are the real
+    // lights, and a second one a hand from a star bleached its face)
+    s.cyl(0.02, 0.02, b.a * 2, C.brass, 0, 0, 0, [0, 0, Math.PI / 2], 8);
+    for (const sx of [-1, 1]) s.cyl(0.006, 0.006, 0.15, C.brass, sx * b.a * 0.6, 0.02, 0.07, [Math.PI / 2 - 0.25, 0, 0], 5);
+    const m = s.group(kit, true);
+    const lamp = add(THREE, m, new THREE.BoxGeometry(b.a * 1.9, 0.008, 0.022), lb.glow, 0, -0.02, 0);
+    lamp.layers.enable(kit.GLOW_LAYER);
+    const star = v >= 94;
+    m.userData.emitter = { color: new THREE.Color(0xffe0a8), strength: star ? 1.4 : 0.8, radius: star ? 1.8 : 1.3 };
+    m.userData.noShadow = true;
+    return m;
+  }
+  if (fam(b, G.lantern)) {
+    // a gallery's lantern: a brass frame round a box of light, on a rod
+    // from wherever the ceiling is. These are the building's real lights.
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) s.box(0.02, b.b * 2 + 0.04, 0.02, C.brass, sx * b.a, 0, sz * b.c);
+    s.box(b.a * 2 + 0.06, 0.02, b.c * 2 + 0.06, C.brass, 0, b.b + 0.02, 0);
+    s.cyl(0.012, 0.012, 1.0, C.brass, 0, b.b + 0.52, 0, null, 6);
+    const m = s.group(kit, true);
+    const box = add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), new THREE.MeshBasicMaterial({ color: 0xfff1d6 }));
+    box.layers.enable(kit.GLOW_LAYER);
+    const hall = Math.abs(b.px) < 1;
+    m.userData.emitter = { color: new THREE.Color(0xffe6bf), strength: hall ? 2.2 : 1.7, radius: 4.2 };
+    kit.pendingLights.push({ node: m, color: 0xffe9c8, intensity: hall ? 20 : 15, distance: 9 });
+    m.userData.noShadow = true;
+    return m;
+  }
+  if (fam(b, G.counter)) {
+    if (v === 70) {
+      // the cloakroom's peg rail
+      s.box(b.a * 2, b.b * 2, b.c * 2, C.walnut);
+      for (let k = 0; k < 5; k++) s.cyl(0.008, 0.008, 0.07, C.brass, 0.04, 0, -b.c + 0.08 + k * ((b.c * 2 - 0.16) / 4), [0, 0, Math.PI / 2], 6);
+      return s.group(kit);
+    }
+    s.box(b.a * 2, b.b * 2, b.c * 2, C.walnut);
+    s.box(b.a * 2 + 0.04, 0.02, b.c * 2 + 0.04, 0x2f5a4e, 0, b.b - 0.008, 0);
+    const m = s.group(kit);
+    plaque(kit, m, 'shop', 0.56, 0.28, 0, -0.02, -(b.c + 0.002));
+    return m;
+  }
+  if (fam(b, G.wall) && b.shape === 2) {
+    // a doorway's jambs: the physics is a round post (a cat slides round
+    // it), the look is a square stone pilaster with a base and a cap
+    const H = 2 * b.a + 2 * b.b, w = b.b * 2 + (v === 93 ? 0.04 : 0.02);
+    s.box(w, H, w, 0xd2c9b4);
+    s.box(w + 0.06, 0.16, w + 0.06, 0xbfb6a0, 0, -H / 2 + 0.08, 0);
+    s.box(w + 0.05, 0.08, w + 0.05, 0xbfb6a0, 0, H / 2 - 0.04, 0);
+    return s.group(kit);
+  }
+  if (fam(b, G.wood)) {
+    // the tapestry's rod
+    s.cyl(0.012, 0.012, b.a * 2 + 0.1, C.brass, 0, 0, 0, [0, 0, Math.PI / 2], 8);
+    for (const sx of [-1, 1]) s.ball(0.022, C.brass, sx * (b.a + 0.06), 0, 0);
+    return s.group(kit, true);
+  }
+  return null;
+}
+
+// the Rosetta Stone's face: hieroglyphs, then a scribble, then Greek
+function rosettaTex(kit) {
+  const lb = lib(kit);
+  lb.rosetta ??= kit.makeCanvas(256, 352, (g) => {
+    g.fillStyle = '#34363c';
+    g.fillRect(0, 0, 256, 352);
+    const r = rng(196);
+    g.fillStyle = '#b9b6aa';
+    g.strokeStyle = '#b9b6aa';
+    g.lineWidth = 1.2;
+    for (let y = 10; y < 96; y += 14) for (let x = 8; x < 250; x += 12) {
+      const k = (r() * 6) | 0;
+      if (k === 0) ell(g, x + 4, y + 5, 3.5, 3.5);
+      else if (k === 1) g.fillRect(x, y + 1, 7, 8);
+      else if (k === 2) poly(g, [x, y + 9, x + 4, y, x + 8, y + 9]);
+      else if (k === 3) stroke(g, 1.4, '#b9b6aa', [x, y + 6, x + 3, y + 2, x + 6, y + 6, x + 9, y + 2]);
+      else if (k === 4) { g.fillRect(x + 3, y, 2, 10); g.fillRect(x, y + 3, 8, 2); }
+      else ell(g, x + 4, y + 5, 4.5, 2);
+    }
+    g.fillRect(0, 100, 256, 1.5);
+    for (let y = 110; y < 216; y += 8) {
+      g.beginPath();
+      g.moveTo(6, y);
+      for (let x = 6; x < 250; x += 5) g.lineTo(x, y + (r() - 0.5) * 6);
+      g.stroke();
+    }
+    g.fillRect(0, 220, 256, 1.5);
+    g.font = '8px Georgia, serif';
+    const greek = 'ΒΑΣΙΛΕΥΟΝΤΟΣΤΟΥΝΕΟΥΚΑΙΠΑΡΑΛΑΒΟΝΤΟΣΤΗΝΒΑΣΙΛΕΙΑΝΠΑΡΑΤΟΥΠΑΤΡΟΣΚΥΡΙΟΥΒΑΣΙΛΕΙΩΝΜΕΓΑΛΟΔΟΞΟΥ';
+    for (let y = 232; y < 348; y += 9) g.fillText(greek.slice(((y * 7) % 30), ((y * 7) % 30) + 46), 6, y);
+  });
+  return lb.rosetta;
+}
+
+function statues(kit, b, lb, v) {
+  const { THREE } = kit;
+  const s = new Sculpt(THREE);
+  const M = C.marble, Ms = C.marbleShade, Md = C.marbleDeep;
+  const done = (voice, shiny = false) => {
+    const m = s.group(kit, shiny);
+    m.userData.voice = voice;
+    return m;
+  };
+
+  // ---- DAVID: weight on one leg, one hand up at the shoulder with the
+  // sling, curls, and (later) a leaf ----
+  if (fam(b, G.david) && b.cls !== 0) {
+    if (v === 60) {
+      s.box(b.a * 2, b.b * 2, b.c * 2, Ms);
+      s.box(b.a * 2 - 0.03, 0.012, b.c * 2 - 0.03, M, 0, b.b, 0);
+      s.cyl(0.03, 0.04, 0.2, Md, 0.13, b.b + 0.1, 0.06, null, 7); // the stump at his heel
+    } else if (v === 61) {
+      s.tube([0, 0.31, 0], [0.005, 0.0, -0.012], 0.062, 0.046, M);
+      s.tube([0.005, 0.0, -0.012], [0, -0.27, 0.0], 0.046, 0.03, M);
+      s.box(0.075, 0.04, 0.16, M, 0, -0.29, -0.035);
+    } else if (v === 62) {
+      s.tube([0.012, 0.31, 0.01], [-0.012, 0.0, -0.035], 0.058, 0.043, M);
+      s.tube([-0.012, 0.0, -0.035], [-0.03, -0.27, 0.02], 0.043, 0.028, M);
+      s.box(0.07, 0.04, 0.15, M, -0.04, -0.29, -0.01, [0, 0.5, 0]);
+    } else if (v === 63) {
+      s.ball(0.1, M, 0.012, -0.2, 0, [1.36, 0.82, 0.86]);
+      s.cyl(0.11, 0.098, 0.16, M, 0.004, -0.07, 0, null, 10);
+      s.ball(0.12, M, -0.004, 0.1, 0, [1.28, 1.02, 0.8]);
+      for (const sx of [-1, 1]) {
+        s.ball(0.052, M, sx * 0.143, 0.2, 0);
+        s.ball(0.05, M, sx * 0.06, 0.13, -0.062, [1.15, 0.85, 0.42]);
+      }
+      s.box(0.01, 0.15, 0.01, Ms, 0, -0.03, -0.09);
+      s.box(0.13, 0.008, 0.01, Ms, 0, -0.06, -0.092);
+      s.cyl(0.042, 0.046, 0.08, M, 0, 0.27, 0, null, 8);
+      // the fig leaf
+      s.ball(0.04, C.leaf, 0.008, -0.235, -0.085, [1.0, 1.35, 0.3]);
+      for (const sx of [-1, 1]) s.ball(0.03, C.leaf, 0.008 + sx * 0.035, -0.215, -0.082, [1.0, 1.2, 0.3], [0, 0, -sx * 0.7]);
+    } else if (v === 64) {
+      s.tube([-0.02, 0.25, 0], [0.0, -0.01, 0.0], 0.046, 0.037, M);
+      s.tube([0.0, -0.01, 0.0], [0.004, -0.215, -0.02], 0.037, 0.028, M);
+      s.ball(0.036, M, 0.004, -0.245, -0.024);
+    } else if (v === 65) {
+      s.tube([0.03, 0.165, 0], [-0.02, -0.15, -0.01], 0.046, 0.038, M);
+      s.tube([-0.02, -0.15, -0.01], [0.038, 0.125, -0.052], 0.037, 0.028, M);
+      s.ball(0.034, M, 0.04, 0.14, -0.055);
+      s.tube([0.04, 0.15, -0.05], [0.07, 0.19, 0.06], 0.009, 0.009, Md, 5, false);
+    } else if (v === 66) {
+      s.cyl(0.04, 0.044, 0.07, M, 0, -0.085, 0, null, 8);
+      s.ball(0.078, M, 0, 0, 0, [0.92, 1.08, 1.0]);
+      // turned to look past his raised hand
+      s.cone(0.016, 0.04, M, -0.035, -0.005, -0.066, [-1.3, 0.5, 0], 4);
+      s.box(0.085, 0.012, 0.02, Ms, -0.028, 0.02, -0.064, [0, 0.45, 0]);
+      for (let k = 0; k < 16; k++) {
+        const a = 0.2 + k * 0.42, up = (k % 3) * 0.028;
+        if (Math.cos(a) < -0.2 && Math.sin(a) < -0.5) continue;
+        s.ball(0.03, Ms, Math.cos(a) * (0.062 - up * 0.5), 0.03 + up, Math.sin(a) * (0.06 - up * 0.5) + 0.008, null, null, 6);
+      }
+      s.ball(0.04, Ms, 0, 0.07, 0.01, [1.2, 0.6, 1.2], null, 7);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- THE THINKER: all of it bronze, the chin on the back of a hand ----
+  if (fam(b, G.thinker) && b.cls !== 0) {
+    const B = C.bronze, Bl = C.bronzeLit, Bd = C.bronzeDark;
+    if (v === 60) {
+      s.put(facet(kit.roughen(new THREE.SphereGeometry(0.25, 9, 7), 0.1)), Bd, 0, -0.01, 0, null, [0.98, 0.72, 0.98]);
+      s.box(0.36, 0.05, 0.36, Bd, 0, b.b - 0.03, 0);
+    } else if (v === 61) {
+      s.ball(0.1, B, 0, 0.0, 0.1, [1.35, 0.8, 0.9]);
+      for (const sx of [-1, 1]) s.tube([sx * 0.07, 0.0, 0.08], [sx * 0.078, 0.012, -0.165], 0.062, 0.05, B);
+    } else if (v === 62) {
+      for (const sx of [-1, 1]) {
+        s.tube([sx * 0.078, 0.2, 0.06], [sx * 0.07, -0.12, 0.01 + (sx > 0 ? 0.03 : 0)], 0.05, 0.034, B);
+        s.box(0.075, 0.04, 0.13, B, sx * 0.07, -0.14, -0.02 + (sx > 0 ? 0.03 : 0));
+      }
+    } else if (v === 63) {
+      s.ball(0.13, B, 0, 0.0, 0.0, [1.22, 1.12, 0.86], [-0.45, 0, 0]);
+      s.ball(0.07, B, 0, 0.06, 0.06, [1.5, 1.0, 0.6]);
+      for (const sx of [-1, 1]) s.ball(0.062, B, sx * 0.135, 0.09, -0.05);
+      // the right arm goes down to the knee; the left lies across the lap
+      s.tube([0.135, 0.09, -0.05], [0.07, -0.13, -0.14], 0.05, 0.04, B);
+      s.tube([-0.135, 0.09, -0.05], [-0.1, -0.13, -0.12], 0.05, 0.04, B);
+      s.tube([-0.1, -0.13, -0.12], [0.0, -0.17, -0.19], 0.04, 0.032, B);
+    } else if (v === 64) {
+      s.ball(0.07, B, 0, 0, 0, [0.95, 1.05, 1.08]);
+      s.ball(0.07, Bd, 0, 0.014, 0.014, [0.98, 0.98, 1.02]);
+      s.box(0.1, 0.014, 0.03, Bd, 0, 0.012, -0.062);
+      s.cone(0.014, 0.04, Bl, 0, -0.012, -0.072, [-1.2, 0, 0], 4);
+    } else if (v === 65) {
+      s.tube([0.012, -0.11, 0.03], [-0.012, 0.125, 0.02], 0.037, 0.03, B);
+      s.ball(0.044, B, -0.02, 0.15, 0.028);
+    } else return null;
+    return done('gong', true);
+  }
+
+  // ---- VENUS DE MILO: the drapery sliding off her hips, and no arms ----
+  if (fam(b, G.venus) && b.cls !== 0) {
+    if (v === 60) {
+      s.box(b.a * 2, b.b * 2, b.c * 2, Ms);
+    } else if (v === 61) {
+      s.put(new THREE.CylinderGeometry(0.1, 0.13, 0.6, 12), M, 0, 0, 0, null, [1, 1, 0.82]);
+      for (let k = 0; k < 7; k++) s.tube([-0.1 + k * 0.033, 0.26, -0.085 + Math.abs(k - 3) * 0.012], [-0.12 + k * 0.042, -0.29, -0.1 + Math.abs(k - 3) * 0.014], 0.012, 0.016, Ms, 4, false);
+      s.put(new THREE.TorusGeometry(0.105, 0.034, 6, 14), M, 0, 0.27, 0, [Math.PI / 2 - 0.12, 0.25, 0], [1, 0.84, 1]);
+      s.ball(0.055, M, -0.035, 0.02, -0.085);
+    } else if (v === 62) {
+      s.cyl(0.085, 0.092, 0.2, M, 0, -0.1, 0, null, 10);
+      s.ball(0.1, M, 0, 0.07, 0, [1.08, 1.0, 0.8]);
+      for (const sx of [-1, 1]) {
+        s.ball(0.04, M, sx * 0.045, 0.085, -0.06, [1, 0.95, 0.75]);
+        // where the arms were
+        s.tube([sx * 0.095, 0.15, 0], [sx * 0.135, 0.12, 0.0], 0.042, 0.04, M, 8, false);
+        s.cyl(0.036, 0.036, 0.008, Md, sx * 0.138, 0.118, 0, [0, 0, sx * 1.0], 8);
+      }
+      s.cyl(0.034, 0.04, 0.07, M, 0, 0.205, 0, null, 8);
+    } else if (v === 63) {
+      s.ball(0.062, M, 0, 0, 0, [0.92, 1.06, 1]);
+      s.ball(0.064, Ms, 0, 0.014, 0.012, [0.96, 1.0, 1.0]);
+      s.ball(0.03, Ms, 0, 0.012, 0.066);
+      s.cone(0.012, 0.03, M, 0, -0.008, -0.062, [-1.3, 0, 0], 4);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- WINGED VICTORY: headless, striding into the wind on her prow ----
+  if (fam(b, G.victory) && b.cls !== 0) {
+    if (v === 60) {
+      s.box(b.a * 2, b.b * 2, b.c * 2 - 0.1, Md, 0, 0, 0.05);
+      s.box(0.24, b.b * 2, 0.24, Md, 0, 0, -0.1, [0, Math.PI / 4, 0]); // the prow
+    } else if (v === 61) {
+      s.put(new THREE.CylinderGeometry(0.085, 0.118, 0.54, 12), M, 0, 0, 0, null, [1, 1, 0.86]);
+      s.tube([-0.03, 0.1, -0.05], [-0.045, -0.25, -0.1], 0.055, 0.036, M); // the leg under the wet cloth
+      s.tube([0.0, -0.05, 0.03], [0.03, -0.25, 0.24], 0.09, 0.03, Ms, 7, false); // and the cloth behind
+      for (let k = 0; k < 6; k++) s.tube([-0.08 + k * 0.032, 0.25, -0.075], [-0.04 + k * 0.03, -0.26, -0.06 + k * 0.03], 0.012, 0.016, Ms, 4, false);
+    } else if (v === 62) {
+      // the body leaning into the wind, the cloth blown flat against it
+      s.put(new THREE.CylinderGeometry(0.085, 0.094, 0.2, 12), M, 0, -0.05, 0, [-0.15, 0, 0], [1, 1, 0.8]);
+      s.ball(0.092, M, 0, 0.07, -0.015, [1.12, 0.9, 0.8]);
+      s.cyl(0.094, 0.094, 0.028, Ms, 0, -0.03, -0.004, [-0.15, 0, 0], 10);
+      for (let k = 0; k < 5; k++) s.tube([-0.07 + k * 0.035, 0.04, -0.074], [-0.05 + k * 0.03, -0.14, -0.082], 0.01, 0.012, Ms, 4, false);
+      s.cyl(0.034, 0.042, 0.04, M, 0, 0.15, -0.015, null, 8);
+      s.cyl(0.03, 0.03, 0.006, Md, 0, 0.172, -0.015, null, 8);
+    } else if (v === 63 || v === 64) {
+      // a wing: the bone edge rising from the shoulder blade and out, the
+      // long feathers trailing from it
+      const sx = v === 63 ? 1 : -1;
+      const bone = [[-sx * 0.17, -0.2, -0.02], [-sx * 0.04, 0.14, 0.0], [sx * 0.15, 0.26, 0.01]];
+      s.tube(bone[0], bone[1], 0.045, 0.034, M, 6);
+      s.tube(bone[1], bone[2], 0.034, 0.016, M, 6);
+      for (let k = 0; k < 9; k++) {
+        const t = k / 8, seg = t < 0.5 ? 0 : 1, f = seg ? (t - 0.5) * 2 : t * 2;
+        const from = [0, 1, 2].map((i) => bone[seg][i] + (bone[seg + 1][i] - bone[seg][i]) * f);
+        const len = 0.2 + 0.24 * Math.sin(t * 2.6);
+        s.tube(from, [from[0] + sx * len * (0.25 + t * 0.35), from[1] - len, from[2] + 0.012], 0.03, 0.009, k % 2 ? Ms : M, 4, false);
+      }
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- DISCOBOLUS: wound up, the discus at the top of the swing ----
+  if (fam(b, G.discobolus) && b.cls !== 0) {
+    if (v === 60) {
+      s.box(b.a * 2, b.b * 2, b.c * 2, Ms);
+    } else if (v === 61) {
+      s.tube([0.05, 0.2, 0], [0.105, 0.0, -0.05], 0.058, 0.044, M);
+      s.tube([0.105, 0.0, -0.05], [0.06, -0.19, 0.0], 0.044, 0.03, M);
+      s.tube([-0.05, 0.2, 0], [-0.085, 0.03, 0.03], 0.056, 0.042, M);
+      s.tube([-0.085, 0.03, 0.03], [-0.125, -0.18, 0.05], 0.042, 0.028, M);
+      s.box(0.07, 0.035, 0.13, M, 0.06, -0.185, -0.03);
+    } else if (v === 62) {
+      s.ball(0.11, M, 0, 0, 0, [1.12, 1.25, 0.8], [0, 0, -0.5]);
+      s.tube([0.09, 0.05, -0.05], [0.1, -0.22, -0.08], 0.036, 0.026, M);
+    } else if (v === 63) {
+      s.ball(0.058, M, 0, 0, 0);
+      s.ball(0.06, Ms, 0, 0.012, 0.012, [0.98, 0.95, 1.0]);
+    } else if (v === 64) {
+      s.tube([0.1, -0.1, -0.02], [-0.01, 0.09, 0.01], 0.036, 0.028, M);
+      s.cyl(0.08, 0.08, 0.02, Md, -0.03, 0.14, 0.01, [Math.PI / 2, 0, 0.3], 14);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- the sphinx: lion below, a pharaoh's striped headcloth above ----
+  if (fam(b, G.sphinx) && b.cls !== 0) {
+    const Gr = C.granite, Gd = C.graniteDark;
+    if (v === 60) {
+      s.ball(0.1, Gr, 0, 0.0, 0, [0.95, 0.8, 1.42]);
+      for (const sx of [-1, 1]) s.ball(0.06, Gr, sx * 0.07, -0.02, 0.07, [0.9, 1, 1.2]);
+      s.tube([0.06, -0.06, 0.13], [0.0, -0.06, 0.15], 0.014, 0.012, Gd, 5);
+    } else if (v === 61) {
+      for (const sx of [-1, 1]) {
+        s.box(0.055, 0.055, 0.13, Gr, sx * 0.055, 0, 0.0);
+        s.ball(0.03, Gr, sx * 0.055, 0.0, -0.065);
+      }
+    } else if (v === 62) {
+      for (let k = 0; k < 6; k++) s.put(new THREE.CylinderGeometry(0.05 + k * 0.006, 0.056 + k * 0.006, 0.025, 10), k % 2 ? C.lapis : C.gold, 0, 0.075 - k * 0.025, 0.012, null, [1, 1, 0.75]);
+      for (const sx of [-1, 1]) s.box(0.04, 0.1, 0.02, C.gold, sx * 0.058, -0.06, -0.03);
+      s.ball(0.05, Gr, 0, 0.0, -0.03, [0.92, 1.1, 0.8]);
+      s.box(0.022, 0.05, 0.02, Gd, 0, -0.075, -0.05);
+      s.cone(0.012, 0.03, Gr, 0, -0.005, -0.072, [-1.3, 0, 0], 4);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- the moai: brow, long nose, long ears, no neck to speak of ----
+  if (fam(b, G.moai)) {
+    const Bs = C.basalt, Bd = C.basaltDark;
+    if (v === 70) {
+      if (!dims(b, 0.13, 0.08, 0.13)) return shard(kit, b, C.scoria, false, 'stone');
+      s.cyl(0.135, 0.14, 0.15, C.scoria, 0, -0.005, 0, null, 14);
+      s.cyl(0.06, 0.07, 0.035, C.scoria, 0, 0.08, 0, null, 10);
+      return done('stone');
+    }
+    if (b.cls === 0) return null;
+    if (v === 60) {
+      s.box(b.a * 2, b.b * 2, b.c * 2 - 0.02, Bs);
+      for (const sx of [-1, 1]) s.box(0.06, 0.32, 0.2, Bd, sx * (b.a - 0.01), -0.02, -0.02);
+      s.box(0.3, 0.012, 0.012, Bd, 0, 0.1, -b.c + 0.005);
+    } else if (v === 61) {
+      s.put(new THREE.CylinderGeometry(0.19, 0.22, b.b * 2, 4), Bs, 0, 0, 0, [0, Math.PI / 4, 0], [1, 1, 0.98]);
+      s.box(0.33, 0.075, 0.1, Bs, 0, 0.14, -0.125);
+      for (const sx of [-1, 1]) {
+        s.box(0.09, 0.05, 0.03, C.socket, sx * 0.075, 0.09, -0.152);
+        s.box(0.045, 0.3, 0.085, Bd, sx * 0.168, -0.02, 0.0);
+      }
+      s.box(0.15, 0.03, 0.05, Bd, 0, -0.165, -0.15);
+      s.box(0.21, 0.09, 0.07, Bs, 0, -0.245, -0.135);
+    } else if (v === 62) {
+      s.box(0.07, b.b * 2 - 0.04, 0.075, Bs, 0, 0.02, 0, [0.12, 0, 0]);
+      s.box(0.115, 0.05, 0.085, Bs, 0, -0.14, -0.005);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- the Rosetta Stone: three fragments, one text ----
+  if (fam(b, G.rosetta) && b.cls !== 0) {
+    s.box(b.a * 2, b.b * 2, b.c * 2, C.slate);
+    const m = done('stone');
+    // each piece carries its own part of the whole face
+    const [cx, cy] = v === 60 ? [0, 0.17] : v === 61 ? [0.11, 0.497] : [-0.133, 0.462];
+    const geo = new THREE.PlaneGeometry(b.a * 2 - 0.01, b.b * 2 - 0.006);
+    const u0 = (0.24 - (cx + b.a)) / 0.48, u1 = (0.24 - (cx - b.a)) / 0.48, v0 = (cy - b.b) / 0.652, v1 = (cy + b.b) / 0.652;
+    const a = geo.attributes.uv;
+    for (let i = 0; i < a.count; i++) a.setXY(i, u0 + a.getX(i) * (u1 - u0), v0 + a.getY(i) * (v1 - v0));
+    geo.rotateY(Math.PI);
+    add(THREE, m, geo, lb.rosettaMat ??= kit.toonMat(0xffffff, { map: rosettaTex(kit) }), 0, 0, -b.c - 0.002);
+    return m;
+  }
+
+  // ---- terracotta: the eight small attendants, the three warriors ----
+  if (fam(b, G.terracotta)) {
+    const Tc = C.terra, Td = C.terraDark;
+    if (v === 70) {
+      if (!dims(b, 0.022, 0.085, 0.04)) return shard(kit, b, 0xb5673f);
+      // an attendant, in profile, walking along the table
+      s.box(0.044, 0.012, 0.08, Tc, 0, -0.079, 0);
+      s.put(new THREE.CylinderGeometry(0.017, 0.03, 0.1, 8), Tc, 0, -0.023, 0, null, [0.7, 1, 1.1]);
+      s.ball(0.02, Tc, -0.002, 0.048, 0, null, null, 7);
+      s.ball(0.009, Td, 0.004, 0.071, 0, null, null, 5);
+      s.box(0.014, 0.014, 0.05, Td, -0.014, 0.0, 0);
+      return s.group(kit);
+    }
+    if (b.cls === 0) return null;
+    if (v === 72) {
+      for (const sx of [-1, 1]) {
+        s.tube([sx * 0.045, 0.1, 0], [sx * 0.045, -0.17, 0], 0.042, 0.036, Tc, 7, false);
+        s.box(0.07, 0.035, 0.13, Td, sx * 0.045, -0.182, -0.02);
+      }
+      s.put(new THREE.CylinderGeometry(0.085, 0.105, 0.16, 10), Tc, 0, 0.12, 0, null, [1, 1, 0.8]);
+    } else if (v === 73) {
+      s.put(new THREE.CylinderGeometry(0.092, 0.098, 0.26, 10), Tc, 0, 0, 0, null, [1, 1, 0.82]);
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) s.box(0.04, 0.045, 0.012, Td, -0.048 + i * 0.048, -0.07 + j * 0.055, -0.078);
+      for (const sx of [-1, 1]) {
+        s.ball(0.045, Td, sx * 0.105, 0.1, 0);
+        s.tube([sx * 0.11, 0.09, 0], [sx * 0.118, -0.15, -0.02], 0.036, 0.03, Tc, 7);
+      }
+      s.cyl(0.05, 0.06, 0.035, Td, 0, 0.128, 0, null, 8);
+    } else if (v === 74) {
+      s.ball(0.055, Tc, 0, -0.005, 0, [0.95, 1.1, 1]);
+      s.ball(0.056, Td, 0, 0.012, 0.012, [0.98, 0.9, 1.0]);
+      s.ball(0.024, Td, 0.022, 0.068, 0.012, null, null, 6);
+      s.box(0.05, 0.008, 0.012, Td, 0, -0.022, -0.052);
+    } else return null;
+    return done('stone');
+  }
+
+  // ---- Nefertiti: the tall flat crown, the long neck ----
+  if (fam(b, G.treasure) && v === 70) {
+    if (!dims(b, 0.065, 0.14, 0.07)) return shard(kit, b, C.lapis);
+    s.box(0.11, 0.045, 0.1, 0x2a2420, 0, -0.118, 0);
+    s.ball(0.062, C.skin, 0, -0.08, 0.005, [1.0, 0.5, 0.8]);
+    s.cyl(0.044, 0.06, 0.03, C.gold, 0, -0.068, 0.0, null, 10);
+    s.cyl(0.038, 0.046, 0.012, 0x2f8a6a, 0, -0.05, 0.0, null, 10);
+    s.tube([0, -0.05, 0.008], [0, 0.03, -0.014], 0.021, 0.018, C.skin, 7, false);
+    s.ball(0.034, C.skin, 0, 0.05, -0.02, [0.85, 1.12, 1.0]);
+    s.put(new THREE.CylinderGeometry(0.056, 0.036, 0.09, 12), C.lapis, 0, 0.108, 0.012, [0.3, 0, 0]);
+    s.put(new THREE.CylinderGeometry(0.05, 0.046, 0.014, 12), C.gold, 0, 0.108, 0.012, [0.3, 0, 0]);
+    s.put(new THREE.CylinderGeometry(0.038, 0.037, 0.01, 12), C.gold, 0, 0.068, 0.0, [0.3, 0, 0]);
+    s.box(0.02, 0.004, 0.008, 0xb8473a, 0, 0.036, -0.052);
+    for (const sx of [-1, 1]) s.box(0.014, 0.004, 0.006, 0x1b1a1e, sx * 0.013, 0.058, -0.05);
+    return s.group(kit);
+  }
+
+  // ---- the heavy case's steel sill ----
+  if (fam(b, G.armature) && v === 80 && b.cls !== 0) {
+    s.box(b.a * 2, b.b * 2, b.c * 2, 0x55585e);
+    return s.group(kit, true);
+  }
+
+  // ---- the mobile ----
+  if (fam(b, G.mobile)) {
+    if (v === 90) {
+      s.box(b.a * 2, 0.012, 0.012, 0x2a2a2e);
+      s.put(new THREE.TorusGeometry(0.02, 0.005, 4, 8), 0x2a2a2e, 0, 0.03, 0);
+      const m = s.group(kit, true);
+      m.userData.noShadow = true;
+      return m;
+    }
+    const [col, a, bb] = v === 80 ? [0xd3231c, 0.16, 0.1] : v === 81 ? [0xf2c21c, 0.1, 0.1] : [0x2a5fd0, 0.08, 0.11];
+    if (!dims(b, a, bb, 0.006)) return shard(kit, b, col);
+    s.put(new THREE.CylinderGeometry(1, 1, 0.012, 22), col, 0, 0, 0, [Math.PI / 2, 0, 0], [a, 1, bb]);
+    return s.group(kit, true);
+  }
+
+  // ---- the cloakroom ----
+  if (fam(b, G.coat) && b.cls !== 0) {
+    const col = b.tint < 0.6 ? 0xb08a5a : 0x34425f;
+    s.box(b.a * 2, b.b * 2, b.c * 2 - 0.04, col);
+    for (const sz of [-1, 1]) s.tube([0, b.b - 0.03, sz * (b.c - 0.03)], [0.0, -b.b + 0.02, sz * (b.c + 0.005)], 0.036, 0.03, col, 6);
+    s.box(b.a * 2 + 0.02, 0.05, 0.12, col, 0, b.b - 0.02, 0);
+    return s.group(kit);
+  }
+  if (fam(b, G.umbrella) && b.cls !== 0) {
+    if (v === 90) return s.box(b.a * 2, b.b * 2, b.c * 2, 0x2f4f44).group(kit, true);
+    const col = [0x1b1a1e, 0xb3262a, 0x2f6b4f][v - 91] ?? 0x1b1a1e;
+    s.cone(0.034, 0.5, col, 0, -0.1, 0, [Math.PI, 0, 0], 8);
+    s.cyl(0.006, 0.006, 0.22, 0x6a4a30, 0, 0.24, 0, null, 5);
+    s.put(new THREE.TorusGeometry(0.028, 0.008, 5, 8, Math.PI), 0x6a4a30, 0.028, 0.345, 0);
+    return s.group(kit);
+  }
+  return null;
+}
+
 // ------------------------------------------------------------ the recognizer ---
 export function mesh(kit, b) {
   const { THREE, toonMat } = kit;
   const lb = lib(kit);
   const v = variant(b);
-  let m = null;
-
-  // ---- the building ----
-  if (b.cls === 0 && fam(b, G.stone)) {
-    m = new THREE.Group();
-    if (b.shape === 2) {
-      // a plinth's round shaft: drum, base ring, and its brass label
-      const r = b.b, H = 2 * b.a + 2 * b.b;
-      const wood = v === 92;
-      add(THREE, m, new THREE.CylinderGeometry(r * 0.94, r * 0.98, H - 0.024, 20), wood ? lb.walnut : lb.stone, 0, -0.012, 0);
-      add(THREE, m, new THREE.CylinderGeometry(r * 1.06, r * 1.12, 0.05, 20), wood ? lb.walnut : lb.stoneShade, 0, -H / 2 + 0.025, 0);
-      if (wood) {
-        add(THREE, m, new THREE.CylinderGeometry(r * 0.99, r * 0.99, 0.014, 20), lb.brass, 0, H / 2 - 0.07, 0);
-        // the vitrine's own light: a warm strip under the lid of the base.
-        // Lit, but not on the glow layer: bloomed through the glass above
-        // it, it whited out the whole case in the haze pass (seen).
-        add(THREE, m, new THREE.CylinderGeometry(r * 1.0, r * 1.0, 0.008, 20), lb.glow, 0, H / 2 - 0.03, 0);
-        m.userData.emitter = { color: new THREE.Color(0xffe2b0), strength: 0.12, radius: 0.4 };
-      } else {
-        m.add(plaque(kit, 0.13, 0.065, brassLabel(kit, 'plinth', 'PLEASE', ['do not touch']), 0, H * 0.14, -(r * 0.99)));
-      }
-    } else if (v === 80) {
-      // the dais: stone step, a red runner on top, the name on the riser
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), lb.stoneShade);
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2 - 0.12, 0.006, b.c * 2 - 0.12), lb.velvet, 0, b.b + 0.002, 0);
-      m.add(plaque(kit, 0.62, 0.085, brassLabel(kit, 'rex', 'FELIS REX', ['Late Cretaceous · identification disputed']), 0.2, 0, -(b.c + 0.002)));
-    } else if (v === 81) {
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), lb.stone);
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2 + 0.03, 0.03, b.c * 2 + 0.03), lb.stoneShade, 0, -b.b + 0.015, 0);
-      m.add(plaque(kit, 0.36, 0.1, brassLabel(kit, 'attendants', 'EIGHT ATTENDANTS', ['terracotta · in procession']), 0, 0.02, -(b.c + 0.002)));
-    } else {
-      // a cap slab: stone on a plinth, walnut on a vitrine base
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), v >= 96 ? lb.walnut : lb.stoneShade);
-    }
-  } else if (b.cls === 0 && fam(b, G.light)) {
-    // picture light: a brass tube on two arms off the wall, glowing down
-    m = new THREE.Group();
-    const tube = add(THREE, m, new THREE.CylinderGeometry(0.02, 0.02, b.a * 2, 10), lb.brass);
-    tube.rotation.z = Math.PI / 2;
-    for (const s of [-1, 1]) {
-      const arm = add(THREE, m, new THREE.CylinderGeometry(0.006, 0.006, 0.15, 6), lb.brass, s * b.a * 0.6, 0.02, 0.07);
-      arm.rotation.x = Math.PI / 2 - 0.25;
-    }
-    const lamp = add(THREE, m, new THREE.BoxGeometry(b.a * 1.9, 0.008, 0.022), lb.glow, 0, -0.02, 0);
-    lamp.layers.enable(kit.GLOW_LAYER);
-    const star = v >= 94;
-    m.userData.emitter = { color: new THREE.Color(0xffe0a8), strength: star ? 1.5 : 0.9, radius: star ? 1.8 : 1.3 };
-    kit.pendingLights.push({ node: m, color: 0xffe2b4, intensity: star ? 3.4 : 2.1, distance: star ? 3.6 : 3.0 });
-    m.userData.noShadow = true;
-  } else if (b.cls === 0 && fam(b, G.counter)) {
-    m = new THREE.Group();
-    add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), lb.walnut);
-    add(THREE, m, new THREE.BoxGeometry(b.a * 2 + 0.04, 0.02, b.c * 2 + 0.04), toonMat(0x2f5a4e), 0, b.b - 0.008, 0);
-    m.add(plaque(kit, 0.6, 0.2, labelTex(kit, 'shop', 'GIFT SHOP', ['exit through here', 'all breakages must be paid for'], '#efe6cf', '#2f5a4e'), 0, -0.02, -(b.c + 0.002)));
-  } else if (b.cls === 0 && fam(b, G.wood)) {
-    // the tapestry's rod
-    m = new THREE.Group();
-    const rod = add(THREE, m, new THREE.CylinderGeometry(0.012, 0.012, b.a * 2 + 0.1, 8), lb.brass);
-    rod.rotation.z = Math.PI / 2;
-    for (const s of [-1, 1]) add(THREE, m, new THREE.SphereGeometry(0.022, 8, 6), lb.brass, s * (b.a + 0.06), 0, 0);
-  } else if (fam(b, G.pillar) && b.cls !== 0) {
+  let m = building(kit, b, lb, v) ?? statues(kit, b, lb, v);
+  if (m) return m;
+  if (fam(b, G.pillar) && b.cls !== 0) {
     // a loose pillar: square base, fluted shaft, capital
-    m = new THREE.Group();
-    m.userData.voice = 'stone';
+    const s = new Sculpt(THREE);
     if (v === 91) {
-      add(THREE, m, facet(new THREE.CylinderGeometry(b.a * 0.86, b.a * 0.98, b.b * 2, 12)), lb.stone);
-      add(THREE, m, new THREE.CylinderGeometry(b.a * 1.08, b.a * 1.12, 0.03, 14), lb.stoneShade, 0, -b.b + 0.015, 0);
-      m.add(plaque(kit, 0.12, 0.06, brassLabel(kit, 'plinth', 'PLEASE', ['do not touch']), 0, b.b * 0.25, -(b.a * 0.99)));
+      s.put(facet(new THREE.CylinderGeometry(b.a * 0.86, b.a * 0.98, b.b * 2, 12)), C.stone);
+      s.cyl(b.a * 1.08, b.a * 1.12, 0.03, C.stoneShade, 0, -b.b + 0.015, 0, null, 12);
     } else if (v === 92) {
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), lb.stoneShade);
-      add(THREE, m, new THREE.CylinderGeometry(b.a * 0.98, b.a * 0.7, 0.04, 14), lb.stone, 0, -b.b - 0.02, 0);
+      s.box(b.a * 2, b.b * 2, b.c * 2, C.stoneShade);
+      s.cyl(b.a * 0.98, b.a * 0.7, 0.04, C.stone, 0, -b.b - 0.02, 0, null, 12);
     } else {
-      add(THREE, m, new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), lb.stoneShade);
+      s.box(b.a * 2, b.b * 2, b.c * 2, C.stoneShade);
     }
+    m = s.group(kit);
+    m.userData.voice = 'stone';
+    if (v === 91) plaque(kit, m, 'touch', 0.12, 0.06, 0, b.b * 0.25, -(b.a * 0.99));
+    return m;
   }
-
   // ---- pictures ----
-  else if (fam(b, G.canvas)) {
-    const loose = v === 94; // the easel picture: one brittle panel, frame and all
+  if (fam(b, G.canvas)) {
+    const loose = v === 93; // the easel picture: one brittle panel, frame and all
     if (loose && !dims(b, 0.2, 0.26, 0.012)) return shard(kit, b, 0xd9b63c);
     m = new THREE.Group();
     const edge = toonMat(0xcfc3a4);
-    const face = toonMat(0xffffff, { map: lb.pictures[v] || lb.pictures[91] });
+    const face = toonMat(0xffffff, { map: lb.pictures[v] || lb.pictures[88] });
     const inset = loose ? 0.022 : 0;
     add(THREE, m, new THREE.BoxGeometry((b.a - inset) * 2, (b.b - inset) * 2, b.c * 2), [edge, edge, edge, edge, toonMat(0x8a7a5c), face]);
     if (loose) {
@@ -764,7 +1884,7 @@ export function mesh(kit, b) {
     add(THREE, m, geo, glassMat(kit, glazing ? 0.07 : 0.2));
     m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xeaf6f8, transparent: true, opacity: 0.55 })));
     if (b.c < 0.01 && b.a > 0.05 && b.b > 0.05) {
-      const st = add(THREE, m, new THREE.PlaneGeometry(b.a * 2, b.b * 2), new THREE.MeshBasicMaterial({ map: lb.streak, transparent: true, opacity: glazing ? 0.22 : 0.5, depthWrite: false }), 0, 0, -b.c - 0.001);
+      const st = add(THREE, m, new THREE.PlaneGeometry(b.a * 2, b.b * 2), new THREE.MeshBasicMaterial({ map: lb.streak, transparent: true, opacity: glazing ? 0.1 : 0.5, depthWrite: false }), 0, 0, -b.c - 0.001);
       st.rotation.y = Math.PI;
     }
     m.userData.noShadow = true;
@@ -1139,7 +2259,7 @@ export function mesh(kit, b) {
     }
     const bill = add(THREE, m, new THREE.BoxGeometry(0.07, 0.002, 0.03), toonMat(0x6a9a6a), 0.01, -b.b + 0.04, 0.01);
     bill.rotation.set(0.3, 0.6, 0.2);
-    m.add(plaque(kit, 0.12, 0.06, labelTex(kit, 'give', 'DONATIONS', ['suggested: generous']), 0, 0.02, -(b.c + 0.001)));
+    plaque(kit, m, 'give', 0.12, 0.06, 0, 0.02, -(b.c + 0.001));
     m.userData.noShadow = true;
   } else if (fam(b, G.snowGlobe)) {
     if (b.shape !== 1 || !near(b.a, 0.04)) return shard(kit, b, 0xcfe8ec, true);
@@ -1197,7 +2317,7 @@ export function mesh(kit, b) {
     const mat = fam(b, G.wood) ? toonMat(0x54382a, { map: kit.woodTex }) : fam(b, G.leather) ? toonMat(0x6e1f24) : toonMat(0x7f838c);
     m = new THREE.Mesh(new THREE.BoxGeometry(b.a * 2, b.b * 2, b.c * 2), mat);
   }
-  return m;
+  return fuse(kit, m);
 }
 
 // a plain body's material (floor slab, walls, unrecognized props), or null.
@@ -1205,7 +2325,8 @@ export function mesh(kit, b) {
 let floorTex = null;
 export function material(kit, b) {
   const { toonMat } = kit;
-  if (b.cls === 0 && b.shape === 0 && b.a > 2 && b.b < 0.2) {
+  if (b.cls !== 0) return null;
+  if (b.shape === 0 && b.a > 2 && b.b < 0.2) {
     // stone flags, honed, the joints a shade darker
     floorTex ??= (() => {
       const t = kit.makeCanvas(512, 512, (g) => {
@@ -1223,16 +2344,24 @@ export function material(kit, b) {
         }
       });
       t.wrapS = t.wrapT = kit.THREE.RepeatWrapping;
-      t.repeat.set(3.6, 2.7);
+      t.repeat.set(12.5, 2.2);
       return t;
     })();
     return toonMat(0xffffff, { map: floorTex });
   }
-  if (b.cls === 0 && b.shape === 0 && b.b > 1.5) return toonMat(0x2f5148); // gallery green
+  if (fam(b, G.wall)) {
+    // a partition or its lintel: each face is the colour of the room it
+    // looks into (BoxGeometry's faces come +x, -x, +y, -y, +z, -z)
+    const edge = toonMat(0xcfc6b0);
+    return [toonMat(roomAt(b.px + 0.3).wall), toonMat(roomAt(b.px - 0.3).wall), edge, edge, edge, edge];
+  }
+  // the shell: the far wall is dressed room by room in decor(); an end wall
+  // is its room's colour
+  if (b.shape === 0 && b.b > 1.5) return toonMat(b.a > 2 ? 0x8a8474 : roomAt(Math.sign(b.px) * (HX - 0.5)).wall);
   return null;
 }
 
-// the tapestry is the room's one cloth: main.js hands the skinned patch
+// the tapestry is the building's one cloth: main.js hands the skinned patch
 // over once, and it gets its picture (flipped: the sheet's u runs +x,
 // which is right-to-left from the door)
 export function cloth(kit, patch) {
@@ -1244,42 +2373,141 @@ export function cloth(kit, patch) {
   return true;
 }
 
-// render-only dressing with no collision, added to the decor group
+// where each picture hangs (room_museum.rs): centre, half-size, its card
+const HUNG = [
+  [13.06, 1.34, 0.66, 0.53, 'starry'], [15.28, 1.2, 0.38, 0.38, 'reddot'], [14.31, 1.26, 0.34, 0.44, 'scream'],
+  [11.75, 1.22, 0.4, 0.4, 'kiss'], [10.72, 1.2, 0.38, 0.38, 'grid'], [6.97, 1.44, 0.48, 0.64, 'mona'],
+  [5.7, 1.36, 0.46, 0.56, 'cat'], [8.68, 1.33, 0.82, 0.53, 'birth'], [4.37, 1.3, 0.42, 0.5, 'pearl'],
+  [-4.5, 1.24, 0.52, 0.37, 'wave'], [-15.12, 1.24, 0.5, 0.42, 'whistler'], [-13.95, 1.25, 0.35, 0.43, 'gothic'],
+];
+
+// render-only dressing with no collision, added to the decor group: the
+// walls' colours and mouldings (one mesh), every card and sign on a wall
+// (one mesh), the names over the rooms (one mesh), and the skylight
 export function decor(kit, group, hx, hz) {
-  const { THREE, toonMat } = kit;
+  const { THREE } = kit;
   const lb = lib(kit);
-  const put = (geo, mat, x, y, z) => add(THREE, group, geo, mat, x, y, z);
-  const cream = toonMat(0xe6dcc4);
-  const dado = toonMat(0x223a34);
-  // the far wall: dado, chair rail, picture rail, cornice
-  put(new THREE.BoxGeometry(hx * 2, 0.56, 0.012), dado, 0, 0.42, hz - 0.012);
-  put(new THREE.BoxGeometry(hx * 2, 0.035, 0.03), lb.gilt, 0, 0.715, hz - 0.02);
-  put(new THREE.BoxGeometry(hx * 2, 0.05, 0.05), cream, 0, RAIL_Y + 0.03, hz - 0.03);
-  put(new THREE.BoxGeometry(hx * 2, 0.16, 0.1), cream, 0, 3.72, hz - 0.05);
-  for (const s of [-1, 1]) {
-    put(new THREE.BoxGeometry(0.012, 0.56, hz * 2), dado, s * (hx - 0.012), 0.42, 0);
-    put(new THREE.BoxGeometry(0.03, 0.035, hz * 2), lb.gilt, s * (hx - 0.02), 0.715, 0);
-    put(new THREE.BoxGeometry(0.05, 0.05, hz * 2), cream, s * (hx - 0.03), RAIL_Y + 0.03, 0);
-    put(new THREE.BoxGeometry(0.1, 0.16, hz * 2), cream, s * (hx - 0.05), 3.72, 0);
-  }
-  // the name of the place, in the frieze
-  const frieze = kit.makeCanvas(1024, 96, (g) => {
-    g.fillStyle = '#2f5148';
-    g.fillRect(0, 0, 1024, 96);
-    g.fillStyle = '#d9b45a';
-    g.font = 'bold 54px Georgia, serif';
-    g.textAlign = 'center';
-    g.fillText('MVSEVM  OF  FINE  &  FRAGILE  ARTS', 512, 66);
+  const s = new Sculpt(THREE);
+  const gilt = 0xc79a35;
+  const doorZ = -1.0, plen = hz - doorZ, pz = (hz + doorZ) / 2;
+  ROOMS.forEach((r, i) => {
+    const w = r.x1 - r.x0, cx = (r.x1 + r.x0) / 2;
+    // the far wall: colour, dado, chair rail, picture rail, cornice
+    s.box(w, WALL_TOP - 0.7, 0.01, r.wall, cx, (WALL_TOP + 0.7) / 2, hz - 0.006);
+    s.box(w, 0.7, 0.014, r.dado, cx, 0.35, hz - 0.008);
+    s.box(w, 0.035, 0.03, gilt, cx, 0.715, hz - 0.02);
+    s.box(w, 0.05, 0.05, C.cream, cx, RAIL_Y + 0.03, hz - 0.03);
+    s.box(w, 0.05, 0.04, C.cream, cx, 4.02, hz - 0.03);
+    // the clerestory: tall round-headed windows over the frieze
+    const nw = Math.max(1, Math.floor(w / 1.7));
+    for (let k = 0; k < nw; k++) {
+      const x = r.x0 + (w * (k + 0.5)) / nw;
+      s.box(0.78, 0.96, 0.012, C.cream, x, 4.62, hz - 0.014);
+      s.cyl(0.39, 0.39, 0.012, C.cream, x, 5.1, hz - 0.014, [Math.PI / 2, 0, 0], 16);
+      s.box(0.66, 0.9, 0.012, 0xbfdcec, x, 4.62, hz - 0.02);
+      s.cyl(0.33, 0.33, 0.012, 0xbfdcec, x, 5.07, hz - 0.02, [Math.PI / 2, 0, 0], 16);
+      s.box(0.03, 1.2, 0.012, C.cream, x, 4.75, hz - 0.026);
+      s.box(0.66, 0.03, 0.012, C.cream, x, 4.62, hz - 0.026);
+    }
+    s.box(w, 0.16, 0.1, C.cream, cx, WALL_TOP - 0.08, hz - 0.05);
+    // the side walls of the room, as far forward as they are solid
+    for (const [x, sx, solid] of [[r.x1, -1, i > 0], [r.x0, 1, i < ROOMS.length - 1]]) {
+      const face = x + sx * (solid ? 0.097 : 0.006);
+      const [z0, len] = solid ? [pz, plen] : [0, hz * 2];
+      s.box(0.012, 0.7, len, r.dado, face, 0.35, z0);
+      s.box(0.03, 0.035, len, gilt, face + sx * 0.008, 0.715, z0);
+      s.box(0.05, 0.16, len, C.cream, face + sx * 0.02, WALL_TOP - 0.08, z0);
+    }
   });
-  group.add(plaque(kit, 5.2, 0.42, frieze, 0, 3.36, hz - 0.012));
-  // the wall cards: title, medium, and what the insurers said
-  const cards = [
-    [-0.55, 1.0, 'card0', 'Portrait of a Cat, Smiling', ['oil on poplar · artist unknown', 'the smile is unexplained']],
-    [-2.62, 1.0, 'card1', 'Untitled (Red Dot)', ['acrylic on canvas, 1974', 'please do not chase']],
-    [-4.24, 0.95, 'card2', 'Landscape with Haystacks,', ['Possibly', 'oil on canvas']],
-    [1.52, 1.0, 'card3', 'The Admiral, Disapproving', ['oil on canvas', 'gift of the Admiral']],
-  ];
-  for (const [x, y, key, title, lines] of cards) group.add(plaque(kit, 0.2, 0.1, labelTex(kit, key, title, lines), x, y, hz - 0.011));
+  // the hall: an arched niche behind David and a runner up to his rope
+  s.box(1.7, 1.8, 0.008, 0xbfb08a, 0, 0.7 + 0.9, hz - 0.016);
+  s.cyl(0.85, 0.85, 0.008, 0xbfb08a, 0, 2.5, hz - 0.016, [Math.PI / 2, 0, 0], 24);
+  s.box(1.3, 0.004, 2.75, 0x7a1f26, 0, 0.003, -1.3);
+  for (const sx of [-1, 1]) s.box(0.05, 0.004, 2.75, 0xd9b45a, sx * 0.6, 0.0045, -1.3);
+  // the banner's rod
+  s.cyl(0.012, 0.012, 0.7, C.brass, -10.9, 3.2, hz - 0.03, [0, 0, Math.PI / 2], 6);
+  const walls = s.mesh(lb.vtoon);
+  walls.receiveShadow = true;
+  group.add(walls);
+
+  // cards and signs: the atlas, one mesh
+  const quads = [];
+  const card = (key, w, h, x, y, z, yaw = Math.PI) => {
+    const g = labelGeo(kit, key, w, h, yaw);
+    g.translate(x, y, z);
+    quads.push(g);
+  };
+  for (const [x, y, w, h, key] of HUNG) card(key, 0.22, 0.11, x - w - 0.17, y - h + 0.1, hz - 0.017);
+  card('notart', 0.3, 0.15, HX - 0.008, 0.85, -0.9, -Math.PI / 2);
+  card('cloak', 0.6, 0.3, -HX + 0.008, 2.0, -0.9, Math.PI / 2);
+  card('warriors', 0.36, 0.18, -3.4 - 0.1, 1.45, 0.75, -Math.PI / 2);
+  card('moai', 0.3, 0.15, -8.6 - 0.1, 1.3, -0.3, Math.PI / 2);
+  const n = quads.reduce((k, g) => k + g.attributes.position.count, 0);
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  let o = 0;
+  for (const g of quads) {
+    pos.set(g.attributes.position.array, o * 3);
+    nor.set(g.attributes.normal.array, o * 3);
+    uv.set(g.attributes.uv.array, o * 2);
+    o += g.attributes.position.count;
+    g.dispose();
+  }
+  const cg = new THREE.BufferGeometry();
+  cg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  cg.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  cg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  group.add(new THREE.Mesh(cg, atlas(kit).mat));
+
+  // over each room, in the frieze: its name, and which way the others are
+  const PX = 190, ROW = 64, CW = 1408;
+  const friezeGeo = [];
+  const frieze = kit.makeCanvas(CW, ROW * ROOMS.length, (g) => {
+    ROOMS.forEach((r, i) => {
+      const w = r.x1 - r.x0 - 0.5, px = Math.min(CW, Math.round(w * PX));
+      const y = i * ROW;
+      g.fillStyle = `#${r.dado.toString(16).padStart(6, '0')}`;
+      g.fillRect(0, y, px, ROW);
+      g.fillStyle = '#e2c26a';
+      g.fillRect(0, y + 3, px, 2);
+      g.fillRect(0, y + ROW - 5, px, 2);
+      g.textBaseline = 'middle';
+      const small = px < 560;
+      g.font = `bold ${small ? 26 : 38}px Georgia, serif`;
+      g.textAlign = 'center';
+      g.fillText(i === 2 ? 'MVSEVM · THE GREAT HALL' : r.name, px / 2, y + ROW / 2 + 1, px * (small ? 0.9 : 0.5));
+      if (!small) {
+        g.font = 'bold 22px Georgia, serif';
+        g.fillStyle = '#f2e6c0';
+        if (i > 0) {
+          g.textAlign = 'left';
+          g.fillText(`‹ ${ROOMS[i - 1].name}`, 16, y + ROW / 2 + 1, px * 0.23);
+        }
+        if (i < ROOMS.length - 1) {
+          g.textAlign = 'right';
+          g.fillText(`${ROOMS[i + 1].name} ›`, px - 16, y + ROW / 2 + 1, px * 0.23);
+        }
+      }
+      const q = new THREE.PlaneGeometry(w, ROW / PX).toNonIndexed();
+      const a = q.attributes.uv;
+      for (let k = 0; k < a.count; k++) a.setXY(k, a.getX(k) * (px / CW), 1 - (i + 1 - a.getY(k)) / ROOMS.length);
+      q.rotateY(Math.PI);
+      q.translate((r.x1 + r.x0) / 2, 3.72, hz - 0.013);
+      friezeGeo.push(q);
+    });
+  });
+  const fp = [], fn = [], fu = [];
+  for (const q of friezeGeo) {
+    fp.push(...q.attributes.position.array);
+    fn.push(...q.attributes.normal.array);
+    fu.push(...q.attributes.uv.array);
+    q.dispose();
+  }
+  const fg = new THREE.BufferGeometry();
+  fg.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3));
+  fg.setAttribute('normal', new THREE.Float32BufferAttribute(fn, 3));
+  fg.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2));
+  group.add(new THREE.Mesh(fg, kit.toonMat(0xffffff, { map: frieze })));
+
   // the banner over the skeleton
   const banner = kit.makeCanvas(256, 384, (g) => {
     g.fillStyle = '#7a1f26';
@@ -1298,14 +2526,18 @@ export function decor(kit, group, hx, hz) {
     g.fillText('of knocking things', 128, 290);
     g.fillText('off ledges', 128, 318);
   });
-  group.add(plaque(kit, 0.62, 0.9, banner, 3.15, 2.52, hz - 0.012));
-  put(new THREE.CylinderGeometry(0.012, 0.012, 0.7, 6), lb.brass, 3.15, 2.985, hz - 0.02).rotation.z = Math.PI / 2;
-  // the visitor path: a runner from the door to the rope
-  const runner = put(new THREE.PlaneGeometry(1.15, 5.0), toonMat(0x7a1f26, { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), 0, 0.0012, -0.72);
-  runner.rotation.x = -Math.PI / 2;
-  runner.receiveShadow = true;
-  for (const s of [-1, 1]) {
-    const edge = put(new THREE.PlaneGeometry(0.05, 5.0), toonMat(0xd9b45a, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), s * 0.5, 0.0016, -0.72);
-    edge.rotation.x = -Math.PI / 2;
-  }
+  const bn = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.9), kit.toonMat(0xffffff, { map: banner }));
+  bn.rotation.y = Math.PI;
+  bn.position.set(-10.9, 2.74, hz - 0.022);
+  group.add(bn);
+
+  // the skylight over David: a shaft of day, drawn (there is no roof to
+  // let it in). Additive and unlit, so it costs one draw and no light.
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 1.35, 5.0, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff0cc, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  shaft.position.set(0, 2.5, 1.2);
+  shaft.renderOrder = 2;
+  group.add(shaft);
 }

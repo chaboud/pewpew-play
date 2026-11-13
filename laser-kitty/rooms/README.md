@@ -10,8 +10,29 @@ points:
 | `mesh(kit, body)` | first thing in `meshFor`, for every body | an `Object3D` (the render loop drives its position and quaternion from the sim body), or `null` to fall through to the shared chain |
 | `material(kit, body)` | for bodies nothing recognized, before the default materials | a material for the default box / sphere / capsule, or `null` |
 | `decor(kit, group, hx, hz)` | once per room build | nothing; add render-only dressing to `group` |
-| `look` | haze setup | `{ haze, sun }`: haze density per metre, sun-shaft strength |
+| `look` | haze setup, room layout | hints, all optional — see below |
 | `cloth(kit, patch, tint)` | once per cloth patch, the first frame it is skinned (optional) | `true` if it dressed the patch (`patch.mesh` is the skinned sheet: uv spans it, u along the top row in particle order, v down); otherwise the patch takes its tint's hue |
+
+`look` hints (anything left out takes the house default in brackets):
+
+| hint | what it sets |
+|---|---|
+| `haze` | haze density per metre [0.01] |
+| `sun` | how much sun shaft the haze shows [1] |
+| `sunLight` | the directional sun's intensity [1.35] — bring it down for a room lit by its own fixtures |
+| `ambient` | the hemisphere fill's intensity [1.2] |
+| `eyeBack`, `eyeY` | how far in front of the open face the camera stands [2.6 m] and its height [2.0 m]; a deep or tall room steps back |
+| `panX` | sideways pan limit as a fraction of the room's half-width [0.55] |
+| `stops` | `[{ x, name }]`, left to right as seen (+x first): the rooms of a wide building. The viewer names the neighbours of the one in view on chips at the screen edges; a tap pans to that `x` [none] |
+| `zoomTall` | starting zoom on a portrait screen, for a low wide room that would otherwise be a strip across a phone [1] |
+| `panY` | `[min, max]` vertical pan limits in metres [-1.3, 1.7] |
+| `ceil` | the room's height for the light volume and the haze [3.6 m] |
+| `voxelScale` | multiplies the light volume's voxel size [1]; a big room asks for 1.5–2 to keep the grid affordable |
+| `key` | how dim the room keeps itself, as a fraction of a house-lit room [1]. The drawn styles (sketch, ink) divide their input by it, as they do for a dim backdrop — without it a room lit by its own fixtures is hatched edge to edge |
+
+Sun and hemisphere *colours* belong to the active backdrop (`looks.js`
+applies its environment after the room lays out, scaling these two
+intensities), so a room colours its light with fixtures and emitters.
 
 `body` is `{ i, shape, a, b, c, cls, px, py, pz, gloss, tint, h, color }`:
 

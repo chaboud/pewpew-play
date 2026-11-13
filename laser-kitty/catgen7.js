@@ -28,7 +28,7 @@
 
 import * as THREE from 'three';
 import { edgeTable, triTable } from './vendor/MarchingCubes.js';
-import { smin, sdSphere, sdCapsule, buildWalkClip } from './catgen.js?v=k64';
+import { smin, sdSphere, sdCapsule, buildWalkClip } from './catgen.js?v=k65';
 
 // ------------------------------------------------------------- builds ---
 // multipliers on the standard sculpt. S is the whole cat; everything else

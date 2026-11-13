@@ -6,21 +6,21 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k64';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k64';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k65';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k65';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k64';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k65';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k64';
-import { mountNav } from './nav.js?v=k64';
-import { SfxEngine, } from './sfx.js?v=k64';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k64';
+import { CatRig } from './catrig.js?v=k65';
+import { mountNav } from './nav.js?v=k65';
+import { SfxEngine, } from './sfx.js?v=k65';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k65';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k64';
+import { ROOM_ART } from './rooms/index.js?v=k65';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,7 +34,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k64'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k65'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -239,7 +239,8 @@ function lightFrame(now, data, count) {
     volRoomKey = key;
     const r = cfg.room | 0;
     // denser grid on fine pointers (founder: "we could also have a higher density grid")
-    lightVol.setup(roomHX, roomHZ, r === 7 ? 24 : r === 6 ? 4.6 : 3.6, volCoarse ? 0.1 : 0.07);
+    const vl = roomLook();
+    lightVol.setup(roomHX, roomHZ, vl.ceil ?? (r === 7 ? 24 : r === 6 ? 4.6 : 3.6), (volCoarse ? 0.1 : 0.07) * (vl.voxelScale ?? 1));
     lightVol.minInterval = volCoarse ? 80 : 40;
     volNextVoxel = 0;
   }
@@ -278,8 +279,9 @@ function hazeFrame(now) {
     haze.uniforms.laserA.value.copy(beltWorld());
     haze.uniforms.laserB.value.copy(dot.position);
   }
-  haze.uniforms.uCeil.value = (cfg.room | 0) === 7 ? 24 : 3.2;
-  haze.uniforms.uRoom.value.set(roomHX || 4, (cfg.room | 0) === 7 ? 24 : (cfg.room | 0) === 6 ? 4.6 : 3.6, roomHZ || 3);
+  const hl = roomLook();
+  haze.uniforms.uCeil.value = hl.ceil !== undefined ? hl.ceil - 0.4 : (cfg.room | 0) === 7 ? 24 : 3.2;
+  haze.uniforms.uRoom.value.set(roomHX || 4, hl.ceil ?? ((cfg.room | 0) === 7 ? 24 : (cfg.room | 0) === 6 ? 4.6 : 3.6), roomHZ || 3);
 }
 
 // --- toon look: shared band ramp + material factory ------------------------
@@ -948,6 +950,8 @@ function liquidStyle(mat, tint) {
   }
 }
 
+// the active room's `look` hints (rooms/README.md); {} for rooms 0-9
+function roomLook() { return ROOM_ART[cfg.room | 0]?.look ?? {}; }
 // what a room-art module may use from this file (rooms/README.md)
 let roomKitCache = null;
 function roomKit() {
@@ -3444,7 +3448,7 @@ let zoomT = 1;
 let panX = 0, panY = 0;
 let panXT = 0, panYT = 0;
 let panYMin = -1.3, panYMax = 1.7; // widened per room in layoutRoom
-function panLimX() { return roomHX * ((cfg.room | 0) === 7 ? 0.8 : 0.55); }
+function panLimX() { return roomHX * (roomLook().panX ?? ((cfg.room | 0) === 7 ? 0.8 : 0.55)); }
 function clampPan() {
   panXT = Math.max(-panLimX(), Math.min(panLimX(), panXT));
   panYT = Math.max(panYMin, Math.min(panYMax, panYT));
@@ -3544,12 +3548,44 @@ function pinchSpan() {
   const [a, b] = [...lookPts.values()];
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
 }
+// A wide building names its neighbouring rooms at the screen edges
+// (look.stops, left to right as seen: +x first). Panning is otherwise an
+// undiscovered gesture, and a room whose money is spread over six
+// galleries needs the player to know the other five exist. A tap slides
+// the window to that room; dragging still works.
+const wingL = document.getElementById('wingL'), wingR = document.getElementById('wingR');
+let wingAt = -2, wingStops = null;
+function updateWings() {
+  const stops = roomLook().stops;
+  if (!stops || !stops.length) {
+    if (wingAt !== -1) { wingAt = -1; wingL.classList.remove('on'); wingR.classList.remove('on'); }
+    return;
+  }
+  let at = 0;
+  for (let i = 1; i < stops.length; i++) if (Math.abs(stops[i].x - panXT) < Math.abs(stops[at].x - panXT)) at = i;
+  if (at === wingAt && stops === wingStops) return;
+  const fresh = stops !== wingStops;
+  wingAt = at; wingStops = stops;
+  const set = (el, stop, html) => {
+    el.classList.toggle('on', !!stop);
+    if (!stop) return;
+    el.innerHTML = html(stop.name);
+    el.dataset.x = stop.x;
+    // the first sight of a building nudges its chips; later ones sit still
+    el.classList.toggle('hint', fresh);
+  };
+  set(wingL, stops[at - 1], (n) => `<b>&lsaquo;</b>${n}`);
+  set(wingR, stops[at + 1], (n) => `${n}<b>&rsaquo;</b>`);
+}
+for (const el of [wingL, wingR]) {
+  el.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); panXT = +el.dataset.x; clampPan(); });
+}
 function pinchCentroid() {
   const [a, b] = [...lookPts.values()];
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 addEventListener('pointerdown', (e) => {
-  if (e.target.closest && e.target.closest('button, #panel, #panhand')) return;
+  if (e.target.closest && e.target.closest('button, #panel, #panhand, .wing')) return;
   if (e.clientY >= pad.getBoundingClientRect().top) return;
   if (lookPts.size >= 2) return;
   lookPts.set(e.pointerId, [e.clientX, e.clientY]);
@@ -3628,25 +3664,36 @@ function layoutRoom() {
   // multi-story rooms frame farther back and pan much higher — the
   // apartment tower is 7.8 tall, the home 4.4
   const tall = r === 6 || r === 7;
-  EYE.z = -(roomHZ + (r === 7 ? 10.5 : tall ? 5.4 : 2.6));
-  EYE.y = r === 7 ? 3.6 : tall ? 2.8 : 2.0;
-  FOCUS_D = roomHZ + (r === 7 ? 10.4 : tall ? 5.3 : 2.5);
-  panYMin = tall ? -2.4 : -1.3;
-  panYMax = r === 7 ? 21.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7; // tower: pan to floor 9
+  // a newer room may frame and light itself through its `look` hints
+  // (rooms/README.md); anything it leaves out takes the house default
+  const L = roomLook();
+  const back = L.eyeBack ?? (r === 7 ? 10.5 : tall ? 5.4 : 2.6);
+  EYE.z = -(roomHZ + back);
+  EYE.y = L.eyeY ?? (r === 7 ? 3.6 : tall ? 2.8 : 2.0);
+  FOCUS_D = roomHZ + back - 0.1;
+  panYMin = L.panY?.[0] ?? (tall ? -2.4 : -1.3);
+  panYMax = L.panY?.[1] ?? (r === 7 ? 21.6 : tall ? 3.6 : r === 8 ? 2.6 : 1.7); // tower: pan to floor 9
   // per-room light, first slice (founder: area/point lights, not a
   // per-room sun): in the tower the global sun drops its shadow (one
   // 2048 map over a 23m facade = smears) and dims, and per-floor point
   // lights wired to the switch zones carry the interior instead
   applyShadowMode();
-  sun.intensity = r === 7 ? 0.9 : 1.35;
+  sun.intensity = L.sunLight ?? (r === 7 ? 0.9 : 1.35);
   // the sun stays inside the room's x-span and out past the open front:
   // a thin side wall backlit from outside bleeds through the VSM blur
   sun.position.set(-Math.min(roomHX * 0.55, 2.5), 5.5, -(roomHZ + 2.0));
   // interior rooms dim the ambient so the fixture pools read; the
   // tower keeps its brighter hemi (its per-floor lights are sparser)
-  hemi.intensity = r === 7 ? 1.45 : 1.2;
+  hemi.intensity = L.ambient ?? (r === 7 ? 1.45 : 1.2);
   panX = panXT = 0;
   panY = panYT = 0;
+  // a low, wide room is a strip across a tall phone at the standard
+  // framing, so it may start closer there (the pinch still zooms out)
+  {
+    const { w, h } = viewSize();
+    zoom = zoomT = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (h > w ? L.zoomTall : undefined) ?? 1));
+    resize();
+  }
   const b = Math.max(roomHX, roomHZ) + 1.2;
   sun.shadow.camera.left = -b;
   sun.shadow.camera.right = b;
@@ -3659,7 +3706,7 @@ function layoutRoom() {
   buildDecor(roomHX, roomHZ, cfg.room | 0);
   // the backdrop is built around the model and takes over the sky, the fog
   // and the tint of the two lights set above
-  presentation.layout({ room: r, hx: roomHX, hz: roomHZ, top: roomTop(), back: -EYE.z - roomHZ });
+  presentation.layout({ room: r, hx: roomHX, hz: roomHZ, top: roomTop(), back: -EYE.z - roomHZ, key: L.key });
   applyLook();
 }
 // the highest static surface: the wall tops (the rooms have no ceiling)
@@ -3838,7 +3885,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k64', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k65', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.bus.fx.d;
   sfxCatGain = engine.bus.cats.d;
@@ -4581,10 +4628,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k64');
+      const { Story } = await import('./story.js?v=k65');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k64');
+      const { Career } = await import('./career.js?v=k65');
       game = new Career(api);
     }
   } else {
@@ -4985,6 +5032,7 @@ function frame(now) {
   tickPuffs(frameDt / 1000);
   {
     const ea = 1 - Math.exp(-frameDt / 110);
+    updateWings();
     panX += (panXT - panX) * ea;
     panY += (panYT - panY) * ea;
     lookYaw += (yawT - lookYaw) * ea;
@@ -5265,6 +5313,16 @@ window.__lk = {
     return Array.from(d.slice(rec * FLOATS_PER_BODY, rec * FLOATS_PER_BODY + FLOATS_PER_BODY));
   },
   count: () => lk.lk_body_count(sim),
+  // what the scene costs to draw: one extra direct render, counted (draw
+  // calls include the shadow pass), for comparing rooms
+  perf: () => {
+    renderer.info.autoReset = false;
+    renderer.info.reset();
+    renderer.render(scene, camera);
+    const r = { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
+    renderer.info.autoReset = true;
+    return r;
+  },
   meshAt: (i) => {
     const m = meshes[i];
     return m ? { puddle: !!m.userData.puddle, scale: +m.scale.x.toFixed(3), kids: m.children.length, vis: m.visible, y: +m.position.y.toFixed(4) } : null;

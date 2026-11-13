@@ -23,7 +23,7 @@
 //   - the style itself (classic / courtroom sketch / comic ink) and a grade.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
-import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k64';
+import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k65';
 
 export { BACKDROP_KINDS };
 export const STYLE_KINDS = [
@@ -633,7 +633,8 @@ export class Presentation {
     u.uBoxC.value.set(0, (y0 + y1) / 2, -0.4 * R);
     u.uBoxH.value.set(hx + 0.2 + 0.9 * R, (y1 - y0) / 2, hz + 0.3 + 0.7 * R);
     u.uRamp.value = 18 * R;
-    u.uKey.value = (this.backdrop.env && this.backdrop.env.key) || 1;
+    // a room that keeps itself dim (its look's `key`) is drawn by adapted eyes too
+    u.uKey.value = ((this.backdrop.env && this.backdrop.env.key) || 1) * (this.geo.key || 1);
   }
 
   // once a frame, before the render: cats = [{x, y, z}], dot = Vector3|null
