@@ -2,48 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#05010d" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>PewPew</title>
+  <meta name="theme-color" content="#05010d" />
+  <title>play</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%; height: 100%;
-      background: #05010d;
-      color: #e8e6ff;
-      font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-      overflow: hidden;
-      overscroll-behavior: none;
-      touch-action: none;
-      -webkit-user-select: none; user-select: none;
-      -webkit-tap-highlight-color: transparent;
+    html { background: #05010d; color: #e8e6ff; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+    body {
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 14px;
+      padding: calc(env(safe-area-inset-top, 0px) + 28px) 16px calc(env(safe-area-inset-bottom, 0px) + 28px);
     }
-    #game-canvas {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
-      display: block;
+    h1 { font-size: 15px; font-weight: 400; letter-spacing: 6px; color: #8877cc; margin-bottom: 6px; }
+    a {
+      display: block; width: 100%; max-width: 420px; text-decoration: none; color: inherit;
+      border: 1px solid #443a77; border-radius: 10px; padding: 16px 18px;
     }
-    #ui-root {
-      position: fixed; inset: 0;
-      pointer-events: none; /* screens re-enable on their own elements */
-    }
-    #ui-root > * { pointer-events: auto; }
-    /* hidden video element that feeds face tracking + recording PiP */
-    #camera-video {
-      position: fixed;
-      width: 2px; height: 2px;
-      opacity: 0;
-      pointer-events: none;
-    }
+    a:active, a:hover { background: #0d0620; }
+    b { display: block; font-size: 20px; font-weight: 400; letter-spacing: 4px; margin-bottom: 6px; }
+    span { font-size: 13px; line-height: 1.6; color: #a79fd6; }
+    p { font-size: 11px; color: #5a4a99; margin-top: 10px; text-align: center; line-height: 1.7; }
   </style>
-  <script type="module" crossorigin src="./assets/index-BFFblMTB.js"></script>
 </head>
 <body>
-  <canvas id="game-canvas"></canvas>
-  <video id="camera-video" autoplay muted playsinline></video>
-  <div id="ui-root"></div>
+  <h1>TEST BUILDS</h1>
+  <a href="pewpew/"><b style="color:#4df3ff">PEWPEW</b><span>A shooter with no buttons: tilt to fly, say “pew” to shoot, wink to shield.</span></a>
+  <a href="strollzilla/"><b style="color:#9fffe8">STROLLZILLA</b><span>You are a giant monster and the city is your real neighbourhood.</span></a>
+  <a href="laser-kitty/"><b style="color:#ff5566">LASER KITTY</b><span>Steer a laser pointer. Cats chase it. Things break.</span></a>
+  <a href="splinecraft/"><b style="color:#ffd24d">SPLINECRAFT</b><span>A dig-and-build world with a smooth skin.</span></a>
+  <p>unlisted work in progress · best on a phone</p>
 </body>
 </html>
