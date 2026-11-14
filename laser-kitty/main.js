@@ -6,21 +6,21 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k66';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k66';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k67';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k67';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k66';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k67';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k66';
-import { mountNav } from './nav.js?v=k66';
-import { SfxEngine, } from './sfx.js?v=k66';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k66';
+import { CatRig } from './catrig.js?v=k67';
+import { mountNav } from './nav.js?v=k67';
+import { SfxEngine, } from './sfx.js?v=k67';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k67';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k66';
+import { ROOM_ART } from './rooms/index.js?v=k67';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,11 +34,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k66'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k67'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', sound: true, catVolume: 1, fxVolume: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', chonks: 0, sound: true, catVolume: 1, fxVolume: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -47,8 +47,26 @@ if (typeof cfg.shadows === 'boolean') cfg.shadows = cfg.shadows ? 'auto' : 'off'
 // explicit dropdown pick (catverPick) may keep a cat version pinned
 if (cfg.catver === 'v1' && !cfg.catverPick) cfg.catver = 'v2';
 function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
+// The cast: which kind each cat is (core/src/kinds.rs owns what a kind
+// does; the viewer only says who is in the room and draws them). Free
+// Play's "Le Chonk" count makes the LAST cats chonks, so one cat and one
+// chonk is a cat and a chonk. Story and Career runs are all standard cats:
+// their star thresholds were measured on those.
+const PLAY_MODE = /[?&](story|play)\b/.test(location.search);
+const KIND_CHONK = 1;
+function roster() {
+  if (PLAY_MODE) return [0, 0];
+  const n = Math.min(cfg.cats | 0, 16), c = Math.max(0, Math.min(cfg.chonks | 0, n));
+  let lo = 0, hi = 0;
+  for (let k = n - c; k < n; k++) {
+    if (k < 8) lo += KIND_CHONK * 2 ** (k * 4);
+    else hi += KIND_CHONK * 2 ** ((k - 8) * 4);
+  }
+  return [lo, hi];
+}
 function newSim() {
-  const s = lk.lk_new_cfg(SEED, 0, cfg.cats, cfg.weight, cfg.room | 0);
+  const [lo, hi] = roster();
+  const s = lk.lk_new_roster(SEED, 0, cfg.cats, cfg.weight, cfg.room | 0, lo, hi);
   lk.lk_tune(s, cfg.strength, cfg.gravity, cfg.destruct);
   return s;
 }
@@ -3197,8 +3215,11 @@ function v2Pose(st, act, crouch) {
 }
 const CAT_COATS = [0xff9d45, 0x8a8f9e, 0xf5f0e6, 0x3d3a45]; // orange, grey, cream, black
 const CAT_DARKS = [0xd97f2e, 0x6b7080, 0xd8cfc0, 0x2a2830];
+// a chonk is drawn a chonk: v7 has the body for it; every other cat model
+// is the same sculpt made wide (x, y, z)
+const CHONK_SCALE = [1.34, 1.14, 1.2], CHONK_SCALE_V7 = [1.12, 1.12, 1.12];
 function buildCat(k) {
-  const view = { k, legs: [], tailSegs: [], prev: null, facing: 0, coat: CAT_COATS[k % 4] };
+  const view = { k, kind: lk.lk_cat_kind(sim, k), legs: [], tailSegs: [], prev: null, facing: 0, coat: CAT_COATS[k % 4] };
   const g = new THREE.Group();
   const fur = toonMat(view.coat);
   const dark = toonMat(CAT_DARKS[k % 4]);
@@ -3279,6 +3300,7 @@ function buildCat(k) {
   view.tag.className = 'cattag';
   view.tag.style.marginTop = `${-k * 15}px`; // clustered cats stack, not overprint
   document.getElementById('tags').appendChild(view.tag);
+  if (view.kind === KIND_CHONK) g.scale.fromArray(CHONK_SCALE);
   return view;
 }
 
@@ -3886,7 +3908,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k66', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k67', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.bus.fx.d;
   sfxCatGain = engine.bus.cats.d;
@@ -4453,7 +4475,10 @@ roomEl.addEventListener('change', () => {
   rebuildSim();
 });
 const retune = () => lk.lk_tune(sim, cfg.strength, cfg.gravity, cfg.destruct);
-bindSlider('cats', 'cats', (v) => `${v}`, () => rebuildSim());
+bindSlider('cats', 'cats', (v) => `${v}`, () => { rebuildSim(); showChonks(); });
+const chonkLabel = (v) => (v ? `${Math.min(v, cfg.cats, 16)} of ${cfg.cats}` : 'none');
+const showChonks = () => { document.getElementById('v-chonks').textContent = chonkLabel(cfg.chonks | 0); };
+bindSlider('chonks', 'chonks', chonkLabel, () => rebuildSim());
 bindSlider('weight', 'weight', (v) => `${v.toFixed(2)}x`, () => rebuildSim());
 bindSlider('strength', 'strength', (v) => `${v.toFixed(2)}x`, retune);
 bindSlider('gravity', 'gravity', (v) => `${v.toFixed(2)}x`, retune);
@@ -4629,10 +4654,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k66');
+      const { Story } = await import('./story.js?v=k67');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k66');
+      const { Career } = await import('./career.js?v=k67');
       game = new Career(api);
     }
   } else {
@@ -4949,7 +4974,12 @@ function frame(now) {
       // cat v2: the skinned rig replaces the blob but consumes the same
       // computed story — position, facing, lean, tumble, state pose, speed
       if (cfg.catver !== 'v1') {
-        if (!view.rig && catRigGltf) view.rig = new CatRig(catRigGltf, scene, view.k); // coat by ordinal
+        if (!view.rig && catRigGltf) {
+          // coat by ordinal; v7's body by kind (the chonk's is the chonk build, the rest share the other three)
+          const chonk = view.kind === KIND_CHONK;
+          view.rig = new CatRig(catRigGltf, scene, view.k, { build: chonk ? 1 : [0, 2, 3][view.k % 3] });
+          if (chonk) view.rig.group.scale.fromArray(catRigGltf.forBuild ? CHONK_SCALE_V7 : CHONK_SCALE);
+        }
         if (view.rig) {
           view.group.visible = false;
           const rg = view.rig.group;
@@ -5281,7 +5311,7 @@ window.__lk = {
       return {
         k: view.k, st: view.lastSt, pos: view.prev && [...view.prev],
         screen: [Math.round(((v.x + 1) / 2) * w), Math.round(((-v.y + 1) / 2) * h)],
-        build: view.rig?.build, mood: view.rig?.expr?.mood,
+        build: view.rig?.build, mood: view.rig?.expr?.mood, kind: view.kind,
       };
     });
   },

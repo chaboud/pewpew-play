@@ -2,7 +2,7 @@
 // thread and hands each buffer back as it's done (transferred, not copied).
 // 'ready' goes out when the core set is built (the catalog marks where it
 // ends); the instrument voices and the courtroom keep arriving after it.
-import { catalog } from './sfxbank.js?v=k66';
+import { catalog } from './sfxbank.js?v=k67';
 
 self.onmessage = (ev) => {
   const { sr } = ev.data;

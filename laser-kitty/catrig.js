@@ -28,6 +28,7 @@ const GROUND_Y = -0.19;
 // Rig forward matches the game's +z at yaw 0 — no flip. (The first guess
 // was PI; the founder's phone caught every cat moonwalking mid-pounce.)
 const YAW_OFFSET = 0;
+const LOOK_CHAIN = ['neck', 'head']; // the bones the head tracking turns
 
 let gltfPromise = null;
 
@@ -324,10 +325,10 @@ export class CatRig {
   // source hands the constructor one build per cat.
   static source(variant) {
     if (variant === 7) {
-      return import('./catgen7.js?v=k66').then((m) => m.buildCat7Source());
+      return import('./catgen7.js?v=k67').then((m) => m.buildCat7Source());
     }
     if (variant >= 3) {
-      return import('./catgen.js?v=k66').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k67').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }
@@ -436,6 +437,15 @@ export class CatRig {
     this.phase = 0; // cycle clock for groom/swat/windup wiggles
     this._q = new THREE.Quaternion();
     this._e = new THREE.Euler();
+    // the look (head tracking): the turn is made in the cat's frame, up
+    // first, so it has its own Euler order and scratch
+    this._eLook = new THREE.Euler(0, 0, 0, 'YXZ');
+    this._qg = new THREE.Quaternion();
+    this._qp = new THREE.Quaternion();
+    this._lookPre = {}; // the neck's and head's pose before this frame's look went on
+    // which bones the walk clip writes: the generated cats' clips key the
+    // legs, spine and tail but not the neck, so nothing puts it back
+    this.keyed = new Set(gltf.animations[0].tracks.filter((t) => t.name.endsWith('.quaternion')).map((t) => t.name.slice(0, -11)));
     this._look = new THREE.Vector3();
   }
 
@@ -524,6 +534,17 @@ export class CatRig {
   update(dt, s) {
     this.phase += dt;
     if (this.expr) this.expr.restore(this); // take back last frame's ear and tail deltas before any layer reads them
+    // and last frame's look. The look is laid over whatever the clip and
+    // the pose layer wrote; a bone neither of them writes (the generated
+    // cats' neck, while walking or standing) kept the look and took the
+    // next one on top of it, a little more every frame: the neck wound
+    // round until a pose reset it (founder, on v7: "their heads can turn
+    // strange"; measured in the lab, a standing cat's neck made a full
+    // turn every few frames with the dot 26° to one side).
+    for (const key of LOOK_CHAIN) {
+      const bone = this.bones[key], pre = this._lookPre[key];
+      if (bone && pre) bone.quaternion.copy(pre);
+    }
     if (this.fur) this.#swayFur(dt, s);
     const table = POSES[s.pose] || null;
     const wantAlpha = table ? 1 : 0;
@@ -589,6 +610,14 @@ export class CatRig {
         }
       }
     }
+    // out of a pose, a look bone the clip does not write eases home to
+    // rest instead of keeping the pose's last angle through the walk
+    if (!table) {
+      for (const key of LOOK_CHAIN) {
+        const bone = this.bones[key];
+        if (bone && this.rest[key] && !this.keyed.has(bone.name)) bone.quaternion.slerp(this.rest[key], Math.min(1, dt * 7));
+      }
+    }
     // idle micro-life when standing still with no pose: breathing, tail sway
     if (!table && locoW < 0.2) {
       const idleA = (1 - locoW / 0.2) * 0.6;
@@ -639,13 +668,27 @@ export class CatRig {
     const ease = Math.min(1, dt * 9);
     this.lookY = (this.lookY ?? 0) + Math.max(-cap, Math.min(cap, (ty - (this.lookY ?? 0)) * ease));
     this.lookP = (this.lookP ?? 0) + Math.max(-cap, Math.min(cap, (tp - (this.lookP ?? 0)) * ease));
+    for (const key of LOOK_CHAIN) {
+      const bone = this.bones[key];
+      if (bone) (this._lookPre[key] ||= new THREE.Quaternion()).copy(bone.quaternion);
+    }
     if (Math.abs(this.lookY) + Math.abs(this.lookP) > 0.004) {
+      // The turn is made in the CAT's frame: about its own up, then about
+      // its (turned) side. It used to be made in each bone's local frame,
+      // and a neck or head that a pose or the rest pose has pitched does
+      // not have its y axis up: the same yaw then leaned the head over,
+      // ear toward shoulder (measured: the turn's axis 14-52° off the
+      // cat's up on v2 and up to 47° on v7, the ear line tipping up to
+      // 16°). Carried into the bone through its parent's orientation, the
+      // turn is the same on every rig and in every pose.
+      this.group.getWorldQuaternion(this._qg).invert();
       for (const [key, share] of [['neck', 0.45], ['head', 0.55]]) {
         const bone = this.bones[key];
         if (!bone) continue;
-        this._q.setFromEuler(this._e.set(-this.lookP * share, this.lookY * share, 0));
-        this._q.premultiply(bone.quaternion);
-        bone.quaternion.copy(this._q);
+        bone.parent.getWorldQuaternion(this._qp).premultiply(this._qg); // the parent, in the cat's frame
+        this._q.setFromEuler(this._eLook.set(-this.lookP * share, this.lookY * share, 0));
+        this._q.multiply(this._qp).premultiply(this._qp.invert()); // parent^-1 . turn . parent
+        bone.quaternion.premultiply(this._q);
       }
     }
 

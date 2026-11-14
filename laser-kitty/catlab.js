@@ -13,12 +13,13 @@
 // setMood / setLineup / setCam / stats().
 
 import * as THREE from 'three';
-import { CatRig, POSES, COAT_NAMES } from './catrig.js?v=k66';
-import { MOOD_NAMES } from './catgen7.js?v=k66';
-import { mountNav } from './nav.js?v=k66';
+import { CatRig, POSES, COAT_NAMES } from './catrig.js?v=k67';
+import { MOOD_NAMES } from './catgen7.js?v=k67';
+import { mountNav } from './nav.js?v=k67';
 mountNav({ right: '10px', top: '10px' });
 
 const params = new URLSearchParams(location.search);
+const FIXED_DOT = params.has('dot') ? params.get('dot').split(',').map(Number) : null;
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -260,6 +261,7 @@ function frame(now) {
   const t = now / 1000;
   dot.visible = state.dotOn;
   dot.position.set(Math.cos(t * 0.7) * 0.7, 0.1 + Math.sin(t * 1.7) * 0.28 + 0.28, Math.sin(t * 0.9) * 0.7);
+  if (FIXED_DOT) dot.position.set(FIXED_DOT[0], FIXED_DOT[1], FIXED_DOT[2]); // ?dot=x,y,z: a still target, for measuring the head
   for (const r of rigs) {
     r.group.rotation.y = state.yaw;
     r.update(dt, {

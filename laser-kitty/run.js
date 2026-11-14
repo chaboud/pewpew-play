@@ -47,7 +47,7 @@ export class RunShell {
     // the settings panel doubles as the in-run graphics menu: gameplay
     // tuning rows are hidden, render rows stay (founder: "a menu that
     // allows for graphics settings change and a return to main menu")
-    for (const id of ['s-room', 's-cats', 's-weight', 's-strength', 's-gravity', 's-destruct']) {
+    for (const id of ['s-room', 's-cats', 's-chonks', 's-weight', 's-strength', 's-gravity', 's-destruct']) {
       const el = document.getElementById(id);
       const row = el && el.closest('.row');
       if (row) {
