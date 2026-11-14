@@ -6,21 +6,21 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k67';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k67';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k68';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k68';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k67';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k68';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k67';
-import { mountNav } from './nav.js?v=k67';
-import { SfxEngine, } from './sfx.js?v=k67';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k67';
+import { CatRig } from './catrig.js?v=k68';
+import { mountNav } from './nav.js?v=k68';
+import { SfxEngine, } from './sfx.js?v=k68';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k68';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k67';
+import { ROOM_ART } from './rooms/index.js?v=k68';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,11 +34,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k67'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k68'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', chonks: 0, sound: true, catVolume: 1, fxVolume: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', chonks: 0, sound: true, catVolume: 1, fxVolume: 1, catReal: 1, recLevel: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -3908,12 +3908,17 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k67', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k68', import.meta.url));
+  // the recordings (sounds/manifest.json): fetched and decoded in the
+  // background; until they are in, and if they never arrive, the bank plays
+  if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
   window.__sfx = engine; // test hook
   sfxGain = engine.bus.fx.d;
   sfxCatGain = engine.bus.cats.d;
   engine.setLevel('cats', cfg.catVolume);
   engine.setLevel('fx', cfg.fxVolume);
+  engine.catReal = cfg.catReal;
+  engine.recLevel = cfg.recLevel;
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -4018,12 +4023,20 @@ function vocal({ f0, peak, end, dur, gain, when = 0 }) {
 }
 // purr: AM'd low triangle while a cat loafs
 let purr = null;
+const purrPick = (Math.random() * 5) | 0;
 function setPurr(on) {
   if (!ac) return;
   if (engine && engine.has('cat:purr')) {
     if (purr) { purr.pg.gain.linearRampToValueAtTime(0.001, ac.currentTime + 0.3); purr.o.stop(ac.currentTime + 0.35); purr.am.stop(ac.currentTime + 0.35); purr = null; }
     // the real purr's energy is mostly under 60 Hz: kept below the
     // compressor's knee so an inaudible-on-phones rumble can't duck the mix
+    if (engine.has('rec:purr')) {
+      // a recorded purr has its breath where a phone can play it; one cat's
+      // purr per room visit, not a new cat every loaf
+      engine.loop('cat:purr', false);
+      engine.loop('rec:purr', on, { gain: 0.5, variant: purrPick });
+      return;
+    }
     engine.loop('cat:purr', on, { gain: 0.32 });
     return;
   }
@@ -4153,7 +4166,8 @@ function soundClass(i, shape, a, b, c, cls, gloss) {
   else if (shape === 1 && a < 0.05 && gloss >= 0.8) mat = 'ball';
   else if (gloss >= 0.65) mat = 'metal';
   else mat = 'wood';
-  return { mat, size, electric, liquid, brittle: kind === 1 };
+  // dims: full extents, for the bank to work the thing's own modes out of
+  return { mat, size, dims: shape === 1 ? [2 * a, 2 * a, 2 * a] : [2 * a, 2 * b, 2 * c], electric, liquid, brittle: kind === 1 };
 }
 const nearestIdx = (arr, v) => { let bi = 0; for (let k = 1; k < arr.length; k++) if (Math.abs(Math.log(arr[k] / v)) < Math.abs(Math.log(arr[bi] / v))) bi = k; return bi; };
 const jit = (p) => 1 + (Math.random() * 2 - 1) * p;
@@ -4187,8 +4201,6 @@ function voicedImpact(mesh, s, pan, delay, scale = 1) {
   if (v === 'bone' || v === 'stone') feedDestruction(0.15 + s.size);
   return true;
 }
-// per-cat voices: a bigger cat speaks lower (rate shifts pitch AND formants)
-const CAT_VOICE = [1.0, 1.13, 0.88, 1.22, 0.94, 1.06, 0.82, 1.17];
 function catPanOf(k) {
   for (const v of catViews.values()) if (v.k === k) return panOf(v.group);
   return 0;
@@ -4214,12 +4226,60 @@ function catThrottled(kind, k, ms) {
   catLast[key] = t;
   return false;
 }
+// knocks (the sim's Knocked events): how many were voiced lately, so a
+// pile-up is a few blows over the debris bed and not sixty
+const recentKnocks = [];
+let hasKnocks = false; // this core raises Knocked: a topple no longer needs a sound of its own
+let objectsAskedAt = -1;
 const sfx = {
+  // which character cat k speaks with (a CAT_VOICES name in sfx.js), or
+  // undefined for the engine's own choice by ordinal. A cat's kind decides
+  // first: Le Chonk is lower, rounder and slower to speak. New kinds go here
+  catChar(k) {
+    for (const v of catViews.values()) if (v.k === k) return v.kind === KIND_CHONK ? 'chonk' : undefined;
+    return undefined;
+  },
+  // A body took a blow of v m/s. Everything that can be struck answers every
+  // time it is struck (Q-17): the thing's own modes, softer and duller for a
+  // softer blow; an instrument its own voice. The blow that follows a
+  // topple, or any hard one, also gets a recording of that material.
+  knock(mesh, v) {
+    hasKnocks = true;
+    const s = mesh?.userData?.snd;
+    if (!ac || !bankOn() || !s) return;
+    const t = performance.now();
+    // the first blow in a room asks the bank for every object in it by its
+    // own dimensions (eighty distinct ones at most; the engine keeps the 96
+    // most recently struck), so by the second blow most things answer in
+    // their own voice
+    if (objectsAskedAt !== roomBuiltAt) {
+      objectsAskedAt = roomBuiltAt;
+      for (const m of meshes) { const q = m?.userData?.snd; if (q && q.dims && engine.asked.size < 80) engine.object(q.mat, q.dims); }
+    }
+    while (recentKnocks.length && t - recentKnocks[0] > 250) recentKnocks.shift();
+    feedDestruction(Math.min(0.25, 0.04 * v));
+    const hot = (mesh.userData.hot || 0) > t;
+    // the budget: six voiced blows a quarter second, quiet ones dropped first
+    if (recentKnocks.length >= 6 || engine.voices > engine.maxVoices - 10 || (v < 0.9 && recentKnocks.length >= 3 && !hot)) return;
+    recentKnocks.push(t);
+    const pan = panOf(mesh), g = Math.max(0.08, Math.min(1.2, Math.pow(v / 3, 0.8)));
+    if (voicedImpact(mesh, s, pan, 0, g)) return;
+    // a hand-dropped 'impact' pool (sfx/manifest.json) still wins the layer, as it won the topple
+    const layer = hot || v > 2.4, own = layer && playSample('impact', pan, 0.22, 0.5 * g);
+    engine.knock(s, v, { pan, layer: layer && !own });
+    // a small piece of glass landing is a shard: now and then the real thing bouncing
+    if (s.mat === 'glass' && s.size < 0.06 && v > 1 && Math.random() < 0.3) engine.sample('debris', { pan, gain: 0.5 * g, rate: jit(0.12) });
+    if (hot) mesh.userData.hot = 0;
+  },
   // a prop falling over: its material's modal hit, pitched by size
   impact(mesh, delay = 0) {
     if (!ac) return;
     const s = mesh?.userData?.snd;
     if (!bankOn() || !s) return synthSfx.impact(mesh);
+    // with knocks the landing is heard when it lands, not when the sim
+    // scores the tilt: a direct topple only marks the thing, so its next
+    // blow carries a recording. (Delayed calls are a break's own pieces.)
+    if (hasKnocks && !delay) { if (mesh) mesh.userData.hot = performance.now() + 1500; return; }
     const pan = panOf(mesh);
     if (voicedImpact(mesh, s, pan, delay)) return;
     if (playSample('impact', pan, 0.22, 0.5, delay)) return;
@@ -4270,7 +4330,15 @@ const sfx = {
     engine.stats['call:shatter'] = (engine.stats['call:shatter'] || 0) + 1;
     const kind = s.electric ? 'electric' : s.mat === 'glass' ? 'glass' : 'ceramic';
     const si = Math.min(SHATTER_SIZES[kind].length - 1, nearestIdx(SHATTER_SIZES[kind], s.size) + (extra >= 6 ? 2 : extra >= 2 ? 1 : 0));
-    engine.play(`shatter:${kind}:${si}`, { pan, gain: Math.min(1.4, 0.8 + s.size * 2 + extra * 0.05), rate: jit(0.06) });
+    const loud = Math.min(1.4, 0.8 + s.size * 2 + extra * 0.05);
+    // a recorded break on top: a small glass, a big pane or mirror, china;
+    // a bigger thing is the same break slower. The bank's shatter stays
+    // under it (it carries the size, and the buzz of dying electrics) and
+    // is all there is when the recordings are not
+    const pool = kind === 'ceramic' ? 'ceramic' : s.size > 0.16 || extra >= 2 ? 'glassbig' : 'glass';
+    const rec = engine.sample(pool, { pan, gain: loud * 0.9, rate: Math.max(0.75, Math.min(1.2, Math.pow(0.1 / Math.max(0.03, s.size), 0.25))) * jit(0.07) });
+    engine.play(`shatter:${kind}:${si}`, { pan, gain: loud * (rec ? 0.45 : 1), rate: jit(0.06) });
+    if (rec && extra >= 4) engine.sample('pile', { pan, gain: 0.6, rate: jit(0.08), when: 0.12 });
     // a pile of breaks leaves a pile of pieces settling
     if (extra >= 2 || s.size > 0.2) engine.play(`crumble:${kind === 'ceramic' ? 'ceramic' : 'glass'}`, { pan, gain: 0.5 + Math.min(0.4, extra * 0.05), rate: jit(0.08), when: 0.25 });
     feedDestruction(0.6 + extra * 0.2);
@@ -4293,6 +4361,7 @@ const sfx = {
     // the compound crash: splinters and the crack, the pieces' own falls,
     // then the bits settling
     engine.play('snap', { pan, gain: 1.3, rate: jit(0.06) });
+    engine.sample('woodcrack', { pan, gain: 1.0, rate: jit(0.12) }); // real wood letting go, over the modelled crack
     for (let k = 0; k < 3; k++) sfx.impact(mesh, 0.2 + Math.random() * 0.4);
     engine.play('crumble:wood', { pan, gain: 0.7, rate: jit(0.08), when: 0.35 });
     feedDestruction(1.4);
@@ -4302,10 +4371,12 @@ const sfx = {
     if (!bankOn()) return synthSfx.scratch(pan);
     if (playSample('scratch', pan, 0.15, 0.5)) return;
     engine.play(stage >= 2 ? 'scratch:1' : 'scratch:0', { pan, gain: 0.7, rate: jit(0.08) });
+    if (stage >= 2) engine.sample('tear', { pan, gain: 0.55, rate: jit(0.1) }); // deep wear rips: real cloth over the strokes
   },
   splash(pan, sizeIdx = 1, delay = 0) {
     if (!bankOn() || throttled('splash', 120)) return;
-    engine.play(`splash:${sizeIdx}`, { pan, gain: 0.75, rate: jit(0.08), when: delay });
+    const wet = engine.sample('splash', { pan, gain: 0.6, rate: [1.2, 1, 0.85][sizeIdx] * jit(0.08), when: delay });
+    engine.play(`splash:${sizeIdx}`, { pan, gain: wet ? 0.4 : 0.75, rate: jit(0.08), when: delay });
   },
   spark(pan) {
     if (!bankOn() || throttled('spark', 160)) return;
@@ -4318,19 +4389,24 @@ const sfx = {
   land(pan) {
     if (!ac) return;
     if (!bankOn()) return synthSfx.impact(null);
-    engine.play('land', { pan, gain: 0.8, rate: jit(0.08) });
+    const pad = engine.sample('paws', { pan, gain: 0.7, rate: jit(0.1), bus: 'cats' }); // a real cat's feet on a real floor
+    engine.play('land', { pan, gain: pad ? 0.45 : 0.8, rate: jit(0.08) });
   },
   pounce(k) {
     if (!ac) return;
     if (!bankOn()) return synthSfx.boing();
     if (throttled('pounce', 150)) return;
-    const pan = catPanOf(k), r = CAT_VOICE[k % CAT_VOICE.length];
+    const pan = catPanOf(k);
     engine.play('whoosh', { pan, gain: 0.5, rate: jit(0.1) });
-    if (Math.random() < 0.6) engine.play('cat:mrp', { pan, gain: 0.55, rate: r * jit(0.04) });
+    if (Math.random() < 0.6) engine.catCall(k, 'mrp', { pan, gain: 0.55 });
   },
   // vocals: per cat, panned to where that cat is
   cat(kind, k = 0, ms = 900) {
-    if (!ac || catThrottled(kind, k, ms)) return;
+    if (!ac) return;
+    // a cat's character (sfx.js CAT_VOICES): its voice, what it says when
+    // asked for a kind of call, and how often it bothers
+    if (engine) { const ch = sfx.catChar(k); if (ch) engine.setCat(k, ch); ms /= engine.catTalk(k); }
+    if (catThrottled(kind, k, ms)) return;
     const pool = kind === 'meow' || kind === 'mrrow' ? kind : null;
     if (pool && playSample(pool, catPanOf(k), 0.12, 0.6)) return;
     if (!bankOn()) {
@@ -4343,7 +4419,7 @@ const sfx = {
     // cats sit under the destruction: a meow is a line, a mirror is the punchline
     // (k63 voices re-levelled: the measured chatter is sparse and quiet)
     const gain = kind === 'chatter' ? 0.6 : kind === 'mew' ? 0.42 : kind === 'trill' ? 0.45 : 0.5;
-    engine.play(`cat:${kind}`, { pan: catPanOf(k), gain, rate: CAT_VOICE[k % CAT_VOICE.length] * jit(0.04), wet: 0.8 });
+    engine.catCall(k, kind, { pan: catPanOf(k), gain });
   },
   // the old names the rest of the file still calls
   chirp(k = 0) { sfx.cat('trill', k, 900); },
@@ -4540,6 +4616,10 @@ bindSlider('bounce', 'bounce', (v) => v.toFixed(1));
 // input levels for the two sound buses (cats vs destruction), 0-200%
 bindSlider('volcat', 'catVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('cats', v); });
 bindSlider('volfx', 'fxVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('fx', v); });
+// recordings against the synthesised bank, for an A/B by ear: how often a
+// cat's call is a real cat, and how loud real breaks sit over modelled ones
+bindSlider('catreal', 'catReal', (v) => (v === 0 ? 'synth only' : `${Math.round(v * 100)}%`), (v) => { if (engine) engine.catReal = v; });
+bindSlider('reclevel', 'recLevel', (v) => (v === 0 ? 'synth only' : `${Math.round(v * 100)}%`), (v) => { if (engine) engine.recLevel = v; });
 bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
 // presentation rows: all default to today's look
 const fillSelect = (id, kinds, key, onPick) => {
@@ -4654,10 +4734,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k67');
+      const { Story } = await import('./story.js?v=k68');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k67');
+      const { Career } = await import('./career.js?v=k68');
       game = new Career(api);
     }
   } else {
@@ -4755,6 +4835,7 @@ function frame(now) {
       }
       if (ev === 2) sfx.pounce(code & 0xfff);
       if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1fff]);
+      if (ev === 9) sfx.knock(meshes[(code >>> 12) & 0x1fff], (code & 0xfff) / 100); // Knocked: a blow, |dv| in cm/s
       if (ev === 4) sfx.crash(meshes[(code >>> 12) & 0x1fff]);
       if (ev === 5) sfx.scratch(panOf(meshes[(code >>> 12) & 0x1fff]), code & 0xfff);
       if (ev === 8) {

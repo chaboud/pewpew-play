@@ -1,0 +1,2423 @@
+{
+ "set": "lk-sounds-1",
+ "retrieved": "2026-11-14",
+ "format": "mp3, mono",
+ "via": "FSD50K (Fonseca, Favory, Pons, Font, Serra; Zenodo 10.5281/zenodo.4060432, the dataset CC BY 4.0, each clip under its uploader's licence), fetched clip by clip from the Hugging Face copy Fhrozen/FSD50k and checked against the Zenodo archives by CRC-32",
+ "changes": "each file is one event cut from the clip at the seconds given (t), faded at both ends, scaled to a peak of 0.9 and encoded as MP3",
+ "pools": {
+  "ceramic": [
+   {
+    "f": "ceramic-01.mp3",
+    "src": "172000",
+    "t": [
+     0.014,
+     2.014
+    ],
+    "dur": 2.0,
+    "cen": 6070,
+    "rms": -17.8
+   },
+   {
+    "f": "ceramic-02.mp3",
+    "src": "194682",
+    "t": [
+     0.41,
+     1.642
+    ],
+    "dur": 1.232,
+    "cen": 8303,
+    "rms": -29.9
+   },
+   {
+    "f": "ceramic-03.mp3",
+    "src": "194684",
+    "t": [
+     0.334,
+     2.064
+    ],
+    "dur": 1.73,
+    "cen": 9101,
+    "rms": -24.9
+   },
+   {
+    "f": "ceramic-04.mp3",
+    "src": "194685",
+    "t": [
+     0.432,
+     1.852
+    ],
+    "dur": 1.42,
+    "cen": 6023,
+    "rms": -20.5
+   },
+   {
+    "f": "ceramic-05.mp3",
+    "src": "233606",
+    "t": [
+     0.182,
+     1.394
+    ],
+    "dur": 1.212,
+    "cen": 5227,
+    "rms": -17.4
+   },
+   {
+    "f": "ceramic-06.mp3",
+    "src": "233607",
+    "t": [
+     0.14,
+     0.936
+    ],
+    "dur": 0.796,
+    "cen": 7126,
+    "rms": -16.3
+   },
+   {
+    "f": "ceramic-07.mp3",
+    "src": "430702",
+    "t": [
+     0.188,
+     2.188
+    ],
+    "dur": 2.0,
+    "cen": 4967,
+    "rms": -37.7
+   }
+  ],
+  "chatter": [
+   {
+    "f": "chatter-01.mp3",
+    "src": "165105",
+    "t": [
+     0.0,
+     1.786
+    ],
+    "dur": 1.786,
+    "cen": 668,
+    "rms": -39.6,
+    "f0": 501,
+    "voice": "applauseav"
+   },
+   {
+    "f": "chatter-02.mp3",
+    "src": "274990",
+    "t": [
+     0.0,
+     2.026
+    ],
+    "dur": 2.026,
+    "cen": 2306,
+    "rms": -50.0,
+    "f0": 525,
+    "voice": "theshaggyfreak"
+   },
+   {
+    "f": "chatter-03.mp3",
+    "src": "274990",
+    "t": [
+     5.702,
+     6.016
+    ],
+    "dur": 0.314,
+    "cen": 1253,
+    "rms": -51.2,
+    "f0": 817,
+    "voice": "theshaggyfreak"
+   }
+  ],
+  "clink": [
+   {
+    "f": "clink-01.mp3",
+    "src": "214187",
+    "t": [
+     0.026,
+     0.308
+    ],
+    "dur": 0.282,
+    "cen": 1814,
+    "rms": -25.1
+   },
+   {
+    "f": "clink-02.mp3",
+    "src": "214188",
+    "t": [
+     0.032,
+     0.226
+    ],
+    "dur": 0.194,
+    "cen": 1919,
+    "rms": -30.4
+   },
+   {
+    "f": "clink-03.mp3",
+    "src": "214190",
+    "t": [
+     0.002,
+     0.228
+    ],
+    "dur": 0.226,
+    "cen": 2710,
+    "rms": -31.3
+   },
+   {
+    "f": "clink-04.mp3",
+    "src": "322404",
+    "t": [
+     0.002,
+     0.28
+    ],
+    "dur": 0.278,
+    "cen": 1723,
+    "rms": -27.8
+   },
+   {
+    "f": "clink-05.mp3",
+    "src": "322405",
+    "t": [
+     0.604,
+     1.304
+    ],
+    "dur": 0.7,
+    "cen": 1632,
+    "rms": -24.0
+   },
+   {
+    "f": "clink-06.mp3",
+    "src": "322406",
+    "t": [
+     0.04,
+     0.74
+    ],
+    "dur": 0.7,
+    "cen": 1871,
+    "rms": -28.9
+   },
+   {
+    "f": "clink-07.mp3",
+    "src": "325253",
+    "t": [
+     2.668,
+     3.34
+    ],
+    "dur": 0.672,
+    "cen": 1984,
+    "rms": -22.3
+   },
+   {
+    "f": "clink-08.mp3",
+    "src": "325254",
+    "t": [
+     5.666,
+     5.988
+    ],
+    "dur": 0.322,
+    "cen": 7830,
+    "rms": -33.4
+   },
+   {
+    "f": "clink-09.mp3",
+    "src": "339675",
+    "t": [
+     0.224,
+     0.49
+    ],
+    "dur": 0.266,
+    "cen": 823,
+    "rms": -31.2
+   },
+   {
+    "f": "clink-10.mp3",
+    "src": "51161",
+    "t": [
+     0.06,
+     0.76
+    ],
+    "dur": 0.7,
+    "cen": 2327,
+    "rms": -14.7
+   }
+  ],
+  "debris": [
+   {
+    "f": "debris-01.mp3",
+    "src": "203379",
+    "t": [
+     0.0,
+     0.66
+    ],
+    "dur": 0.66,
+    "cen": 5766,
+    "rms": -24.2
+   },
+   {
+    "f": "debris-02.mp3",
+    "src": "203380",
+    "t": [
+     0.0,
+     0.32
+    ],
+    "dur": 0.32,
+    "cen": 9479,
+    "rms": -20.4
+   }
+  ],
+  "glass": [
+   {
+    "f": "glass-01.mp3",
+    "src": "115916",
+    "t": [
+     3.846,
+     5.3
+    ],
+    "dur": 1.454,
+    "cen": 3716,
+    "rms": -23.9
+   },
+   {
+    "f": "glass-02.mp3",
+    "src": "126465",
+    "t": [
+     0.994,
+     2.994
+    ],
+    "dur": 2.0,
+    "cen": 5193,
+    "rms": -18.3
+   },
+   {
+    "f": "glass-03.mp3",
+    "src": "171994",
+    "t": [
+     0.23,
+     1.362
+    ],
+    "dur": 1.132,
+    "cen": 9439,
+    "rms": -16.5
+   },
+   {
+    "f": "glass-04.mp3",
+    "src": "171998",
+    "t": [
+     0.276,
+     2.276
+    ],
+    "dur": 2.0,
+    "cen": 8071,
+    "rms": -27.3
+   },
+   {
+    "f": "glass-05.mp3",
+    "src": "189575",
+    "t": [
+     0.014,
+     0.862
+    ],
+    "dur": 0.848,
+    "cen": 6974,
+    "rms": -32.1
+   },
+   {
+    "f": "glass-06.mp3",
+    "src": "203372",
+    "t": [
+     0.0,
+     0.79
+    ],
+    "dur": 0.79,
+    "cen": 8190,
+    "rms": -21.0
+   },
+   {
+    "f": "glass-07.mp3",
+    "src": "203373",
+    "t": [
+     0.0,
+     0.652
+    ],
+    "dur": 0.652,
+    "cen": 8236,
+    "rms": -21.0
+   },
+   {
+    "f": "glass-08.mp3",
+    "src": "203375",
+    "t": [
+     0.0,
+     1.088
+    ],
+    "dur": 1.088,
+    "cen": 8117,
+    "rms": -20.6
+   },
+   {
+    "f": "glass-09.mp3",
+    "src": "204185",
+    "t": [
+     1.21,
+     3.21
+    ],
+    "dur": 2.0,
+    "cen": 6016,
+    "rms": -31.2
+   },
+   {
+    "f": "glass-10.mp3",
+    "src": "371093",
+    "t": [
+     0.118,
+     1.026
+    ],
+    "dur": 0.908,
+    "cen": 3679,
+    "rms": -20.3
+   },
+   {
+    "f": "glass-11.mp3",
+    "src": "378289",
+    "t": [
+     1.43,
+     2.898
+    ],
+    "dur": 1.468,
+    "cen": 6363,
+    "rms": -37.6
+   },
+   {
+    "f": "glass-12.mp3",
+    "src": "378321",
+    "t": [
+     0.706,
+     2.706
+    ],
+    "dur": 2.0,
+    "cen": 5775,
+    "rms": -18.0
+   }
+  ],
+  "glassbig": [
+   {
+    "f": "glassbig-01.mp3",
+    "src": "155620",
+    "t": [
+     6.724,
+     8.146
+    ],
+    "dur": 1.422,
+    "cen": 6984,
+    "rms": -27.2
+   },
+   {
+    "f": "glassbig-02.mp3",
+    "src": "163364",
+    "t": [
+     6.116,
+     7.128
+    ],
+    "dur": 1.012,
+    "cen": 7688,
+    "rms": -29.1
+   },
+   {
+    "f": "glassbig-03.mp3",
+    "src": "173557",
+    "t": [
+     0.018,
+     2.474
+    ],
+    "dur": 2.456,
+    "cen": 6734,
+    "rms": -15.5
+   },
+   {
+    "f": "glassbig-04.mp3",
+    "src": "173559",
+    "t": [
+     0.122,
+     3.122
+    ],
+    "dur": 3.0,
+    "cen": 5336,
+    "rms": -22.8
+   },
+   {
+    "f": "glassbig-05.mp3",
+    "src": "244238",
+    "t": [
+     0.176,
+     1.426
+    ],
+    "dur": 1.25,
+    "cen": 7311,
+    "rms": -15.2
+   },
+   {
+    "f": "glassbig-06.mp3",
+    "src": "276938",
+    "t": [
+     1.864,
+     3.318
+    ],
+    "dur": 1.454,
+    "cen": 5999,
+    "rms": -27.2
+   },
+   {
+    "f": "glassbig-07.mp3",
+    "src": "341070",
+    "t": [
+     0.178,
+     1.098
+    ],
+    "dur": 0.92,
+    "cen": 7726,
+    "rms": -29.0
+   }
+  ],
+  "glasshit": [
+   {
+    "f": "glasshit-01.mp3",
+    "src": "353105",
+    "t": [
+     0.218,
+     0.496
+    ],
+    "dur": 0.278,
+    "cen": 1652,
+    "rms": -31.8
+   }
+  ],
+  "meow": [
+   {
+    "f": "meow-01.mp3",
+    "src": "110010",
+    "t": [
+     0.138,
+     0.792
+    ],
+    "dur": 0.654,
+    "cen": 1501,
+    "rms": -23.7,
+    "f0": 612,
+    "voice": "tuberatanka"
+   },
+   {
+    "f": "meow-02.mp3",
+    "src": "110011",
+    "t": [
+     0.18,
+     1.198
+    ],
+    "dur": 1.018,
+    "cen": 1376,
+    "rms": -12.5,
+    "f0": 604,
+    "voice": "tuberatanka"
+   },
+   {
+    "f": "meow-03.mp3",
+    "src": "177612",
+    "t": [
+     1.22,
+     1.512
+    ],
+    "dur": 0.292,
+    "cen": 2403,
+    "rms": -23.5,
+    "f0": 525,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-04.mp3",
+    "src": "177612",
+    "t": [
+     4.492,
+     5.222
+    ],
+    "dur": 0.73,
+    "cen": 2403,
+    "rms": -19.7,
+    "f0": 596,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-05.mp3",
+    "src": "177613",
+    "t": [
+     0.288,
+     0.67
+    ],
+    "dur": 0.382,
+    "cen": 2374,
+    "rms": -22.1,
+    "f0": 630,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-06.mp3",
+    "src": "177613",
+    "t": [
+     1.892,
+     2.344
+    ],
+    "dur": 0.452,
+    "cen": 2033,
+    "rms": -19.2,
+    "f0": 612,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-07.mp3",
+    "src": "192047",
+    "t": [
+     0.0,
+     0.648
+    ],
+    "dur": 0.648,
+    "cen": 2140,
+    "rms": -46.2,
+    "f0": 774,
+    "voice": "Wdfourtee"
+   },
+   {
+    "f": "meow-08.mp3",
+    "src": "192048",
+    "t": [
+     0.076,
+     0.59
+    ],
+    "dur": 0.514,
+    "cen": 1545,
+    "rms": -34.1,
+    "f0": 882,
+    "voice": "Wdfourtee"
+   },
+   {
+    "f": "meow-09.mp3",
+    "src": "220019",
+    "t": [
+     0.0,
+     0.718
+    ],
+    "dur": 0.718,
+    "cen": 2414,
+    "rms": -27.8,
+    "f0": 700,
+    "voice": "Chocktaw"
+   },
+   {
+    "f": "meow-10.mp3",
+    "src": "246037",
+    "t": [
+     5.39,
+     6.06
+    ],
+    "dur": 0.67,
+    "cen": 2181,
+    "rms": -30.0,
+    "f0": 630,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-11.mp3",
+    "src": "246037",
+    "t": [
+     7.05,
+     7.632
+    ],
+    "dur": 0.582,
+    "cen": 1028,
+    "rms": -30.0,
+    "f0": 588,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-12.mp3",
+    "src": "246037",
+    "t": [
+     18.958,
+     19.596
+    ],
+    "dur": 0.638,
+    "cen": 1453,
+    "rms": -30.4,
+    "f0": 630,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-13.mp3",
+    "src": "262312",
+    "t": [
+     0.024,
+     0.522
+    ],
+    "dur": 0.498,
+    "cen": 1210,
+    "rms": -17.2,
+    "f0": 711,
+    "voice": "steffcaffrey"
+   },
+   {
+    "f": "meow-14.mp3",
+    "src": "262314",
+    "t": [
+     0.052,
+     0.858
+    ],
+    "dur": 0.806,
+    "cen": 1448,
+    "rms": -33.6,
+    "f0": 723,
+    "voice": "steffcaffrey"
+   },
+   {
+    "f": "meow-15.mp3",
+    "src": "386737",
+    "t": [
+     13.806,
+     14.854
+    ],
+    "dur": 1.048,
+    "cen": 1017,
+    "rms": -39.0,
+    "f0": 397,
+    "voice": "ken788"
+   },
+   {
+    "f": "meow-16.mp3",
+    "src": "414042",
+    "t": [
+     1.912,
+     2.494
+    ],
+    "dur": 0.582,
+    "cen": 2164,
+    "rms": -13.5,
+    "f0": 541,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-17.mp3",
+    "src": "414042",
+    "t": [
+     3.436,
+     4.154
+    ],
+    "dur": 0.718,
+    "cen": 2508,
+    "rms": -17.1,
+    "f0": 459,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-18.mp3",
+    "src": "414042",
+    "t": [
+     5.514,
+     6.034
+    ],
+    "dur": 0.52,
+    "cen": 2450,
+    "rms": -15.1,
+    "f0": 474,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-19.mp3",
+    "src": "64014",
+    "t": [
+     0.014,
+     0.47
+    ],
+    "dur": 0.456,
+    "cen": 2297,
+    "rms": -15.6,
+    "f0": 573,
+    "voice": "Department64"
+   },
+   {
+    "f": "meow-20.mp3",
+    "src": "64017",
+    "t": [
+     0.07,
+     0.57
+    ],
+    "dur": 0.5,
+    "cen": 1797,
+    "rms": -15.9,
+    "f0": 479,
+    "voice": "Department64"
+   },
+   {
+    "f": "meow-21.mp3",
+    "src": "64018",
+    "t": [
+     0.036,
+     0.616
+    ],
+    "dur": 0.58,
+    "cen": 2451,
+    "rms": -18.8,
+    "f0": 507,
+    "voice": "Department64"
+   }
+  ],
+  "metal": [
+   {
+    "f": "metal-01.mp3",
+    "src": "13854",
+    "t": [
+     0.0,
+     0.82
+    ],
+    "dur": 0.82,
+    "cen": 113,
+    "rms": -20.6
+   },
+   {
+    "f": "metal-02.mp3",
+    "src": "13874",
+    "t": [
+     0.0,
+     1.112
+    ],
+    "dur": 1.112,
+    "cen": 133,
+    "rms": -25.5
+   },
+   {
+    "f": "metal-03.mp3",
+    "src": "33921",
+    "t": [
+     0.0,
+     1.8
+    ],
+    "dur": 1.8,
+    "cen": 240,
+    "rms": -26.7
+   },
+   {
+    "f": "metal-04.mp3",
+    "src": "33922",
+    "t": [
+     0.0,
+     1.8
+    ],
+    "dur": 1.8,
+    "cen": 252,
+    "rms": -26.2
+   },
+   {
+    "f": "metal-05.mp3",
+    "src": "33923",
+    "t": [
+     0.0,
+     1.8
+    ],
+    "dur": 1.8,
+    "cen": 239,
+    "rms": -30.0
+   },
+   {
+    "f": "metal-06.mp3",
+    "src": "33931",
+    "t": [
+     0.0,
+     0.436
+    ],
+    "dur": 0.436,
+    "cen": 489,
+    "rms": -15.2
+   },
+   {
+    "f": "metal-07.mp3",
+    "src": "33932",
+    "t": [
+     0.0,
+     0.524
+    ],
+    "dur": 0.524,
+    "cen": 474,
+    "rms": -23.0
+   },
+   {
+    "f": "metal-08.mp3",
+    "src": "33933",
+    "t": [
+     0.0,
+     0.404
+    ],
+    "dur": 0.404,
+    "cen": 663,
+    "rms": -21.7
+   },
+   {
+    "f": "metal-09.mp3",
+    "src": "96137",
+    "t": [
+     0.02,
+     0.394
+    ],
+    "dur": 0.374,
+    "cen": 792,
+    "rms": -27.0
+   }
+  ],
+  "paws": [
+   {
+    "f": "paws-01.mp3",
+    "src": "240596",
+    "t": [
+     9.822,
+     10.222
+    ],
+    "dur": 0.4,
+    "cen": 97,
+    "rms": -25.8
+   },
+   {
+    "f": "paws-02.mp3",
+    "src": "240596",
+    "t": [
+     18.038,
+     18.224
+    ],
+    "dur": 0.186,
+    "cen": 245,
+    "rms": -29.6
+   },
+   {
+    "f": "paws-03.mp3",
+    "src": "240596",
+    "t": [
+     20.022,
+     20.258
+    ],
+    "dur": 0.236,
+    "cen": 4983,
+    "rms": -28.5
+   },
+   {
+    "f": "paws-04.mp3",
+    "src": "240596",
+    "t": [
+     20.482,
+     20.882
+    ],
+    "dur": 0.4,
+    "cen": 264,
+    "rms": -20.0
+   },
+   {
+    "f": "paws-05.mp3",
+    "src": "240596",
+    "t": [
+     20.702,
+     21.034
+    ],
+    "dur": 0.332,
+    "cen": 966,
+    "rms": -21.3
+   },
+   {
+    "f": "paws-06.mp3",
+    "src": "240596",
+    "t": [
+     21.272,
+     21.466
+    ],
+    "dur": 0.194,
+    "cen": 204,
+    "rms": -26.5
+   }
+  ],
+  "pile": [
+   {
+    "f": "pile-01.mp3",
+    "src": "348032",
+    "t": [
+     0.42,
+     3.42
+    ],
+    "dur": 3.0,
+    "cen": 487,
+    "rms": -21.9
+   },
+   {
+    "f": "pile-02.mp3",
+    "src": "348033",
+    "t": [
+     0.028,
+     1.01
+    ],
+    "dur": 0.982,
+    "cen": 561,
+    "rms": -22.3
+   }
+  ],
+  "purr": [
+   {
+    "f": "purr-01.mp3",
+    "src": "126150",
+    "t": [
+     10.8,
+     12.95
+    ],
+    "dur": 2.15,
+    "cen": 608,
+    "rms": -33.8,
+    "voice": "Buskieboy",
+    "cycle": 0.9
+   },
+   {
+    "f": "purr-02.mp3",
+    "src": "223743",
+    "t": [
+     9.5,
+     11.97
+    ],
+    "dur": 2.47,
+    "cen": 668,
+    "rms": -43.2,
+    "voice": "soundatADM",
+    "cycle": 1.06
+   },
+   {
+    "f": "purr-03.mp3",
+    "src": "33561",
+    "t": [
+     23.3,
+     25.57
+    ],
+    "dur": 2.27,
+    "cen": 103,
+    "rms": -20.4,
+    "voice": "rossgk",
+    "cycle": 0.96
+   },
+   {
+    "f": "purr-04.mp3",
+    "src": "364893",
+    "t": [
+     13.4,
+     15.79
+    ],
+    "dur": 2.39,
+    "cen": 161,
+    "rms": -41.4,
+    "voice": "TiesWijnen",
+    "cycle": 1.02
+   },
+   {
+    "f": "purr-05.mp3",
+    "src": "93847",
+    "t": [
+     0.4,
+     4.01
+    ],
+    "dur": 3.61,
+    "cen": 760,
+    "rms": -36.3,
+    "voice": "jhann",
+    "cycle": 3.26
+   }
+  ],
+  "splash": [
+   {
+    "f": "splash-01.mp3",
+    "src": "143257",
+    "t": [
+     0.0,
+     0.934
+    ],
+    "dur": 0.934,
+    "cen": 1821,
+    "rms": -27.7
+   },
+   {
+    "f": "splash-02.mp3",
+    "src": "144135",
+    "t": [
+     0.136,
+     1.936
+    ],
+    "dur": 1.8,
+    "cen": 3301,
+    "rms": -24.2
+   },
+   {
+    "f": "splash-03.mp3",
+    "src": "154645",
+    "t": [
+     4.878,
+     6.002
+    ],
+    "dur": 1.124,
+    "cen": 7336,
+    "rms": -51.8
+   },
+   {
+    "f": "splash-04.mp3",
+    "src": "154645",
+    "t": [
+     8.134,
+     9.238
+    ],
+    "dur": 1.104,
+    "cen": 5639,
+    "rms": -51.7
+   },
+   {
+    "f": "splash-05.mp3",
+    "src": "32073",
+    "t": [
+     0.0,
+     1.8
+    ],
+    "dur": 1.8,
+    "cen": 549,
+    "rms": -25.2
+   }
+  ],
+  "tear": [
+   {
+    "f": "tear-01.mp3",
+    "src": "159619",
+    "t": [
+     0.014,
+     0.898
+    ],
+    "dur": 0.884,
+    "cen": 3338,
+    "rms": -33.5
+   },
+   {
+    "f": "tear-02.mp3",
+    "src": "159619",
+    "t": [
+     1.144,
+     1.848
+    ],
+    "dur": 0.704,
+    "cen": 4135,
+    "rms": -35.8
+   },
+   {
+    "f": "tear-03.mp3",
+    "src": "174627",
+    "t": [
+     3.71,
+     4.048
+    ],
+    "dur": 0.338,
+    "cen": 2240,
+    "rms": -18.2
+   },
+   {
+    "f": "tear-04.mp3",
+    "src": "174627",
+    "t": [
+     24.136,
+     24.764
+    ],
+    "dur": 0.628,
+    "cen": 4032,
+    "rms": -21.5
+   },
+   {
+    "f": "tear-05.mp3",
+    "src": "252256",
+    "t": [
+     0.046,
+     0.526
+    ],
+    "dur": 0.48,
+    "cen": 5486,
+    "rms": -21.9
+   }
+  ],
+  "thud": [
+   {
+    "f": "thud-01.mp3",
+    "src": "187136",
+    "t": [
+     0.288,
+     0.963
+    ],
+    "dur": 0.675,
+    "cen": 1263,
+    "rms": -19.3
+   },
+   {
+    "f": "thud-02.mp3",
+    "src": "323725",
+    "t": [
+     0.05,
+     0.368
+    ],
+    "dur": 0.318,
+    "cen": 288,
+    "rms": -20.7
+   },
+   {
+    "f": "thud-03.mp3",
+    "src": "344149",
+    "t": [
+     0.066,
+     0.644
+    ],
+    "dur": 0.578,
+    "cen": 163,
+    "rms": -23.0
+   },
+   {
+    "f": "thud-04.mp3",
+    "src": "344150",
+    "t": [
+     0.274,
+     1.142
+    ],
+    "dur": 0.868,
+    "cen": 626,
+    "rms": -28.3
+   },
+   {
+    "f": "thud-05.mp3",
+    "src": "344152",
+    "t": [
+     0.036,
+     0.608
+    ],
+    "dur": 0.572,
+    "cen": 260,
+    "rms": -35.7
+   },
+   {
+    "f": "thud-06.mp3",
+    "src": "344153",
+    "t": [
+     0.128,
+     0.688
+    ],
+    "dur": 0.56,
+    "cen": 1426,
+    "rms": -17.6
+   },
+   {
+    "f": "thud-07.mp3",
+    "src": "346693",
+    "t": [
+     0.476,
+     1.1
+    ],
+    "dur": 0.624,
+    "cen": 177,
+    "rms": -23.8
+   },
+   {
+    "f": "thud-08.mp3",
+    "src": "346693",
+    "t": [
+     0.708,
+     1.666
+    ],
+    "dur": 0.958,
+    "cen": 181,
+    "rms": -25.7
+   }
+  ],
+  "trill": [
+   {
+    "f": "trill-01.mp3",
+    "src": "170298",
+    "t": [
+     2.582,
+     2.946
+    ],
+    "dur": 0.364,
+    "cen": 1904,
+    "rms": -18.2,
+    "f0": 525,
+    "voice": "colinsullivan"
+   },
+   {
+    "f": "trill-02.mp3",
+    "src": "170298",
+    "t": [
+     6.722,
+     7.044
+    ],
+    "dur": 0.322,
+    "cen": 2249,
+    "rms": -17.9,
+    "f0": 463,
+    "voice": "colinsullivan"
+   },
+   {
+    "f": "trill-03.mp3",
+    "src": "200336",
+    "t": [
+     3.432,
+     4.216
+    ],
+    "dur": 0.784,
+    "cen": 1308,
+    "rms": -34.6,
+    "f0": 551,
+    "voice": "jsbarrett"
+   },
+   {
+    "f": "trill-04.mp3",
+    "src": "200336",
+    "t": [
+     7.712,
+     8.416
+    ],
+    "dur": 0.704,
+    "cen": 757,
+    "rms": -30.7,
+    "f0": 496,
+    "voice": "jsbarrett"
+   },
+   {
+    "f": "trill-05.mp3",
+    "src": "200336",
+    "t": [
+     9.862,
+     10.306
+    ],
+    "dur": 0.444,
+    "cen": 962,
+    "rms": -26.3,
+    "f0": 493,
+    "voice": "jsbarrett"
+   },
+   {
+    "f": "trill-06.mp3",
+    "src": "262308",
+    "t": [
+     0.07,
+     0.493
+    ],
+    "dur": 0.423,
+    "cen": 546,
+    "rms": -29.9,
+    "f0": 361,
+    "voice": "steffcaffrey"
+   },
+   {
+    "f": "trill-07.mp3",
+    "src": "415107",
+    "t": [
+     0.11,
+     0.834
+    ],
+    "dur": 0.724,
+    "cen": 836,
+    "rms": -16.8,
+    "f0": 519,
+    "voice": "steffcaffrey"
+   }
+  ],
+  "wood": [
+   {
+    "f": "wood-01.mp3",
+    "src": "104003",
+    "t": [
+     0.196,
+     0.996
+    ],
+    "dur": 0.8,
+    "cen": 1642,
+    "rms": -19.3
+   },
+   {
+    "f": "wood-02.mp3",
+    "src": "104003",
+    "t": [
+     1.274,
+     1.898
+    ],
+    "dur": 0.624,
+    "cen": 6402,
+    "rms": -54.2
+   },
+   {
+    "f": "wood-03.mp3",
+    "src": "137081",
+    "t": [
+     0.0,
+     0.404
+    ],
+    "dur": 0.404,
+    "cen": 398,
+    "rms": -24.5
+   },
+   {
+    "f": "wood-04.mp3",
+    "src": "175417",
+    "t": [
+     2.792,
+     3.592
+    ],
+    "dur": 0.8,
+    "cen": 1856,
+    "rms": -19.5
+   },
+   {
+    "f": "wood-05.mp3",
+    "src": "175417",
+    "t": [
+     4.108,
+     4.244
+    ],
+    "dur": 0.136,
+    "cen": 1187,
+    "rms": -24.1
+   },
+   {
+    "f": "wood-06.mp3",
+    "src": "175417",
+    "t": [
+     5.3,
+     6.1
+    ],
+    "dur": 0.8,
+    "cen": 1977,
+    "rms": -22.1
+   },
+   {
+    "f": "wood-07.mp3",
+    "src": "330523",
+    "t": [
+     0.0,
+     0.44
+    ],
+    "dur": 0.44,
+    "cen": 353,
+    "rms": -23.0
+   },
+   {
+    "f": "wood-08.mp3",
+    "src": "330523",
+    "t": [
+     0.52,
+     0.866
+    ],
+    "dur": 0.346,
+    "cen": 378,
+    "rms": -30.9
+   }
+  ],
+  "woodcrack": [
+   {
+    "f": "woodcrack-01.mp3",
+    "src": "109359",
+    "t": [
+     0.0,
+     0.692
+    ],
+    "dur": 0.692,
+    "cen": 7036,
+    "rms": -28.3
+   },
+   {
+    "f": "woodcrack-02.mp3",
+    "src": "144890",
+    "t": [
+     0.702,
+     1.502
+    ],
+    "dur": 0.8,
+    "cen": 5185,
+    "rms": -29.0
+   },
+   {
+    "f": "woodcrack-03.mp3",
+    "src": "144945",
+    "t": [
+     0.326,
+     1.126
+    ],
+    "dur": 0.8,
+    "cen": 5461,
+    "rms": -28.7
+   },
+   {
+    "f": "woodcrack-04.mp3",
+    "src": "319230",
+    "t": [
+     0.284,
+     0.954
+    ],
+    "dur": 0.67,
+    "cen": 6521,
+    "rms": -35.8
+   },
+   {
+    "f": "woodcrack-05.mp3",
+    "src": "319231",
+    "t": [
+     0.23,
+     0.812
+    ],
+    "dur": 0.582,
+    "cen": 5607,
+    "rms": -36.6
+   },
+   {
+    "f": "woodcrack-06.mp3",
+    "src": "400653",
+    "t": [
+     5.23,
+     5.334
+    ],
+    "dur": 0.104,
+    "cen": 3917,
+    "rms": -41.4
+   },
+   {
+    "f": "woodcrack-07.mp3",
+    "src": "400653",
+    "t": [
+     7.488,
+     7.632
+    ],
+    "dur": 0.144,
+    "cen": 3056,
+    "rms": -37.8
+   },
+   {
+    "f": "woodcrack-08.mp3",
+    "src": "82802",
+    "t": [
+     0.918,
+     1.046
+    ],
+    "dur": 0.128,
+    "cen": 8371,
+    "rms": -20.2
+   }
+  ]
+ },
+ "sources": {
+  "13854": {
+   "title": "2.wav",
+   "author": "adcbicycle",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/13854/",
+   "clip": "FSD50K.dev_audio/13854.wav",
+   "note": "object hit"
+  },
+  "13874": {
+   "title": "22.wav",
+   "author": "adcbicycle",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/13874/",
+   "clip": "FSD50K.dev_audio/13874.wav",
+   "note": "hollow object"
+  },
+  "32073": {
+   "title": "Splash_Request.wav",
+   "author": "hello_flowers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/32073/",
+   "clip": "FSD50K.dev_audio/32073.wav",
+   "note": ""
+  },
+  "33561": {
+   "title": "MunroPurr.flac",
+   "author": "rossgk",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33561/",
+   "clip": "FSD50K.dev_audio/33561.wav",
+   "note": ""
+  },
+  "33921": {
+   "title": "lid04.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33921/",
+   "clip": "FSD50K.dev_audio/33921.wav",
+   "note": "pot lid"
+  },
+  "33922": {
+   "title": "lid05.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33922/",
+   "clip": "FSD50K.dev_audio/33922.wav",
+   "note": "pot lid"
+  },
+  "33923": {
+   "title": "lid06.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33923/",
+   "clip": "FSD50K.dev_audio/33923.wav",
+   "note": "pot lid"
+  },
+  "33931": {
+   "title": "pot1.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33931/",
+   "clip": "FSD50K.dev_audio/33931.wav",
+   "note": "pot"
+  },
+  "33932": {
+   "title": "pot2.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33932/",
+   "clip": "FSD50K.dev_audio/33932.wav",
+   "note": "pot"
+  },
+  "33933": {
+   "title": "pot3.wav",
+   "author": "Necrosensual",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/33933/",
+   "clip": "FSD50K.dev_audio/33933.wav",
+   "note": "pot"
+  },
+  "51161": {
+   "title": "Plate.wav",
+   "author": "RutgerMuller",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/51161/",
+   "clip": "FSD50K.dev_audio/51161.wav",
+   "note": "earthenware plate"
+  },
+  "64014": {
+   "title": "kitten19.wav",
+   "author": "Department64",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/64014/",
+   "clip": "FSD50K.dev_audio/64014.wav",
+   "note": "standard loud"
+  },
+  "64017": {
+   "title": "kitten22.wav",
+   "author": "Department64",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/64017/",
+   "clip": "FSD50K.dev_audio/64017.wav",
+   "note": "friendly purr meow"
+  },
+  "64018": {
+   "title": "kitten23.wav",
+   "author": "Department64",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/64018/",
+   "clip": "FSD50K.dev_audio/64018.wav",
+   "note": "double meow"
+  },
+  "82802": {
+   "title": "stick snap.wav",
+   "author": "payattention",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/82802/",
+   "clip": "FSD50K.dev_audio/82802.wav",
+   "note": "stick snap"
+  },
+  "93847": {
+   "title": "CatPurring_1-2.aif",
+   "author": "jhann",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/93847/",
+   "clip": "FSD50K.eval_audio/93847.wav",
+   "note": ""
+  },
+  "96137": {
+   "title": "Thud2.wav",
+   "author": "BMacZero",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/96137/",
+   "clip": "FSD50K.eval_audio/96137.wav",
+   "note": "dense pipe"
+  },
+  "104003": {
+   "title": "Wood_Metal_Chain_Smash_Hall.aif",
+   "author": "RutgerMuller",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/104003/",
+   "clip": "FSD50K.dev_audio/104003.wav",
+   "note": "plank falling"
+  },
+  "109359": {
+   "title": "wood breaking.aiff",
+   "author": "SoundCollectah",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/109359/",
+   "clip": "FSD50K.dev_audio/109359.wav",
+   "note": "dry branch"
+  },
+  "110010": {
+   "title": "cat meow II",
+   "author": "tuberatanka",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/110010/",
+   "clip": "FSD50K.dev_audio/110010.wav",
+   "note": "hungry"
+  },
+  "110011": {
+   "title": "cat meow",
+   "author": "tuberatanka",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/110011/",
+   "clip": "FSD50K.dev_audio/110011.wav",
+   "note": "hungry"
+  },
+  "115916": {
+   "title": "Glass Hits floor, breaks, shatters.wav",
+   "author": "issalcake",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/115916/",
+   "clip": "FSD50K.dev_audio/115916.wav",
+   "note": "hits floor"
+  },
+  "126150": {
+   "title": "Purr1.wav",
+   "author": "Buskieboy",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/126150/",
+   "clip": "FSD50K.dev_audio/126150.wav",
+   "note": "deep"
+  },
+  "126465": {
+   "title": "lightbulb_smash.wav",
+   "author": "pillonoise",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/126465/",
+   "clip": "FSD50K.dev_audio/126465.wav",
+   "note": "light bulbs"
+  },
+  "137081": {
+   "title": "Wood Pat 02",
+   "author": "chaosportal",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/137081/",
+   "clip": "FSD50K.dev_audio/137081.wav",
+   "note": "pat desk"
+  },
+  "143257": {
+   "title": "singleSplash.wav",
+   "author": "Zabuhailo",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/143257/",
+   "clip": "FSD50K.dev_audio/143257.wav",
+   "note": "single"
+  },
+  "144135": {
+   "title": "Water Popping Out of Glass Bottle",
+   "author": "gfrog",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/144135/",
+   "clip": "FSD50K.dev_audio/144135.wav",
+   "note": "glugging out of a bottle"
+  },
+  "144890": {
+   "title": "Crack_of_branch.wav",
+   "author": "Adam_N",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/144890/",
+   "clip": "FSD50K.dev_audio/144890.wav",
+   "note": "branch"
+  },
+  "144945": {
+   "title": "Crack_of_branch_2.wav",
+   "author": "Adam_N",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/144945/",
+   "clip": "FSD50K.dev_audio/144945.wav",
+   "note": "branch"
+  },
+  "154645": {
+   "title": "Glass_Bottle_Spilling_Liquid.aif",
+   "author": "crcavol",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/154645/",
+   "clip": "FSD50K.dev_audio/154645.wav",
+   "note": "bottle spilling"
+  },
+  "155620": {
+   "title": "IMPACT_GLASS_BIG_WINDOW_PANE_SMASH_HAMMER_LOUD_NTG3_H4N_20120513.wav",
+   "author": "samueljustice00",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/155620/",
+   "clip": "FSD50K.eval_audio/155620.wav",
+   "note": "large pane"
+  },
+  "159619": {
+   "title": "STRAPPO LENZUOLO.WAV",
+   "author": "lollosound",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/159619/",
+   "clip": "FSD50K.dev_audio/159619.wav",
+   "note": "sheet ripped"
+  },
+  "163364": {
+   "title": "breaking_small_window.wav",
+   "author": "MikaF",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/163364/",
+   "clip": "FSD50K.dev_audio/163364.wav",
+   "note": "small window panes"
+  },
+  "165105": {
+   "title": "Excited Kitty.wav",
+   "author": "applauseav",
+   "licence": "CC BY 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+   "url": "https://freesound.org/s/165105/",
+   "clip": "FSD50K.dev_audio/165105.wav",
+   "note": "excited kitty, trilling (CC-BY)"
+  },
+  "170298": {
+   "title": "cat-purring_cool-microphone-bump-initial-meows.aif",
+   "author": "colinsullivan",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/170298/",
+   "clip": "FSD50K.eval_audio/170298.wav",
+   "note": "purring and meeping"
+  },
+  "171994": {
+   "title": "glass1.wav",
+   "author": "drewkelly",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/171994/",
+   "clip": "FSD50K.eval_audio/171994.wav",
+   "note": "light bulb"
+  },
+  "171998": {
+   "title": "glass4.wav",
+   "author": "drewkelly",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/171998/",
+   "clip": "FSD50K.eval_audio/171998.wav",
+   "note": "light bulb"
+  },
+  "172000": {
+   "title": "glass2.wav",
+   "author": "drewkelly",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/172000/",
+   "clip": "FSD50K.eval_audio/172000.wav",
+   "note": "mug"
+  },
+  "173557": {
+   "title": "004.wav",
+   "author": "gevaroy",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/173557/",
+   "clip": "FSD50K.dev_audio/173557.wav",
+   "note": "window indoor"
+  },
+  "173559": {
+   "title": "002.wav",
+   "author": "gevaroy",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/173559/",
+   "clip": "FSD50K.dev_audio/173559.wav",
+   "note": "window indoor"
+  },
+  "174627": {
+   "title": "Ripping Clothes",
+   "author": "altfuture",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/174627/",
+   "clip": "FSD50K.eval_audio/174627.wav",
+   "note": "cloth ripped"
+  },
+  "175417": {
+   "title": "Modulation with Wood.aif",
+   "author": "Housed1J",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/175417/",
+   "clip": "FSD50K.dev_audio/175417.wav",
+   "note": "wooden spoon on desk"
+  },
+  "177612": {
+   "title": "04 Cat Miauing",
+   "author": "aminut",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/177612/",
+   "clip": "FSD50K.dev_audio/177612.wav",
+   "note": "wants petting"
+  },
+  "177613": {
+   "title": "03 Cat Miauing",
+   "author": "aminut",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/177613/",
+   "clip": "FSD50K.dev_audio/177613.wav",
+   "note": "wants petting"
+  },
+  "187136": {
+   "title": "BodyFall.wav",
+   "author": "000600",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/187136/",
+   "clip": "FSD50K.dev_audio/187136.wav",
+   "note": "falling object"
+  },
+  "189575": {
+   "title": "Breaking Glass.wav",
+   "author": "Unopiate",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/189575/",
+   "clip": "FSD50K.eval_audio/189575.wav",
+   "note": "tumbler on laminate"
+  },
+  "192047": {
+   "title": "Catroom_Meow_2.wav",
+   "author": "Wdfourtee",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/192047/",
+   "clip": "FSD50K.dev_audio/192047.wav",
+   "note": "small bathroom"
+  },
+  "192048": {
+   "title": "Catroom_Meow_1.wav",
+   "author": "Wdfourtee",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/192048/",
+   "clip": "FSD50K.dev_audio/192048.wav",
+   "note": "small bathroom"
+  },
+  "194682": {
+   "title": "BreakingVase04.wav",
+   "author": "kingsrow",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/194682/",
+   "clip": "FSD50K.dev_audio/194682.wav",
+   "note": "vase on concrete"
+  },
+  "194684": {
+   "title": "BreakingVase02.wav",
+   "author": "kingsrow",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/194684/",
+   "clip": "FSD50K.dev_audio/194684.wav",
+   "note": "vase on concrete"
+  },
+  "194685": {
+   "title": "BreakingVase01.wav",
+   "author": "kingsrow",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/194685/",
+   "clip": "FSD50K.dev_audio/194685.wav",
+   "note": "vase on concrete"
+  },
+  "200336": {
+   "title": "Cat trilling",
+   "author": "jsbarrett",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/200336/",
+   "clip": "FSD50K.dev_audio/200336.wav",
+   "note": "trilling"
+  },
+  "203372": {
+   "title": "glass-shattering_04.ogg",
+   "author": "C_Rogers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/203372/",
+   "clip": "FSD50K.dev_audio/203372.wav",
+   "note": ""
+  },
+  "203373": {
+   "title": "glass-shattering_03.ogg",
+   "author": "C_Rogers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/203373/",
+   "clip": "FSD50K.dev_audio/203373.wav",
+   "note": ""
+  },
+  "203375": {
+   "title": "glass-shattering_01.ogg",
+   "author": "C_Rogers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/203375/",
+   "clip": "FSD50K.dev_audio/203375.wav",
+   "note": ""
+  },
+  "203379": {
+   "title": "glass_shard_bounce.ogg",
+   "author": "C_Rogers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/203379/",
+   "clip": "FSD50K.dev_audio/203379.wav",
+   "note": "shard bounce"
+  },
+  "203380": {
+   "title": "glass_shard_bounce_3.ogg",
+   "author": "C_Rogers",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/203380/",
+   "clip": "FSD50K.dev_audio/203380.wav",
+   "note": "shard bounce"
+  },
+  "204185": {
+   "title": "breaking_glass1.wav",
+   "author": "reg7783",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/204185/",
+   "clip": "FSD50K.eval_audio/204185.wav",
+   "note": "wine glass on floor"
+  },
+  "214187": {
+   "title": "ceramicCups1.wav",
+   "author": "kikuchiyo",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/214187/",
+   "clip": "FSD50K.dev_audio/214187.wav",
+   "note": "ceramic cups"
+  },
+  "214188": {
+   "title": "ceramicCups6.wav",
+   "author": "kikuchiyo",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/214188/",
+   "clip": "FSD50K.dev_audio/214188.wav",
+   "note": "ceramic cups"
+  },
+  "214190": {
+   "title": "ceramicCups4.wav",
+   "author": "kikuchiyo",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/214190/",
+   "clip": "FSD50K.dev_audio/214190.wav",
+   "note": "ceramic cups"
+  },
+  "220019": {
+   "title": "Fiji-meow-01.wav",
+   "author": "Chocktaw",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/220019/",
+   "clip": "FSD50K.dev_audio/220019.wav",
+   "note": "hello"
+  },
+  "223743": {
+   "title": "poppykitten_purring.aiff",
+   "author": "soundatADM",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/223743/",
+   "clip": "FSD50K.dev_audio/223743.wav",
+   "note": "kitten"
+  },
+  "233606": {
+   "title": "Breaking Glass #2.wav",
+   "author": "Agaxly",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/233606/",
+   "clip": "FSD50K.dev_audio/233606.wav",
+   "note": "plates or bowls"
+  },
+  "233607": {
+   "title": "Breaking Glass #1.wav",
+   "author": "Agaxly",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/233607/",
+   "clip": "FSD50K.dev_audio/233607.wav",
+   "note": "china plates or cups"
+  },
+  "240596": {
+   "title": "crazy cat.flac",
+   "author": "arseniiv",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/240596/",
+   "clip": "FSD50K.dev_audio/240596.wav",
+   "note": "running on sofa, carpet, parquet"
+  },
+  "244238": {
+   "title": "Glass Smash.wav",
+   "author": "chewiesmissus",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/244238/",
+   "clip": "FSD50K.dev_audio/244238.wav",
+   "note": ""
+  },
+  "246037": {
+   "title": "meow.wav",
+   "author": "UncleSigmund",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/246037/",
+   "clip": "FSD50K.eval_audio/246037.wav",
+   "note": ""
+  },
+  "252256": {
+   "title": "velcro2.wav",
+   "author": "Reitanna",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/252256/",
+   "clip": "FSD50K.dev_audio/252256.wav",
+   "note": "velcro"
+  },
+  "262308": {
+   "title": "Cat Happy Purr/Twit3.wav",
+   "author": "steffcaffrey",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/262308/",
+   "clip": "FSD50K.dev_audio/262308.wav",
+   "note": "happy purr/twit greeting"
+  },
+  "262312": {
+   "title": "Cat Meow1.wav",
+   "author": "steffcaffrey",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/262312/",
+   "clip": "FSD50K.dev_audio/262312.wav",
+   "note": "male greeting"
+  },
+  "262314": {
+   "title": "Cat Meow3.wav",
+   "author": "steffcaffrey",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/262314/",
+   "clip": "FSD50K.dev_audio/262314.wav",
+   "note": "male greeting"
+  },
+  "274990": {
+   "title": "Cat Bird Chirp",
+   "author": "theshaggyfreak",
+   "licence": "CC BY 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+   "url": "https://freesound.org/s/274990/",
+   "clip": "FSD50K.dev_audio/274990.wav",
+   "note": "bird chirp at window (CC-BY)"
+  },
+  "276938": {
+   "title": "breaking_glass_mirror_Rode_NTG3.wav",
+   "author": "gladkiy",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/276938/",
+   "clip": "FSD50K.dev_audio/276938.wav",
+   "note": "mirror"
+  },
+  "319230": {
+   "title": "Stick Snap 2.wav",
+   "author": "worthahep88",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/319230/",
+   "clip": "FSD50K.dev_audio/319230.wav",
+   "note": "stick"
+  },
+  "319231": {
+   "title": "Stick Snap 1.wav",
+   "author": "worthahep88",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/319231/",
+   "clip": "FSD50K.dev_audio/319231.wav",
+   "note": "stick"
+  },
+  "322404": {
+   "title": "Stacking Plates 03.wav",
+   "author": "Glitchedtones",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/322404/",
+   "clip": "FSD50K.dev_audio/322404.wav",
+   "note": "stacking plates"
+  },
+  "322405": {
+   "title": "Stacking Plates 02.wav",
+   "author": "Glitchedtones",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/322405/",
+   "clip": "FSD50K.dev_audio/322405.wav",
+   "note": "stacking plates"
+  },
+  "322406": {
+   "title": "Stacking Plates 01.wav",
+   "author": "Glitchedtones",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/322406/",
+   "clip": "FSD50K.dev_audio/322406.wav",
+   "note": "stacking plates"
+  },
+  "323725": {
+   "title": "thunk.wav",
+   "author": "Reitanna",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/323725/",
+   "clip": "FSD50K.dev_audio/323725.wav",
+   "note": "putting something down"
+  },
+  "325253": {
+   "title": "Ding 3",
+   "author": "Adam_N",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/325253/",
+   "clip": "FSD50K.dev_audio/325253.wav",
+   "note": "teacups"
+  },
+  "325254": {
+   "title": "Ding 2",
+   "author": "Adam_N",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/325254/",
+   "clip": "FSD50K.dev_audio/325254.wav",
+   "note": "teacups"
+  },
+  "330523": {
+   "title": "Ball dropping on bench.wav",
+   "author": "casemundy",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/330523/",
+   "clip": "FSD50K.eval_audio/330523.wav",
+   "note": "ball on bench"
+  },
+  "339675": {
+   "title": "casserole plate down x3.wav",
+   "author": "jeremjuru",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/339675/",
+   "clip": "FSD50K.eval_audio/339675.wav",
+   "note": "casserole plate down"
+  },
+  "341070": {
+   "title": "breaking glass",
+   "author": "hifijohn",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/341070/",
+   "clip": "FSD50K.eval_audio/341070.wav",
+   "note": "window pane"
+  },
+  "344149": {
+   "title": "Thump_001.wav",
+   "author": "Brokenphono",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/344149/",
+   "clip": "FSD50K.eval_audio/344149.wav",
+   "note": ""
+  },
+  "344150": {
+   "title": "Thump_005.wav",
+   "author": "Brokenphono",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/344150/",
+   "clip": "FSD50K.eval_audio/344150.wav",
+   "note": ""
+  },
+  "344152": {
+   "title": "Thump_003.wav",
+   "author": "Brokenphono",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/344152/",
+   "clip": "FSD50K.eval_audio/344152.wav",
+   "note": ""
+  },
+  "344153": {
+   "title": "Thump_002.wav",
+   "author": "Brokenphono",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/344153/",
+   "clip": "FSD50K.eval_audio/344153.wav",
+   "note": ""
+  },
+  "346693": {
+   "title": "Body fall_03.wav",
+   "author": "Adam_N",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/346693/",
+   "clip": "FSD50K.dev_audio/346693.wav",
+   "note": "body fall"
+  },
+  "348032": {
+   "title": "Stuff knocking over 2.wav",
+   "author": "bigmanjoe",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/348032/",
+   "clip": "FSD50K.eval_audio/348032.wav",
+   "note": "knocking stuff off a counter"
+  },
+  "348033": {
+   "title": "Stuff Knoking over.wav",
+   "author": "bigmanjoe",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/348033/",
+   "clip": "FSD50K.eval_audio/348033.wav",
+   "note": "knocking stuff off a counter"
+  },
+  "353105": {
+   "title": "place glass object.wav",
+   "author": "milpower",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/353105/",
+   "clip": "FSD50K.eval_audio/353105.wav",
+   "note": "glass bottle on glass plate"
+  },
+  "364893": {
+   "title": "Cat purring",
+   "author": "TiesWijnen",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/364893/",
+   "clip": "FSD50K.dev_audio/364893.wav",
+   "note": "kitten"
+  },
+  "371093": {
+   "title": "glass break 2.wav",
+   "author": "mccormick_iain",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/371093/",
+   "clip": "FSD50K.dev_audio/371093.wav",
+   "note": "bottle"
+  },
+  "378289": {
+   "title": "destruction of light bulb.wav",
+   "author": "13GPanska_Langerova_Lucie",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/378289/",
+   "clip": "FSD50K.dev_audio/378289.wav",
+   "note": "light bulb"
+  },
+  "378321": {
+   "title": "broken_glass.wav",
+   "author": "13F_Panska_Tlolkova_Matilda",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/378321/",
+   "clip": "FSD50K.dev_audio/378321.wav",
+   "note": "empty glass falls"
+  },
+  "386737": {
+   "title": "Cat_Meowing.wav",
+   "author": "ken788",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/386737/",
+   "clip": "FSD50K.eval_audio/386737.wav",
+   "note": ""
+  },
+  "400653": {
+   "title": "Wood panel small snap crack prise",
+   "author": "LampEight",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/400653/",
+   "clip": "FSD50K.dev_audio/400653.wav",
+   "note": "fence panel"
+  },
+  "414042": {
+   "title": "cat meowing",
+   "author": "nekoninja",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/414042/",
+   "clip": "FSD50K.eval_audio/414042.wav",
+   "note": "Sushi"
+  },
+  "415107": {
+   "title": "catwhirr.wav",
+   "author": "steffcaffrey",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/415107/",
+   "clip": "FSD50K.dev_audio/415107.wav",
+   "note": "happy whirr"
+  },
+  "430702": {
+   "title": "47. Jarrón rompiendose.wav",
+   "author": "juanj105",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/430702/",
+   "clip": "FSD50K.dev_audio/430702.wav",
+   "note": "jar"
+  }
+ }
+}

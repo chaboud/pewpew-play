@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Laser v. Kitty — sound credits</title>
+<style>
+  body { margin: 0; background: #14121a; color: #d8dbe8; font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 64px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { color: #a9adbf; margin: 8px 0; }
+  a { color: #7fdcea; }
+  /* one recording per block, not a table: on a phone the author and the
+     licence must be on screen, not off the right edge */
+  ul { list-style: none; margin: 18px 0 0; padding: 0; font-size: 14px; }
+  li { padding: 8px; border-bottom: 1px solid #2c2936; overflow-wrap: anywhere; }
+  li span { display: block; color: #a9adbf; }
+  li em { color: #8a8798; font-style: normal; }
+  .by { background: rgba(83, 200, 216, 0.08); }
+  #err { color: #e8a4a4; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sound credits</h1>
+  <p>The cats you hear are real cats, and the things that break are real things breaking: recordings that people gave away
+    on Freesound, collected in the FSD50K dataset. Everything else is synthesised by the game.</p>
+  <p id="how"></p>
+  <p id="err"></p>
+  <ul id="t" hidden></ul>
+</main>
+<script type="module">
+import { mountNav } from './nav.js?v=k68';
+mountNav();
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const NAMES = { meow: 'meows', trill: 'trills', chatter: 'chirps', purr: 'purring', paws: 'paws', glass: 'glass breaking', glassbig: 'glass breaking', ceramic: 'china breaking',
+  clink: 'china knocks', glasshit: 'glass knocks', debris: 'shards', woodcrack: 'wood cracking', wood: 'wood knocks', metal: 'metal knocks', thud: 'thuds', pile: 'pile-ups', splash: 'splashes', tear: 'cloth tearing' };
+try {
+  const man = await (await fetch('sounds/manifest.json')).json();
+  const uses = {};
+  for (const [pool, list] of Object.entries(man.pools)) for (const e of list) (uses[e.src] ||= new Set()).add(NAMES[pool] || pool);
+  // attribution licences first: those are the ones that ask to be named
+  const rows = Object.entries(man.sources).sort((a, b) => (a[1].licence === 'CC0 1.0') - (b[1].licence === 'CC0 1.0') || a[1].author.localeCompare(b[1].author));
+  document.getElementById('t').innerHTML = rows.map(([id, s]) => `<li class="${s.licence === 'CC0 1.0' ? '' : 'by'}">
+    <a href="${esc(s.url)}" rel="noopener">${esc(s.title)}</a>
+    <span>by ${esc(s.author)} · <a href="${esc(s.licence_url)}" rel="noopener">${esc(s.licence)}</a> · <em>${[...uses[id]].join(', ')}</em></span></li>`).join('');
+  document.getElementById('t').hidden = false;
+  const n = Object.values(man.pools).reduce((a, l) => a + l.length, 0);
+  document.getElementById('how').innerHTML = `${n} short cuts from ${rows.length} recordings, retrieved ${esc(man.retrieved)} through
+    <a href="https://doi.org/10.5281/zenodo.4060432" rel="noopener">FSD50K</a> (Fonseca, Favory, Pons, Font and Serra; the dataset is CC BY 4.0,
+    each recording under the licence its author chose). Each cut is one event trimmed from the recording, faded, levelled and encoded as MP3;
+    nothing else was changed. Highlighted rows are Creative Commons Attribution; the rest were dedicated to the public domain (CC0), and are thanked anyway.`;
+} catch (e) {
+  document.getElementById('err').textContent = 'The list of recordings could not be loaded.';
+}
+</script>
+</body>
+</html>

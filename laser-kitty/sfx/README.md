@@ -1,4 +1,12 @@
-# sfx/ — the CC sample rack
+# sfx/ — the drop-in sample rack
+
+**This is not where the game's shipped recordings live.** Those are in
+[`../sounds/`](../sounds/): 126 cuts with a manifest that records each
+one's source and licence, played by the engine in `sfx.js` (see
+`wiki/research/sound-samples.md`). This folder is the older, separate
+drop zone for files someone adds by hand (or with `tools/slice-sfx.py`
+from `sounds_raw/`). It is empty. Anything listed in `sfx/manifest.json`
+still wins over both the shipped recordings and the bank for its pool.
 
 The viewer looks for `sfx/manifest.json`. If it exists, every voice
 plays a random sample from its pool (with playback-rate jitter and

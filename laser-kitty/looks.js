@@ -23,7 +23,7 @@
 //   - the style itself (classic / courtroom sketch / comic ink) and a grade.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
-import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k67';
+import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k68';
 
 export { BACKDROP_KINDS };
 export const STYLE_KINDS = [

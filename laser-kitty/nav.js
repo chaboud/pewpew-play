@@ -9,6 +9,7 @@ const LINKS = [
   ['Free Play', 'index.html'],
   ['Cat Lab', 'catlab.html'],
   ['Engine preview', 'engine.html'],
+  ['Sound credits', 'credits.html'],
 ];
 export function mountNav({ left = '10px', right = null, top = null } = {}) {
   const style = document.createElement('style');

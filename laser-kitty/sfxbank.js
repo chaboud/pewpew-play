@@ -1,13 +1,17 @@
 // sfxbank.js — the procedural sample bank (founder: "better cat and
 // destruction sounds"). Pure math: no Web Audio, no three.js, so it runs
 // in a worker at load (sfxbank.worker.js) and in Node for offline renders.
-// Every sound is authored here, so the bank is license-free by
-// construction and ships zero asset bytes.
+// Every sound here is authored, so the bank is license-free by
+// construction. Recordings are a separate layer the engine plays over it
+// (sounds/manifest.json, wiki/research/sound-samples.md); with none loaded
+// the game sounds as this file says.
 //
-// Struck things are OBJECTS: a fixed set of partials drawn from a material
-// and a size (wood, metal, glass, ceramic; soft, cardboard and a billiard
-// ball have their own recipes), rung by a few ms of noise and re-struck as
-// the thing bounces and settles. Breaks layer a crack, a wash of fragments,
+// Struck things are OBJECTS: modes worked out from a material, a shape and
+// a size (wood, metal, glass, ceramic; soft, cardboard and a billiard ball
+// have their own recipes), rung by a Hertz contact pulse and re-struck as
+// the thing bounces and settles. The engine can ask for any one object by
+// its own dimensions (make(), obj:* keys) and for a cat of a given
+// character (cat:<kind>@<character>). Breaks layer a crack, a wash of fragments,
 // pieces landing, shards ringing and grains thinning out. Some things are
 // instruments and have their own voices (gong, chime, bowl, bead, bone,
 // stone, rubber), and story mode's courtroom is the ui:* family.
@@ -115,6 +119,44 @@ function crumbleInto(d, sr, t0, n, fLo, fHi, ringLo, ringHi, amp, mean, fall, rn
   }
 }
 
+// a click: a burst of noise, not a resonance (Strollzilla's `snap`, from its
+// audio/bank.ts, the founder's own: "part of what makes a crunch a crunch is
+// distribution over high energy with percussive sprinkles"). White noise
+// through a one-pole low-pass at fc and, from hp, a one-pole high-pass,
+// under an envelope up in 0.2 ms and 60 dB down after dur. Its measurement:
+// a crumble of tuned grains was a third narrow peaks; recorded breakage is
+// clicks. Ours, same test: tools/sound/README.md
+function click(d, sr, t, dur, amp, fc, rnd, hp = 0) {
+  const at = Math.max(0, Math.round(t * sr)), len = Math.min(d.length - at, Math.round(dur * sr)), att = Math.max(1, Math.round(0.0002 * sr));
+  const a = 1 - Math.exp((-TAU * Math.min(fc, sr * 0.45)) / sr), h = hp > 0 ? Math.exp((-TAU * hp) / sr) : 0;
+  const k = Math.exp(-6.9 / Math.max(1, dur * sr));
+  let lp = 0, hx = 0, hy = 0, env = amp;
+  for (let i = 0; i < len; i++) {
+    lp += a * (rnd() * 2 - 1 - lp);
+    let y = lp;
+    if (h) { hy = h * (hy + y - hx); hx = y; y = hy; }
+    d[at + i] += y * env * (i < att ? i / att : 1);
+    env *= k;
+  }
+}
+// pieces settling: snaps arriving at rate0 a second and thinning by
+// exp(-t/thin), loud ones rare (amplitude ~ u^3: the big pieces are few),
+// each one's brightness log-uniform in lo..hi; one in six is a piece's own
+// knock (a resonance gone in milliseconds: a body, no pitch) and a big one
+// lands with a low thump. steady: a constant rate, for a loop
+function settle(d, sr, t0, secs, rate0, thin, lo, hi, amp, rnd, steady = false) {
+  let t = 0;
+  while (t < secs) {
+    const rate = steady ? rate0 : rate0 * Math.exp(-t / thin);
+    t += -Math.log(1 - rnd() * 0.999) / Math.max(rate, 2);
+    if (t >= secs) break;
+    const u = rnd(), big = u * u * u, f = lo * Math.pow(hi / lo, rnd());
+    if (rnd() < 0.16) grain(d, sr, t0 + t, Math.min(f, 3000), 0.004 + 0.006 * rnd(), amp * (0.3 + 0.5 * big), rnd, 0.0008);
+    else click(d, sr, t0 + t, 0.003 + 0.012 * rnd() + 0.03 * big, amp * (0.15 + 0.85 * big), f * (1 - 0.5 * big), rnd, 150);
+    if (big > 0.4) click(d, sr, t0 + t, 0.03 + 0.03 * rnd(), amp * 0.6 * big, 250 * Math.pow(2.4, rnd()), rnd);
+  }
+}
+
 // a partial rung by a few ms of noise instead of an impulse: every strike
 // gets its own phase and a broadband onset, where an impulse-started sine is
 // a ruled line on the spectrogram. t60 is the fall to -60 dB; the ringing
@@ -190,67 +232,202 @@ function normalize(d, peak = 0.9) {
 }
 
 // ----------------------------------------------------------- materials ---
-// An object is a fixed set of partials — [freq, amp, t60] — drawn once from
-// its material and size; every knock and bounce re-excites that same set
-// with a different balance (the strike point moves), so a thing landing
-// twice sounds like one thing. Measured against struck steel, woodblocks,
-// claves and door knocks (wiki/research/sound-audit.md): real metal is 15+
-// partials out to 10 kHz with the strongest at 3-6 kHz and T60s near a
-// second, not five ruled lines ringing for two; real wood is
-// clusters of modes too dense to resolve, down 20 dB in 50-100 ms.
-//   k / (size + 0.02) is the lowest partial, clamped to [lo, hi]
-//   ratios, spread: the partial series and how far each strays from it
-//   level(f, f0, i): dB;  t60(size) at f0, falling as (f0/f)^damp
-//   bands: [ratio, dB, q, t60] mode clusters (decaying noise bands)
-//   beat: detune of the doublets half the partials get
-//   extra: faint partials scattered above the series (a sheet's plate modes)
-//   wash: the broadband smear of the first 50 ms (every mode at once)
-//   click: the contact transient (shorter + brighter = harder)
-const MATS = {
-  wood: { k: 32, lo: 70, hi: 1100, ratios: [1, 2.57, 4.1], spread: 0.06, level: (f, f0, i) => -5 - 7 * i,
-    t60: (s) => clamp(0.12 + s * 0.25, 0.12, 0.27), damp: 0.5, burst: 0.004, bands: [[1.3, -13, 1.2, 0.125], [3.1, -21, 2.2, 0.08]],
-    click: { dur: 0.004, f: 1300, amp: 0.4, type: 'bp' }, bounce: 0.35, rattle: 2 },
-  metal: { k: 70, lo: 200, hi: 2600, ratios: [1, 1.58, 2.3, 2.76, 3.45, 4.2, 5.4, 6.3, 7.6, 8.93, 10.7, 13.3, 16.2, 19.5], spread: 0.05,
-    level: (f, f0) => -4 * (Math.log2(f / clamp(f0 * 4, 1800, 5200)) / 1.4) ** 2,
-    t60: (s) => clamp(0.45 + s * 1.6, 0.45, 1.4), damp: 0.4, burst: 0.0012, beat: 0.006, extra: 10, wash: 0.5,
-    click: { dur: 0.003, f: 4500, amp: 0.5, type: 'hp' }, bounce: 0.5, rattle: 4 },
-  glass: { k: 120, lo: 700, hi: 5200, ratios: [1, 1.52, 2.32, 3.05, 4.25, 5.3, 6.63, 8.4], spread: 0.04, level: (f, f0, i) => -3.5 * i,
-    t60: (s) => clamp(0.28 + s * 0.9, 0.28, 0.7), damp: 0.55, burst: 0.001, beat: 0.004,
-    click: { dur: 0.0015, f: 8000, amp: 0.3, type: 'bp' }, bounce: 0.3, rattle: 3 },
-  ceramic: { k: 85, lo: 450, hi: 3600, ratios: [1, 1.62, 2.1, 2.95, 3.9, 4.9, 5.7], spread: 0.04, level: (f, f0, i) => -4.5 * i,
-    t60: (s) => clamp(0.14 + s * 0.5, 0.14, 0.4), damp: 0.7, burst: 0.0018, bands: [[1.4, -24, 1.5, 0.05]],
-    click: { dur: 0.0025, f: 5500, amp: 0.45, type: 'bp' }, bounce: 0.35, rattle: 3 },
+// A struck thing is modelled from what it IS: its material, its shape and
+// its size give it a set of modes, and the blow that rings them is a
+// contact force whose length depends on how hard it was hit.
+//
+//   modes     from the geometry: a bar's bending series, a plate's (m,n)
+//             lattice, a hollow vessel's bell modes, a box's panels. The
+//             formulas are the textbook thin-bar / thin-plate / thin-shell
+//             ones (Fletcher & Rossing, The Physics of Musical Instruments,
+//             ch. 2-3, from memory; van den Doel & Pai 1998 use the same
+//             idea for arbitrary shapes). c is sqrt(E/rho), the speed of
+//             compression waves in the material.
+//   damping   one law per material: a mode at f rings T60 = 2.2 / (f*eta +
+//             rest), where eta is the material's internal friction (what
+//             lets an ear tell glass from wood; Klatzky, Pai & Krotkov
+//             2000) and `rest` is what the thing stands on taking energy
+//             out at every frequency. Constants are set so each material's
+//             k64 hit, which was fitted to recordings, keeps its measured
+//             decay (wiki/research/sound-audit.md).
+//   contact   Hertz: the force is one smooth push lasting tau ~ size^0.25 *
+//             speed^-0.2 (Hertz gives speed^-1/5 exactly, and tau
+//             proportional to size for a sphere; things land on edges and
+//             corners, so the size power is cut to a quarter — with 1/2 a
+//             cabinet's blow was all under 600 Hz). It is fed to every mode as the excitation, so a
+//             mode above ~1/tau is simply not rung: a hard, fast blow is
+//             bright and a soft or slow one is dull, with no table of
+//             brightness anywhere. T0 is tau in ms for a 10 cm thing at
+//             1 m/s; the values are estimates, not measurements.
+//   position  where it was struck weights each mode by its shape there, so
+//             two blows on one object differ the way they do on a real one.
+//   radiation a body small against the wavelength radiates its low modes
+//             poorly (6 dB an octave under ka = 1); nothing finer.
+// What is NOT modelled: the object's true shape past bar/plate/vessel/box,
+// what it lands on (one `rest` per material), and nonlinear contact (a
+// rattle against the floor is added by hand).
+const PHYS = {
+  wood: { c: 3800, eta: 0.008, rest: 7, T0: 0.55, wall: [0.07, 0.008, 0.03], click: [1300, 0.4, 'bp'], bounce: 0.35, rattle: 2, spread: 0.06, cluster: 3, modal: 0.3 },
+  metal: { c: 5100, eta: 0.0012, rest: 1.5, T0: 0.1, wall: [0.03, 0.0008, 0.003], click: [4500, 0.5, 'hp'], bounce: 0.5, rattle: 4, spread: 0.02, beat: 0.006, wash: 0.5, cluster: 0.35 },
+  glass: { c: 5300, eta: 0.0025, rest: 2.8, T0: 0.09, wall: [0.06, 0.0012, 0.006], click: [8000, 0.3, 'bp'], bounce: 0.3, rattle: 3, spread: 0.015, beat: 0.004 },
+  ceramic: { c: 4200, eta: 0.006, rest: 8, T0: 0.13, wall: [0.11, 0.003, 0.009], click: [5500, 0.45, 'bp'], bounce: 0.35, rattle: 3, spread: 0.03, cluster: 0.25 },
 };
+const ARCH_DEFAULT = { wood: 'box', metal: 'vessel', glass: 'vessel', ceramic: 'vessel' };
+// full extents [a >= b >= c] in metres -> what kind of body it is
+export function archOf(mat, dims) {
+  const [a, b, c] = dims;
+  if (a > 2.6 * b) return 'bar';
+  if (c < 0.3 * b) return 'plate';
+  return ARCH_DEFAULT[mat] || 'box';
+}
+// the dims a bare size (largest half-extent) stands for, per material: what
+// the pre-built hit:<mat>:<size> keys are
+const dimsOf = (mat, size) => (mat === 'wood' ? [2 * size, 1.3 * size, 0.9 * size] : [2 * size, 1.5 * size, 1.5 * size]);
 
-function objectOf(mat, size, rnd) {
-  const M = MATS[mat];
-  const f0 = clamp(M.k / (size + 0.02), M.lo, M.hi) * (0.94 + 0.12 * rnd());
-  const t0 = M.t60(size), parts = [];
-  M.ratios.forEach((r, i) => {
-    const f = f0 * r * (1 + M.spread * (rnd() * 2 - 1));
-    const a = 10 ** ((M.level(f, f0, i) - 7 * rnd()) / 20), t60 = t0 * Math.pow(f0 / f, M.damp) * (0.75 + 0.5 * rnd());
-    parts.push([f, a, t60]);
-    if (M.beat && rnd() < 0.5) parts.push([f * (1 + M.beat * (0.5 + rnd())), a * 0.5, t60]);
-  });
-  for (let i = 0; i < (M.extra || 0); i++) {
-    const f = f0 * 3 * Math.pow(13000 / (f0 * 3), rnd());
-    parts.push([f, 10 ** ((-10 - 12 * rnd()) / 20), t0 * Math.pow(f0 / f, M.damp) * (0.4 + 0.5 * rnd())]);
+// modes of a body: [[f, weight, family]], lowest first, at most `max` under fmax
+function modesOf(M, arch, dims, fmax, max = 26) {
+  const [a, b, c] = dims, out = [];
+  const wall = Math.min(clamp(M.wall[0] * b, M.wall[1], M.wall[2]), 0.35 * c);
+  if (arch === 'bar') {
+    // free-free bending: f1 = 1.028 c t / L^2, then 2.756, 5.404, 8.933...
+    // about both cross-axes (a round or square bar gives near-twins)
+    for (const [t, w] of [[c, 1], [b, 0.6]]) {
+      [1, 2.756, 5.404, 8.933, 13.34, 18.64, 24.8].forEach((r, i) => out.push([(1.028 * M.c * t * r) / (a * a), w / (1 + 0.15 * i), i]));
+      if (b / c < 1.08) break;
+    }
+  } else if (arch === 'plate') {
+    // thin plate: f(m,n) = 0.453 c t [(m/a)^2 + (n/b)^2]
+    for (let m = 0; m <= 7; m++) for (let n = 0; n <= 7; n++) {
+      if (m + n < 2) continue;
+      out.push([0.453 * M.c * c * ((m / a) ** 2 + (n / b) ** 2), 1 / (1 + 0.1 * (m + n - 2)), m * 8 + n]);
+    }
+  } else if (arch === 'vessel') {
+    // a mug, a vase, a pot, a lampshade: the bell modes of a thin cylinder,
+    // f(n) = c h n(n^2-1) / (2 pi sqrt(12) R^2 sqrt(n^2+1)), each stiffened
+    // a little more by the base and the rim the further up it is counted
+    const R = 0.25 * (b + c), k = (M.c * wall) / (TAU * Math.sqrt(12) * R * R);
+    for (let n = 2; n <= 7; n++) for (let m = 0; m < 3; m++) {
+      out.push([k * ((n * (n * n - 1)) / Math.sqrt(n * n + 1)) * Math.sqrt(1 + 0.9 * m * m * (R / a) ** 2 * (n + 1)), (1 / (1 + 0.15 * (n - 2))) / (1 + 0.8 * m), n * 4 + m]);
+    }
+  } else {
+    // a box of panels (a cabinet, a book, a crate): each pair of faces is a
+    // plate of the wall's thickness; its first few modes
+    for (const [x, y, w] of [[a, b, 1], [a, c, 0.7], [b, c, 0.5]]) {
+      for (let m = 1; m <= 3; m++) for (let n = 1; n <= 3; n++) out.push([0.453 * M.c * wall * ((m / x) ** 2 + (n / y) ** 2), w / (m + n - 1), m * 4 + n]);
+    }
   }
-  return { M, f0, parts };
+  // a body much smaller than the wavelength moves air poorly: below ka = 1
+  // (f = 109 / a Hz) a mode is heard less, 6 dB an octave. This is why a
+  // small thing's lowest modes do not dominate it
+  const fr = 109 / a;
+  return out.filter((p) => p[0] > 45 && p[0] < fmax).sort((p, q) => p[0] - q[0]).slice(0, max).map(([f, w, fam]) => [f, (w * (f / fr)) / Math.sqrt(1 + (f / fr) ** 2), fam]);
 }
-function strike(d, sr, t0, o, amp, rnd) {
-  const M = o.M;
-  for (const [f, a, t60] of o.parts) res(d, sr, t0, f, t60, amp * a * (0.35 + 0.65 * rnd()), rnd, M.burst);
-  for (const [r, dB, q, t60] of M.bands || []) band(d, sr, t0, o.f0 * r, q, t60, amp * 10 ** (dB / 20), rnd);
-  addNoise(d, sr, t0, M.click.dur * 3, amp * M.click.amp, { type: M.click.type, f: M.click.f, q: 0.7, tau: M.click.dur }, rnd);
-  if (M.wash) addNoise(d, sr, t0, 0.12, amp * M.wash, { type: 'bp', f: clamp(o.f0 * 6, 3000, 7000), q: 0.5, tau: 0.02 }, rnd);
-}
-const hit = (d, sr, t0, mat, size, amp, rnd) => strike(d, sr, t0, objectOf(mat, size, rnd), amp, rnd);
+const t60Of = (M, f) => 2.2 / (f * M.eta + M.rest);
+// contact time (s) of a blow at v m/s on a thing `size` m across
+const tauOf = (M, size, v) => M.T0 * 1e-3 * Math.pow(clamp(size, 0.01, 1.5) / 0.1, 0.25) * Math.pow(clamp(v, 0.2, 12), -0.2);
+// where the Hertz pulse stops ringing things: its spectrum is down 6 dB
+// here. The engine low-passes a hard-struck buffer at this for a softer blow
+export const contactHz = (mat, size, v) => 0.6 / tauOf(PHYS[mat] || PHYS.wood, size, v);
+export const STRIKE_V = 3; // m/s: the blow every pre-built hit is rendered at
+export const MODELLED = Object.keys(PHYS);
 
+// an object: its modes, drawn once. dims are full extents, any order
+export function objectOf(mat, dims, rnd, sr = 44100) {
+  const M = PHYS[mat], d = (typeof dims === 'number' ? dimsOf(mat, dims) : [...dims]).sort((x, y) => y - x);
+  const arch = archOf(mat, d), parts = [];
+  for (const [f0, w, fam] of modesOf(M, arch, d, Math.min(15000, sr * 0.45))) {
+    const f = f0 * (1 + M.spread * (rnd() * 2 - 1));
+    parts.push([f, w, t60Of(M, f) * (0.8 + 0.4 * rnd()), fam]);
+    // nothing is perfectly round or square: half the modes are split pairs
+    if (M.beat && rnd() < 0.5) parts.push([f * (1 + M.beat * (0.5 + rnd())), w * 0.6, t60Of(M, f) * (0.8 + 0.4 * rnd()), fam + 0.5]);
+  }
+  return { M, mat, arch, dims: d, size: d[0] / 2, parts, f0: parts.length ? parts[0][0] : 200 };
+}
+// the contact force: one smooth push of tau seconds (Hertz's is close to a
+// half sine to the 3/2), roughened a little, because no two surfaces meet
+// the same way twice. Returned with its area so a mode far below 1/tau
+// comes out at the level asked for
+function pulseOf(tau, sr, rnd) {
+  const n = Math.max(2, Math.round(tau * sr)), p = new Float32Array(n);
+  let area = 0;
+  for (let i = 0; i < n; i++) { p[i] = Math.sin((Math.PI * (i + 0.5)) / n) ** 1.5 * (1 + 0.35 * (rnd() * 2 - 1)); area += p[i]; }
+  p.area = area;
+  return p;
+}
+// a mode rung by a force pulse: the two-pole resonator is driven with the
+// pulse itself, so what a mode gets is the pulse's spectrum at its own
+// frequency. No table says "harder is brighter"; the convolution does
+function ring(d, sr, t0, f, t60, amp, pulse) {
+  if (!(f > 20) || f >= sr * 0.45 || !amp) return;
+  const at = Math.max(0, Math.round(t0 * sr));
+  const w = (TAU * f) / sr, rad = Math.exp(-6.908 / (t60 * sr));
+  const a1 = 2 * rad * Math.cos(w), a2 = -rad * rad, nb = pulse.length, g = (amp * Math.sin(w)) / pulse.area;
+  const keep = clamp(0.85 + Math.log10(Math.abs(amp) + 1e-6) / 3, 0.15, 0.85);
+  const len = Math.min(d.length - at, Math.round(t60 * keep * sr) + nb), fo = len - 48;
+  let y1 = 0, y2 = 0;
+  for (let i = 0; i < len; i++) {
+    const y = (i < nb ? g * pulse[i] : 0) + a1 * y1 + a2 * y2;
+    y2 = y1; y1 = y;
+    d[at + i] += i > fo ? (y * (len - i)) / 48 : y;
+  }
+}
+// one blow on an object at v m/s. `at` (0..1 along it, and around it) is
+// where: each mode is weighted by its shape there
+function strike(d, sr, t0, o, amp, rnd, v = STRIKE_V, at = [rnd(), rnd()]) {
+  const M = o.M, tau = tauOf(M, o.size, v), pulse = pulseOf(tau, sr, rnd), fc = 0.6 / tau;
+  for (const [f, a, t60, fam] of o.parts) {
+    const i = Math.floor(fam), j = o.arch === 'plate' ? [i >> 3, i & 7] : o.arch === 'vessel' ? [i >> 2, i & 3] : [i + 1, 0];
+    // mode shape at the strike point (a floor of 0.15: nothing is struck at an exact node)
+    const shape = Math.abs(Math.cos(Math.PI * j[0] * at[0] + (fam % 1 ? 1.2 : 0))) * (j[1] ? Math.abs(Math.cos(Math.PI * j[1] * at[1])) : 1);
+    ring(d, sr, t0, f, t60, amp * a * (M.modal ?? 1) * (0.15 + 0.85 * shape), pulse);
+  }
+  // mode clusters too dense to resolve (a board, a panel, a mug's body) are
+  // decaying noise in the band of the lowest modes; the pulse dulls them too
+  const soft = (f) => 1 / (1 + (f / fc) ** 2);
+  if (M.cluster) {
+    const f1 = clamp(o.f0 * 1.3, 90, 2400), f2 = clamp(o.f0 * 3.1, 200, 5200);
+    band(d, sr, t0, f1, 1.2, t60Of(M, f1) * 0.8, amp * 0.22 * M.cluster * soft(f1), rnd);
+    band(d, sr, t0, f2, 2.2, t60Of(M, f2) * 0.8, amp * 0.09 * M.cluster * soft(f2), rnd);
+  }
+  // the contact itself: surfaces meeting, as long as the push and no longer
+  addNoise(d, sr, t0, Math.max(0.002, tau * 3), amp * M.click[1] * soft(M.click[0] * 0.5), { type: M.click[2], f: Math.min(M.click[0], fc * 2.5), q: 0.7, tau: Math.max(0.0006, tau) }, rnd);
+  if (M.wash) addNoise(d, sr, t0, 0.12, amp * M.wash * soft(4000), { type: 'bp', f: clamp(o.f0 * 6, 3000, 7000), q: 0.5, tau: 0.02 }, rnd);
+}
+const hit = (d, sr, t0, mat, size, amp, rnd) => strike(d, sr, t0, objectOf(mat, size, rnd, sr), amp, rnd);
+
+// what a struck object plays: the blow at STRIKE_V, then (settles) it rocks
+// and comes to rest — the same object struck again, softer each time and
+// somewhere else. dims as for objectOf. The stock hit:* keys of the four
+// modelled materials settle: they are one sound for a whole fall. An
+// object's own obj:* keys do not: the sim reports every bounce as a blow of
+// its own, and a baked rattle under each would double them
+export function knock(mat, dims, seed, sr, settles = true) {
+  const rnd = mulberry32(seed), o = objectOf(mat, dims, rnd, sr), M = o.M;
+  const d = new Float32Array(Math.ceil(sr * clamp(t60Of(M, o.f0) * 0.9 + 0.35, 0.4, 1.8)));
+  strike(d, sr, 0, o, 1, rnd);
+  let gap = 0.05 + rnd() * 0.1, t = gap, a = M.bounce * (0.6 + 0.4 * rnd());
+  const nb = settles && rnd() < 0.85 ? 1 + Math.floor(rnd() * M.rattle) : 0;
+  for (let b = 0; b < nb && a > 0.04; b++) {
+    // a bounce is a slower blow: by Hertz it is longer, so duller
+    strike(d, sr, t, o, a, rnd, STRIKE_V * a);
+    gap *= 0.5 + 0.25 * rnd(); t += gap; a *= 0.45 + 0.25 * rnd();
+  }
+  if (o.size > 0.25 && mat !== 'glass') floorThud(d, sr, 0.002, o.size, 0.6, rnd);
+  return normalize(d);
+}
+
+// the floor taking a heavy thing. A phone's speaker plays nothing under
+// ~150 Hz, so the weight goes through a soft clip (tanh(2.5x)/2.5, unity
+// for a quiet signal): the harmonics it makes are in the speaker's range
+// and the ear hears the fundamental they imply (Strollzilla, ADR-0027,
+// "weight a phone can play"; measured there, not here)
 function floorThud(d, sr, t0, size, amp, rnd) {
-  addMode(d, sr, t0, 52 + rnd() * 22, amp * 0.8, 0.09 + size * 0.15);
-  addMode(d, sr, t0, 110 + rnd() * 30, amp * 0.3, 0.05);
-  addNoise(d, sr, t0, 0.12, amp * 0.5, { type: 'lp', f: 320, q: 0.7, tau: 0.03 }, rnd);
+  const n = Math.min(d.length - Math.round(t0 * sr), Math.ceil(sr * (0.7 + size))), w = new Float32Array(Math.max(1, n));
+  addMode(w, sr, 0, 52 + rnd() * 22, 0.8, 0.09 + size * 0.15);
+  addMode(w, sr, 0, 110 + rnd() * 30, 0.3, 0.05);
+  addNoise(w, sr, 0, 0.12, 0.5, { type: 'lp', f: 320, q: 0.7, tau: 0.03 }, rnd);
+  const i0 = Math.round(t0 * sr);
+  for (let i = 0; i < n; i++) d[i0 + i] += (amp * Math.tanh(2.5 * 1.4 * w[i])) / 2.5;
 }
 
 export function impact(mat, size, seed, sr) {
@@ -284,16 +461,7 @@ export function impact(mat, size, seed, sr) {
       a *= 0.5;
     }
   } else {
-    // it lands, rocks and settles: bounces closing in, each softer
-    const o = objectOf(mat, size, rnd), M = o.M;
-    strike(d, sr, 0, o, 1, rnd);
-    let gap = 0.05 + rnd() * 0.1, t = gap, a = M.bounce * (0.6 + 0.4 * rnd());
-    const nb = rnd() < 0.85 ? 1 + Math.floor(rnd() * M.rattle) : 0;
-    for (let b = 0; b < nb && a > 0.04; b++) {
-      strike(d, sr, t, o, a, rnd);
-      gap *= 0.5 + 0.25 * rnd(); t += gap; a *= 0.45 + 0.25 * rnd();
-    }
-    if (size > 0.25 && mat !== 'glass') floorThud(d, sr, 0.002, size, 0.9, rnd);
+    return knock(mat, size, seed, sr);
   }
   return normalize(d);
 }
@@ -311,16 +479,9 @@ function shardShower(d, sr, t0, n, fLo, fHi, mean, ratios, tauLo, tauHi, amp, fa
 
 export function shatter(kind, size, seed, sr) {
   const rnd = mulberry32(seed);
-  const d = new Float32Array(Math.ceil(sr * (kind === 'ceramic' ? 1.5 : 2.4)));
+  const d = new Float32Array(Math.ceil(sr * 2.4));
   const big = clamp(size / 0.3, 0, 1);
-  if (kind === 'ceramic') {
-    // a mug, a plate, a vase: a mid crack, chunky pieces, a gritty crumble
-    addNoise(d, sr, 0, 0.03, 1, { type: 'bp', f: 2200, q: 0.6, tau: 0.006 }, rnd);
-    addNoise(d, sr, 0, 0.05, 0.55, { type: 'bp', f: 520, q: 0.8, tau: 0.014 }, rnd); // the body meets the floor
-    for (let i = 0; i < 4 + Math.round(big * 4); i++) addMode(d, sr, 0.01 + rnd() * 0.25, 1400 + 1800 * rnd(), 0.25 * (1 - i * 0.08), 0.02 + 0.02 * rnd(), rnd() * TAU);
-    crumbleInto(d, sr, 0.004, Math.round(90 + big * 260), 1200, 7000, 0.004, 0.016, 0.6, 0.1, 0.3, rnd);
-    if (size > 0.08) floorThud(d, sr, 0, size, 0.5, rnd);
-  } else {
+  {
     // glass, rebuilt to 40 real breaks (sound-audit.md). What they show and
     // the grain-only version lacked: the first 100-300 ms is a WASH — so many
     // fragments at once that it is noise, not countable grains; then pieces
@@ -328,22 +489,29 @@ export function shatter(kind, size, seed, sr) {
     // thin lines for a few tenths of a second. Real breaks also differ a lot
     // from one to the next (0.6-2.0 s, centroid 4.6-7.9 kHz), so `long` and
     // `tone` move each variant instead of every break being the same break.
-    const long = 0.55 + 1.1 * rnd() * rnd() + big * 0.35, tone = 0.8 + 0.45 * rnd();
+    // Ceramic: seven recorded breaks (vases, a mug, plates; CC0, shipped as
+    // samples) measure like glass, not like the low crack-and-crumble this
+    // was: centroid 6.4 kHz against its 1.1, 1% of the energy under 200 Hz
+    // against 52%. So a plate breaks by the glass recipe, a little lower
+    // and shorter, with fewer long rings and chunkier pieces landing.
+    const cer = kind === 'ceramic';
+    const long = (0.55 + 1.1 * rnd() * rnd() + big * 0.35) * (cer ? 0.8 : 1), tone = (0.8 + 0.45 * rnd()) * (cer ? 0.85 : 1);
     addNoise(d, sr, 0, 0.02, 1, { type: 'hp', f: 1800, q: 0.7, tau: 0.004 }, rnd);
     addNoise(d, sr, 0, 0.06, 0.7, { type: 'bp', f: 450, q: 0.5, tau: 0.018 }, rnd); // what it lands on
     addNoise(d, sr, 0.001, 1.1 * long, 0.75, { type: 'bp', f: 4900 * tone, q: 0.35, tau: 0.1 * long }, rnd);
     addNoise(d, sr, 0.001, 0.5 * long, 0.24, { type: 'hp', f: 8500, q: 0.7, tau: 0.05 * long }, rnd);
     // the big shards: thin rings, the lines in every real spectrogram
-    const nr = 4 + Math.floor(rnd() * 5);
+    const nr = (cer ? 2 : 4) + Math.floor(rnd() * (cer ? 3 : 5));
     for (let i = 0; i < nr; i++) res(d, sr, 0.002 + rnd() * 0.03, (1300 + 8500 * rnd() * rnd()) * tone, (0.2 + 0.5 * rnd()) * long, 0.07 + 0.13 * rnd(), rnd, 0.001);
     // pieces landing: each a burst with its own short ring
-    const nl = 2 + Math.floor(rnd() * 3 + big * 2);
+    const nl = (cer ? 3 : 2) + Math.floor(rnd() * 3 + big * 2);
     for (let i = 0; i < nl; i++) {
       const t = (0.07 + 0.75 * rnd()) * long * 0.8, a = (0.25 + 0.4 * rnd()) * Math.exp(-t / (0.5 * long));
       addNoise(d, sr, t, 0.2 * long, a, { type: 'bp', f: (2800 + 3500 * rnd()) * tone, q: 0.45, tau: (0.012 + 0.03 * rnd()) * long }, rnd);
       for (let k = 0; k < 3; k++) res(d, sr, t, (1800 + 7000 * rnd()) * tone, 0.12 + 0.3 * rnd(), a * 0.3, rnd, 0.001);
     }
     crumbleInto(d, sr, 0.003, Math.round(220 + big * 420), 2600 * tone, 15000, 0.0015, 0.006, 0.45, 0.16 * long, 0.4 * long, rnd);
+    if (cer && size > 0.08) floorThud(d, sr, 0, size, 0.3, rnd);
     if (kind === 'electric') {
       // the zap: a 120 Hz buzz gated by crackle, a pop, and fizzing
       const n = Math.ceil(0.5 * sr);
@@ -370,11 +538,13 @@ export function shatter(kind, size, seed, sr) {
 export function crumble(mat, seed, sr) {
   const rnd = mulberry32(seed);
   const d = new Float32Array(Math.ceil(sr * 1.6));
-  if (mat === 'glass') crumbleInto(d, sr, 0, 140, 3000, 11000, 0.002, 0.007, 0.5, 0.25, 0.5, rnd);
-  else if (mat === 'ceramic') crumbleInto(d, sr, 0, 120, 1200, 6000, 0.004, 0.014, 0.6, 0.22, 0.5, rnd);
+  // (these were showers of tuned grains: every piece a small bell. Pieces
+  // settling are clicks; see click())
+  if (mat === 'glass') settle(d, sr, 0, 1.4, 190, 0.3, 2500, 15000, 0.6, rnd);
+  else if (mat === 'ceramic') settle(d, sr, 0, 1.3, 150, 0.28, 1200, 9000, 0.7, rnd);
   else {
     // wood: splinters and bits, lower and duller, a few knocks of pieces
-    crumbleInto(d, sr, 0, 110, 350, 3200, 0.005, 0.02, 0.6, 0.25, 0.55, rnd);
+    settle(d, sr, 0, 1.4, 130, 0.3, 400, 5000, 0.7, rnd);
     for (let i = 0; i < 4; i++) hit(d, sr, 0.05 + rnd() * 0.8, 'wood', 0.04 + 0.06 * rnd(), 0.25, rnd);
   }
   return normalize(d);
@@ -385,13 +555,7 @@ export function crumble(mat, seed, sr) {
 export function bed(len, seed, sr) {
   const rnd = mulberry32(seed);
   const n = Math.round(len * sr), d = new Float32Array(n);
-  const count = Math.round(len * 55);
-  for (let i = 0; i < count; i++) {
-    const t = rnd() * (len - 0.03);
-    const m = rnd();
-    const [lo, hi, rl, rh] = m < 0.5 ? [350, 3000, 0.005, 0.02] : m < 0.8 ? [1200, 6000, 0.004, 0.014] : [3000, 11000, 0.002, 0.007];
-    grain(d, sr, t, lo * Math.pow(hi / lo, rnd()), rl + (rh - rl) * rnd(), 0.3 + 0.7 * rnd(), rnd, 0.001 + 0.002 * rnd());
-  }
+  settle(d, sr, 0, len - 0.05, 55, 1, 350, 9000, 1, rnd, true);
   let m = 0;
   for (let i = 0; i < n; i++) m = Math.max(m, Math.abs(d[i]));
   for (let i = 0; i < n; i++) d[i] *= 0.7 / (m || 1);
@@ -611,7 +775,7 @@ export function chime(size, seed, sr) {
 
 // a singing bowl struck with a padded mallet: long and almost pure. Ratios,
 // levels and decays are from five strikes of one real bowl (a public-domain
-// recording, measured late in k67): 1 : 2.78 : 4.94 : 7.39, the second
+// recording, measured late in k68): 1 : 2.78 : 4.94 : 7.39, the second
 // partial 2-9 dB under the first and ringing 6-8 s, the fourth gone in
 // 0.6 s; the fundamental rings 20-45 s there and is faded here. Each
 // partial is a pair a hair apart — no bowl is round — so it beats: the real
@@ -1159,27 +1323,48 @@ function bendPath(p, rnd, a1 = 0.17, a2 = 0.06) {
 }
 const logn = (rnd, m, s) => m * Math.exp(s * (rnd() + rnd() + rnd() - 1.5) * 1.15);
 
-export function cat(kind, seed, sr) {
+// A cat's character: what makes three cats three voices. f0 scales pitch,
+// tract the vocal tract (under 1 = a longer throat: every formant lower, so
+// "rounder"), tilt is dB/octave of brightness, len stretches calls, breath
+// and rough move how often a call starts breathy or slips into roughness,
+// shapes is the A/B/C mix of meows. Rate-shifting one voice (what the
+// viewer did) moves pitch, formants and length together, which is a tape
+// speed, not another cat. The numbers are designed, inside what the 85
+// measured meows span (f0 p10-p90 401-843 Hz); no cat here was fitted to a
+// real individual. A chonk is lower, rounder, slower and breathier.
+export const CAT_CHARS = {
+  std: { f0: 1, tract: 1, tilt: 0, len: 1, breath: 0, rough: 0 },
+  chonk: { f0: 0.76, tract: 0.86, tilt: -2.5, len: 1.18, breath: 0.25, rough: 0.15 },
+  kitten: { f0: 1.32, tract: 1.16, tilt: 1.5, len: 0.8, breath: 0.1, rough: -0.2 },
+  talker: { f0: 0.94, tract: 1.04, tilt: 3, len: 1.15, breath: -0.2, rough: 0.25, shapes: [0.2, 0.7] },
+  shy: { f0: 1.13, tract: 1.06, tilt: -1.5, len: 0.85, breath: 0.4, rough: -0.3 },
+};
+
+export function cat(kind, seed, sr, ch = CAT_CHARS.std) {
   const rnd = mulberry32(seed);
   const j = (x, p = 0.08) => x * (1 + (rnd() - 0.5) * 2 * p);
   if (kind === 'purr') return purr(seed, sr);
-  const d = new Float32Array(Math.ceil(sr * 1.6));
+  const d = new Float32Array(Math.ceil(sr * 1.9));
   const common = () => ({
-    scale: j(1, 0.07), wobble: j(22, 0.3), jitter: j(9, 0.3), hnr: j(25, 0.08), contrast: 1.4,
-    tilt: (rnd() - 0.5) * 5, // some cats are brighter than the median, some duller
-    breathy: rnd() < 0.35 ? 16 + rnd() * 6 : 0,
-    sub: rnd() < 0.3 ? { u0: 0.25 + rnd() * 0.2, u1: 0.5 + rnd() * 0.25, d: 0.25 + rnd() * 0.25 } : null,
+    scale: j(1, 0.07) * ch.tract, wobble: j(22, 0.3), jitter: j(9, 0.3), hnr: j(25, 0.08), contrast: 1.4,
+    tilt: (rnd() - 0.5) * 5 + ch.tilt, // some cats are brighter than the median, some duller
+    breathy: rnd() < 0.35 + ch.breath ? 16 + rnd() * 6 : 0,
+    sub: rnd() < 0.3 + ch.rough ? { u0: 0.25 + rnd() * 0.2, u1: 0.5 + rnd() * 0.25, d: 0.25 + rnd() * 0.25 } : null,
   });
+  // every call of this cat: its pitch and its pace
+  const vox0 = vox;
+  // eslint-disable-next-line no-shadow
+  const voxC = (dd, srr, t0, sp, r) => vox0(dd, srr, t0, { ...sp, f0: sp.f0 * ch.f0, dur: sp.dur * ch.len }, r);
   if (kind === 'meow') {
     // "hey, keep playing": A or B shape, sometimes the questioning C
-    const r = rnd(), s = r < 0.5 ? 'A' : r < 0.8 ? 'B' : 'C';
-    vox(d, sr, 0.005, {
+    const mix = ch.shapes || [0.5, 0.3], r = rnd(), s = r < mix[0] ? 'A' : r < mix[0] + mix[1] ? 'B' : 'C';
+    voxC(d, sr, 0.005, {
       ...common(), dur: clamp(logn(rnd, 0.8, 0.22), 0.55, 1.15), f0: j(s === 'C' ? 640 : 575, 0.1),
       f0p: bendPath(F0P[s], rnd), lev: LEV[s], env: shapePath(s),
     }, rnd);
   } else if (kind === 'mew') {
     // short and higher: an A shape squeezed into a third of a second
-    vox(d, sr, 0.005, {
+    voxC(d, sr, 0.005, {
       ...common(), dur: j(0.4, 0.15), f0: j(740, 0.1), f0p: bendPath(F0P.A, rnd, 0.09, 0.04),
       lev: LEV.A, env: [[0, 'A', 0.05], [0.3, 'A', 0.35], [1, 'A', 1]], sub: null,
     }, rnd);
@@ -1187,7 +1372,7 @@ export function cat(kind, seed, sr) {
     // a rolled "mrrr" (measured trills: 24-31 Hz, f0 380-430, dark) that
     // opens into an "-ow" arch, as in the real mrrows we looked at
     const tr = j(0.36, 0.12);
-    vox(d, sr, 0.005, {
+    voxC(d, sr, 0.005, {
       ...common(), dur: clamp(logn(rnd, 0.75, 0.15), 0.6, 0.95), f0: j(470, 0.08),
       f0p: [0.86, 0.87, 0.88, 0.9, 0.97, 1.06, 1.08, 1.05, 0.99, 0.93, 0.88].map((v) => v * j(1, 0.02)),
       lev: [-14, -7, -6, -6, -4, -2, -2, -3, -5, -10, -20],
@@ -1197,7 +1382,7 @@ export function cat(kind, seed, sr) {
   } else if (kind === 'trill') {
     // the lock-on "brrrp?": low, dark, rolled, rising at the end (C)
     const deep = rnd() < 0.4;
-    vox(d, sr, 0.005, {
+    voxC(d, sr, 0.005, {
       ...common(), dur: j(0.42, 0.15), f0: j(415, 0.07), f0p: bendPath(F0P.C, rnd, 0.03, 0.02),
       lev: [-12, -5, -4, -4, -3, -3, -3, -4, -5, -9, -20], env: shapePath('C'), tilt: -4,
       am: { rate: j(27.5, 0.1), depth: deep ? 0.92 : 0.38, deep, u0: 0, u1: 1 }, sub: null, breathy: 0,
@@ -1205,9 +1390,40 @@ export function cat(kind, seed, sr) {
   } else if (kind === 'mrp') {
     // the pounce chirp: ~0.15 s, a fast rise then a little fall (published
     // chirp means: 0.15 s, F0 223-1190 Hz, mean 661 — Schötz 2013)
-    vox(d, sr, 0.004, {
+    voxC(d, sr, 0.004, {
       ...common(), dur: j(0.15, 0.15), f0: j(980, 0.1), f0p: [0.48, 0.7, 0.88, 0.98, 1, 0.98, 0.95, 0.92, 0.9, 0.88, 0.86],
       lev: [-16, -6, -2, 0, 0, -1, -2, -3, -5, -8, -16], env: [[0, 'B', 0], [1, 'A', 1]], sub: null,
+    }, rnd);
+  } else if (kind === 'chirp') {
+    // the chirp at something out of reach: two to four voiced "ek"s. From
+    // the one recording of it there is (a cat at a window, sound-samples.md):
+    // 4-5 syllables a second, each about 90 ms, voiced near 700 Hz, bright
+    // (centroid 1.6-2.3 kHz). Six syllables measured; treat as a sketch
+    const nS = 2 + Math.floor(rnd() * 3), f = j(700, 0.06);
+    let t = 0.005;
+    for (let s = 0; s < nS; s++) {
+      voxC(d, sr, t, {
+        ...common(), dur: j(0.09, 0.15), f0: f * j(1, 0.04), f0p: [0.82, 0.95, 1.02, 1.04, 1.0, 0.94, 0.86],
+        lev: [-14, -4, 0, 0, -2, -6, -16], env: [[0, 'B', 0.05], [1, 'B', 0.6]], tilt: 2 + ch.tilt, sub: null, breathy: 0,
+        gain: 0.75 + 0.25 * rnd(),
+      }, rnd);
+      t += j(0.22, 0.12) * ch.len;
+    }
+  } else if (kind === 'chirrup') {
+    // "mrrp?": the greeting — a short rolled trill that rises and opens
+    // (the measured trill's pulse rate and darkness, a quarter second, the
+    // pitch climbing a fifth). Designed from the trill; not measured as its
+    // own call
+    voxC(d, sr, 0.005, {
+      ...common(), dur: j(0.26, 0.15), f0: j(470, 0.07), f0p: [0.86, 0.88, 0.92, 0.98, 1.06, 1.16, 1.27, 1.36, 1.42, 1.45, 1.44],
+      lev: [-12, -5, -4, -3, -2, -1, 0, -1, -3, -8, -18], env: [[0, 'C', 0.2], [0.55, 'C', 0.6], [1, 'A', 0.4]],
+      am: { rate: j(27, 0.1), depth: 0.7, deep: true, u0: 0, u1: 0.6 }, sub: null, breathy: 0,
+    }, rnd);
+  } else if (kind === 'squeak') {
+    // the almost-silent mew: a fifth of a second, high, mostly breath
+    voxC(d, sr, 0.005, {
+      ...common(), dur: j(0.19, 0.15), f0: j(930, 0.08), f0p: bendPath(F0P.A, rnd, 0.06, 0.03),
+      lev: [-16, -8, -5, -4, -4, -5, -6, -8, -11, -15, -22], env: [[0, 'A', 0.1], [1, 'A', 0.9]], hnr: 15, breathy: 18, sub: null,
     }, rnd);
   } else if (kind === 'chatter') {
     // the prey chatter at a dot. No recording of it was reachable (none in
@@ -1227,14 +1443,14 @@ export function cat(kind, seed, sr) {
       if (r < 0.15) {
         // clack only: the jaw juddering shut on nothing
       } else if (r < 0.15 + voicedShare * 0.85) {
-        vox(d, sr, t + 0.004, {
+        voxC(d, sr, t + 0.004, {
           dur: j(0.032, 0.2), f0: j(820, 0.12), f0p: [1.08, 1.04, 0.98, 0.92, 0.88],
           lev: [-8, 0, -2, -7, -16], env: [[0, 'B', 0.05], [1, 'B', 0.5]], scale: j(1, 0.05),
           wobble: 8, jitter: 6, jitP: 25, shimP: 1.5, hnr: 14, breathy: 8, gain: 0.5 * g,
         }, rnd);
       } else {
         // voiceless "kh": breath through a closing mouth
-        vox(d, sr, t + 0.003, {
+        voxC(d, sr, t + 0.003, {
           dur: j(0.028, 0.2), f0: 700, f0p: [1, 1], lev: [-6, 0, -3, -12], env: shapePath('B'),
           voiced: 0, noiseAmp: 0.09 * g, wobble: 0, jitter: 0,
         }, rnd);
@@ -1383,7 +1599,10 @@ export const COURT_ACOUSTICS = [0.9, 0.55];
 // the hits and breaks a pile-up plays over and over
 export function catalog(sr) {
   const L = [];
-  const VN = (n, key, gen) => { for (let v = 0; v < n; v++) L.push([key, () => gen(1000 + v * 7919 + L.length * 31)]); };
+  // the seed's last term was the catalog's length read when a buffer was
+  // built, so adding a key re-rolled every sound in the bank. Frozen at the
+  // k66 catalog's 256 entries: what did not change still sounds as it did
+  const VN = (n, key, gen) => { for (let v = 0; v < n; v++) L.push([key, () => gen(1000 + v * 7919 + 256 * 31)]); };
   const V3 = (key, gen) => VN(3, key, gen);
   for (const mat of ['wood', 'metal', 'glass', 'ceramic']) {
     SIZES.forEach((s, si) => VN(4, `hit:${mat}:${si}`, (seed) => impact(mat, s, seed, sr)));
@@ -1406,7 +1625,7 @@ export function catalog(sr) {
   V3('paw', (seed) => paw(seed, sr));
   V3('land', (seed) => land(seed, sr));
   V3('whoosh', (seed) => whoosh(seed, sr));
-  for (const kind of ['meow', 'mew', 'mrrow', 'trill', 'chatter', 'mrp']) {
+  for (const kind of ['meow', 'mew', 'mrrow', 'trill', 'chatter', 'mrp', 'chirp', 'chirrup', 'squeak']) {
     V3(`cat:${kind}`, (seed) => cat(kind, seed, sr));
     if (kind === 'meow' || kind === 'trill') V3(`cat:${kind}`, (seed) => cat(kind, seed + 17, sr));
   }
@@ -1435,4 +1654,29 @@ export function catalog(sr) {
   L.push(['ui:murmur', () => murmur(8400, sr)]);
   for (let v = 0; v < 2; v++) L.push(['hit:gong:0', () => gong(5000 + v * 7919, sr)]);
   return L;
+}
+
+// ------------------------------------------------------------ on demand ---
+// What the catalog cannot know ahead: this room's objects and this run's
+// cats. The engine asks the worker for a key and gets its buffers back.
+//   obj:<mat>:<a>:<b>:<c>   one object by its own full extents in mm
+//                           (largest first): three blows at different points
+//   cat:<kind>@<character>  a call kind in one of CAT_CHARS' voices
+// Returns [] for a key it does not know.
+export const CAT_KINDS = ['meow', 'mew', 'mrrow', 'trill', 'chatter', 'mrp', 'chirp', 'chirrup', 'squeak'];
+const hashOf = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619); return h >>> 0; };
+export function make(key, sr) {
+  const seed = hashOf(key) % 1000003;
+  let m = /^obj:(\w+):(\d+):(\d+):(\d+)$/.exec(key);
+  if (m && PHYS[m[1]]) return [0, 1, 2].map((v) => knock(m[1], [m[2] / 1000, m[3] / 1000, m[4] / 1000], seed + v * 7919, sr, false));
+  m = /^cat:(\w+)@(\w+)$/.exec(key);
+  if (m && CAT_KINDS.includes(m[1]) && CAT_CHARS[m[2]]) return [0, 1, 2].map((v) => cat(m[1], seed + v * 7919, sr, CAT_CHARS[m[2]]));
+  return [];
+}
+// the key of an object: dims in any order, metres. Quantised to 15% steps
+// so a shelf of near-identical mugs is one object, not thirty buffers
+export function objKey(mat, dims) {
+  const q = (x) => Math.round(1000 * Math.pow(1.15, Math.round(Math.log(clamp(x, 0.004, 4)) / Math.log(1.15))));
+  const d = [...dims].sort((x, y) => y - x).map(q);
+  return `obj:${mat}:${d[0]}:${d[1]}:${d[2]}`;
 }
