@@ -83,6 +83,8 @@
     #foot { position: fixed; bottom: max(8px, env(safe-area-inset-bottom)); left: 8px; right: 8px; display: flex; flex-direction: column; gap: 3px; text-align: center; pointer-events: none; text-shadow: 0 1px 2px #000; }
     #status { font-size: 12px; color: #9aa3b8; }
     #attribution { font-size: 10px; color: #6f7890; }
+    /* the classic picture (ADR-0043): the controls and the readouts go grey with the frame */
+    body.classic #hud, body.classic #stick, body.classic #stomp, body.classic #breath, body.classic #special, body.classic #status, body.classic #attribution { filter: grayscale(1) contrast(1.1); }
     #stick { position: fixed; left: 24px; bottom: max(70px, calc(env(safe-area-inset-bottom) + 60px)); width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); touch-action: none; }
     #knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(255,210,58,0.85); pointer-events: none; }
     #stomp { position: fixed; right: 24px; bottom: max(80px, calc(env(safe-area-inset-bottom) + 70px)); width: 110px; height: 110px; border-radius: 50%; font-size: 18px; touch-action: none; }
@@ -153,10 +155,10 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #btn-reset { font-size: 12px; padding: 8px 12px; background: transparent; border: 1px solid #3a4160; color: #9aa0b8; font-weight: normal; }
   </style>
-  <script type="module" crossorigin src="./assets/main-CWlKer_z.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/atmosphere-wKMnrfOl.js">
-  <link rel="modulepreload" crossorigin href="./assets/ropes-D0f4aWD4.js">
-  <link rel="modulepreload" crossorigin href="./assets/pose-jiY5fhNx.js">
+  <script type="module" crossorigin src="./assets/main-ClHGjz8d.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/atmosphere-Cokh4x9I.js">
+  <link rel="modulepreload" crossorigin href="./assets/ropes-CiPDGQNL.js">
+  <link rel="modulepreload" crossorigin href="./assets/pose-DuOKEXTF.js">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
