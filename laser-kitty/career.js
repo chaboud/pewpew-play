@@ -19,7 +19,7 @@
 // Thresholds are PROVISIONAL (marked in the wiki): tuned to feel, not
 // measurement. The founder playtests them down or up.
 
-import { RunShell } from './run.js?v=k65';
+import { RunShell } from './run.js?v=k66';
 
 const ROOMS = [
   { room: 0, name: 'Living Room', cats: 1, stars: [2000, 5000, 10000],

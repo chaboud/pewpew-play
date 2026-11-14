@@ -6,21 +6,21 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k65';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k65';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k66';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k66';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k65';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k66';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k65';
-import { mountNav } from './nav.js?v=k65';
-import { SfxEngine, } from './sfx.js?v=k65';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k65';
+import { CatRig } from './catrig.js?v=k66';
+import { mountNav } from './nav.js?v=k66';
+import { SfxEngine, } from './sfx.js?v=k66';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k66';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k65';
+import { ROOM_ART } from './rooms/index.js?v=k66';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,7 +34,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k65'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k66'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3439,6 +3439,7 @@ const PITCH_MIN = -0.8, PITCH_MAX = 0.15;
 const ZOOM_MIN = 0.7, ZOOM_MAX = 2.4;
 let zoom = 1;
 let zoomT = 1;
+let zoomHome = 1; // the zoom the room was framed at (look.zoomTall): the drawn styles' sheet is this close
 // bounded two-finger pan: translates the vantage on its own x/y plane —
 // the user stays set back from the diorama (z never changes), so this is
 // sliding a window across the front of the dollhouse, not orbiting into
@@ -3691,7 +3692,7 @@ function layoutRoom() {
   // framing, so it may start closer there (the pinch still zooms out)
   {
     const { w, h } = viewSize();
-    zoom = zoomT = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (h > w ? L.zoomTall : undefined) ?? 1));
+    zoom = zoomT = zoomHome = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, (h > w ? L.zoomTall : undefined) ?? 1));
     resize();
   }
   const b = Math.max(roomHX, roomHZ) + 1.2;
@@ -3885,7 +3886,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k65', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k66', import.meta.url));
   window.__sfx = engine; // test hook
   sfxGain = engine.bus.fx.d;
   sfxCatGain = engine.bus.cats.d;
@@ -4628,10 +4629,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k65');
+      const { Story } = await import('./story.js?v=k66');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k65');
+      const { Career } = await import('./career.js?v=k66');
       game = new Career(api);
     }
   } else {
@@ -5176,7 +5177,7 @@ function frame(now) {
   bedFrame();
   lightFrame(now, data, lk.lk_body_count(sim));
   hazeFrame(now);
-  presentation.frame(now, { cats: debugCats, dot: dot.visible ? dot.position : null, haze });
+  presentation.frame(now, { cats: debugCats, dot: dot.visible ? dot.position : null, haze, page: zoom / zoomHome });
   if (postActive) composer.render();
   else renderer.render(scene, camera);
 
@@ -5313,6 +5314,10 @@ window.__lk = {
     return Array.from(d.slice(rec * FLOATS_PER_BODY, rec * FLOATS_PER_BODY + FLOATS_PER_BODY));
   },
   count: () => lk.lk_body_count(sim),
+  // hold the backdrop's animation at t seconds (null lets it run)
+  freezeBackdrop: (t) => { presentation.freeze = t ?? undefined; },
+  // slide the window without touching zoom or look (view() sets all five)
+  panTo: (px = 0, py = 0) => { panXT = px; panYT = py; clampPan(); panX = panXT; panY = panYT; applyLook(); return [panX, panY, zoom]; },
   // what the scene costs to draw: one extra direct render, counted (draw
   // calls include the shadow pass), for comparing rooms
   perf: () => {

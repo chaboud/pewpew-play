@@ -8,8 +8,8 @@
 //
 // Screen terms: the game camera looks along +z, so screen-right is world
 // -x. Near things (base, tags, mug, gavel, pad, pencil) are toon-lit with
-// the room; the far set (bench, judge, counsel, walls, windows) is painted
-// and self-lit, authored to be seen soft.
+// the room; the far set (bench, walls, windows) is painted and self-lit,
+// authored to be seen soft, and the people in it are stuffed felt.
 
 const INK = '#1b1a1c';
 
@@ -57,61 +57,159 @@ function paintTent(g, w, h, id) {
   g.fillText(id, w / 2, h * 0.63);
 }
 
-// a bust: shoulders, head, the suggestion of a face looking down. Drawn
-// plain and friendly — these are seen as soft giants, not portraits.
-function paintPerson(g, w, h, o) {
-  const cx = w / 2;
-  g.clearRect(0, 0, w, h);
-  if (o.hair && o.long) { g.fillStyle = o.hair; g.beginPath(); g.ellipse(cx, h * 0.30, w * 0.20, h * 0.24, 0, 0, 7); g.fill(); }
-  g.fillStyle = o.suit;
-  g.beginPath(); g.moveTo(0, h);
-  g.bezierCurveTo(0, h * 0.64, w * 0.08, h * 0.52, w * 0.36, h * 0.48);
-  g.lineTo(w * 0.64, h * 0.48);
-  g.bezierCurveTo(w * 0.92, h * 0.52, w, h * 0.64, w, h);
-  g.closePath(); g.fill();
+// --- the people in the room. Founder: "a little more deep, like sackboy or
+// little big planet background". They were painted flats; they are now
+// stuffed felt, a sewn head with button eyes on a soft body, with real
+// arms: seen blurred, what reads as depth is form (a head is a ball with a
+// nose and ears and hair standing off it), overlap that shifts when the
+// view pans, and a hand that reaches most of the way to the model and so
+// is nearly in focus while its owner is not.
+//
+// Felt is shaded by one matcap, not the scene's lights: the far set is
+// self-lit paint so that a room which turns its own sun down (the
+// showroom) does not put the court in the dark, and the giants belong to
+// that set.
+const fxOf = (w) => (a) => w * (0.75 - a / 6.2832);     // yaw (rad, + = screen-left) to canvas x on a sphere's map
+const fyOf = (h) => (b) => h * (0.5 - b / Math.PI);     // pitch up from the equator to canvas y
+function weaveOver(g, w, h, rnd, n = 1500) {
+  g.lineWidth = 1; g.setLineDash([]);
+  for (let i = 0; i < n; i++) {
+    const x = rnd() * w, y = rnd() * h, l = 3 + rnd() * 9, v = rnd() > 0.5;
+    g.strokeStyle = rnd() > 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (v ? 0 : l), y + (v ? l : 0)); g.stroke();
+  }
+}
+// a head's map: cheeks, felt brows, a mouth stitched on. The eyes, nose,
+// ears and hair are sewn on as geometry.
+function paintFace(g, w, h, o, rnd) {
+  const fx = fxOf(w), fy = fyOf(h);
+  g.fillStyle = o.skin; g.fillRect(0, 0, w, h);
+  const sg = g.createLinearGradient(0, 0, 0, h);
+  sg.addColorStop(0.5, 'rgba(70,24,34,0)'); sg.addColorStop(1, 'rgba(70,24,34,0.3)');
+  g.fillStyle = sg; g.fillRect(0, 0, w, h);
+  for (const s of [-1, 1]) {
+    const cx = fx(s * 0.7), cy = fy(-0.2), rg = g.createRadialGradient(cx, cy, 1, cx, cy, w * 0.05);
+    rg.addColorStop(0, 'rgba(208,84,84,0.5)'); rg.addColorStop(1, 'rgba(208,84,84,0)');
+    g.fillStyle = rg; g.fillRect(cx - w * 0.06, cy - w * 0.06, w * 0.12, w * 0.12);
+  }
+  g.lineCap = 'round'; g.strokeStyle = o.brow || o.hair; g.lineWidth = h * 0.034;
+  for (const s of [-1, 1]) { g.beginPath(); g.moveTo(fx(s * 0.2), fy(0.34 + (o.browIn || 0))); g.lineTo(fx(s * 0.56), fy(0.34 + (o.browOut || 0))); g.stroke(); }
+  g.strokeStyle = '#4a2a2c'; g.lineWidth = h * 0.02; g.setLineDash([h * 0.034, h * 0.02]);
+  const mw = o.mouthW || 0.24, my = fy(-0.5);
+  g.beginPath(); g.moveTo(fx(mw), my); g.quadraticCurveTo(fx(0), my + h * (o.smile ?? 0.04), fx(-mw), my); g.stroke();
+  // the seam where the head was closed, up the back
+  g.strokeStyle = 'rgba(50,30,24,0.6)'; g.lineWidth = h * 0.012; g.setLineDash([h * 0.03, h * 0.022]);
+  g.beginPath(); g.moveTo(w * 0.25, 0); g.lineTo(w * 0.25, h); g.stroke();
+  weaveOver(g, w, h, rnd);
+}
+// a body's map: the cut of a suit (or a robe) in sewn-on pieces
+function paintTorso(g, w, h, o, rnd) {
+  const fx = fxOf(w), fy = fyOf(h);
+  g.fillStyle = o.suit; g.fillRect(0, 0, w, h);
+  g.lineCap = 'round'; g.lineJoin = 'round';
   if (o.robe) {
-    g.fillStyle = '#f4f1e8';
-    g.beginPath(); g.moveTo(cx - w * 0.07, h * 0.47); g.lineTo(cx + w * 0.07, h * 0.47); g.lineTo(cx + w * 0.035, h * 0.60); g.lineTo(cx, h * 0.56); g.lineTo(cx - w * 0.035, h * 0.60); g.closePath(); g.fill();
+    g.fillStyle = '#f2efe6';
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(fx(s * 0.03), fy(1.3)); g.lineTo(fx(s * 0.5), fy(1.3)); g.lineTo(fx(s * 0.2), fy(0.5)); g.lineTo(fx(s * 0.03), fy(0.58)); g.closePath(); g.fill(); }
+    g.strokeStyle = 'rgba(236,226,200,0.3)'; g.lineWidth = 3; g.setLineDash([9, 7]);
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(fx(s * 1.5), fy(1.0)); g.quadraticCurveTo(fx(s * 0.7), fy(0.5), fx(s * 0.3), fy(-0.4)); g.stroke(); }
   } else {
     g.fillStyle = o.shirt || '#f1eee6';
-    g.beginPath(); g.moveTo(cx - w * 0.10, h * 0.475); g.lineTo(cx + w * 0.10, h * 0.475); g.lineTo(cx, h * 0.74); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(fx(1.0), fy(1.3)); g.lineTo(fx(-1.0), fy(1.3)); g.lineTo(fx(0), fy(0.15)); g.closePath(); g.fill();
     if (o.tie) {
       g.fillStyle = o.tie;
-      g.beginPath(); g.moveTo(cx - w * 0.03, h * 0.50); g.lineTo(cx + w * 0.03, h * 0.50); g.lineTo(cx + w * 0.045, h * 0.70); g.lineTo(cx, h * 0.76); g.lineTo(cx - w * 0.045, h * 0.70); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(fx(0.16), fy(1.3)); g.lineTo(fx(-0.16), fy(1.3)); g.lineTo(fx(-0.1), fy(0.5)); g.lineTo(fx(0), fy(0.36)); g.lineTo(fx(0.1), fy(0.5)); g.closePath(); g.fill();
     }
-    g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = w * 0.02;
-    g.beginPath(); g.moveTo(cx - w * 0.11, h * 0.47); g.lineTo(cx - w * 0.02, h * 0.80); g.moveTo(cx + w * 0.11, h * 0.47); g.lineTo(cx + w * 0.02, h * 0.80); g.stroke();
+    // lapels, a shade off the cloth, each with its row of stitches
+    g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = h * 0.07; g.setLineDash([]);
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(fx(s * 1.12), fy(1.3)); g.lineTo(fx(s * 0.06), fy(0.08)); g.stroke(); }
+    g.strokeStyle = 'rgba(20,14,20,0.55)'; g.lineWidth = 2; g.setLineDash([7, 6]);
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(fx(s * 1.3), fy(1.26)); g.lineTo(fx(s * 0.2), fy(0.02)); g.stroke(); }
+    g.setLineDash([]); g.fillStyle = 'rgba(16,12,18,0.8)';
+    for (const b of [-0.12, -0.42]) { g.beginPath(); g.arc(fx(0), fy(b), h * 0.026, 0, 7); g.fill(); }
+    if (o.square) { g.fillStyle = o.square; g.fillRect(fx(-0.62), fy(0.5), w * 0.035, h * 0.045); }
   }
-  g.fillStyle = o.skin2; g.fillRect(cx - w * 0.065, h * 0.36, w * 0.13, h * 0.125);
-  g.fillStyle = o.skin;
-  g.beginPath(); g.ellipse(cx - w * 0.15, h * 0.275, w * 0.025, h * 0.04, 0, 0, 7); g.ellipse(cx + w * 0.15, h * 0.275, w * 0.025, h * 0.04, 0, 0, 7); g.fill();
-  g.beginPath(); g.ellipse(cx, h * 0.26, w * 0.145, h * 0.175, 0, 0, 7); g.fill();
-  if (o.hair) {
-    g.fillStyle = o.hair;
-    g.beginPath(); g.ellipse(cx, h * 0.19, w * 0.155, h * 0.115, 0, Math.PI, 0); g.fill();
-    if (o.bun) { g.beginPath(); g.arc(cx, h * 0.075, w * 0.07, 0, 7); g.fill(); }
-    if (o.bald) { g.fillStyle = o.skin; g.beginPath(); g.ellipse(cx, h * 0.185, w * 0.105, h * 0.10, 0, 0, 7); g.fill(); }
-  }
-  // eyes cast down at the model, brows, the hint of a nose and mouth
-  g.strokeStyle = 'rgba(40,24,20,0.75)'; g.lineCap = 'round'; g.lineWidth = w * 0.014;
-  for (const s of [-1, 1]) {
-    g.fillStyle = 'rgba(40,24,20,0.85)'; g.beginPath(); g.ellipse(cx + s * w * 0.06, h * 0.272, w * 0.016, h * 0.014, 0, 0, 7); g.fill();
-    g.beginPath(); g.arc(cx + s * w * 0.06, h * 0.268, w * 0.03, 1.12 * Math.PI, 1.88 * Math.PI); g.stroke();
-    g.beginPath(); g.moveTo(cx + s * w * 0.03, h * 0.236); g.lineTo(cx + s * w * 0.095, h * 0.228); g.stroke();
-  }
-  g.beginPath(); g.moveTo(cx, h * 0.285); g.lineTo(cx - w * 0.012, h * 0.33); g.stroke();
-  g.beginPath(); g.arc(cx, h * 0.355, w * 0.04, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
-  if (o.glasses) {
-    g.strokeStyle = '#2a2622'; g.lineWidth = w * 0.012; g.fillStyle = 'rgba(214,236,255,0.38)';
-    for (const s of [-1, 1]) { g.beginPath(); g.ellipse(cx + s * w * 0.06, h * 0.268, w * 0.046, h * 0.036, 0, 0, 7); g.fill(); g.stroke(); }
-    g.beginPath(); g.moveTo(cx - w * 0.014, h * 0.266); g.lineTo(cx + w * 0.014, h * 0.266); g.stroke();
-  }
-  // one soft light from the windows, upper left
-  g.globalCompositeOperation = 'source-atop';
-  const lg = g.createLinearGradient(0, 0, w, h);
-  lg.addColorStop(0, 'rgba(255,240,210,0.22)'); lg.addColorStop(0.5, 'rgba(255,240,210,0)'); lg.addColorStop(1, 'rgba(20,10,30,0.30)');
-  g.fillStyle = lg; g.fillRect(0, 0, w, h);
-  g.globalCompositeOperation = 'source-over';
+  weaveOver(g, w, h, rnd);
+}
+
+function plushKit(k, rnd) {
+  const { THREE, canvas, mesh } = k;
+  // one soft light from the windows, upper left, falling off into violet,
+  // and the pale fuzz felt shows at a grazing edge
+  const cap = canvas(256, 256, (g) => {
+    const im = g.createImageData(256, 256), d = im.data, L = [-0.42, 0.56, 0.71];
+    for (let j = 0; j < 256; j++) for (let i = 0; i < 256; i++) {
+      let x = (i + 0.5) / 128 - 1, y = 1 - (j + 0.5) / 128;
+      const r = Math.hypot(x, y); if (r > 0.995) { x *= 0.995 / r; y *= 0.995 / r; }
+      const z = Math.sqrt(Math.max(0, 1 - x * x - y * y));
+      const wl = Math.max(0, Math.min(1, (x * L[0] + y * L[1] + z * L[2] + 0.42) / 1.42));
+      const s = 0.38 + 0.7 * Math.pow(wl, 1.15), fz = Math.pow(1 - z, 2.6) * 0.3, o = (j * 256 + i) * 4;
+      d[o] = 255 * Math.min(1, s * (0.68 + 0.32 * wl) + fz);
+      d[o + 1] = 255 * Math.min(1, s * (0.6 + 0.38 * wl) + fz * 0.94);
+      d[o + 2] = 255 * Math.min(1, s * (0.8 + 0.12 * wl) + fz * 0.9);
+      d[o + 3] = 255;
+    }
+    g.putImageData(im, 0, 0);
+  });
+  // a button: dark, with the window in it
+  const gloss = canvas(64, 64, (g) => {
+    g.fillStyle = '#17141b'; g.fillRect(0, 0, 64, 64);
+    const rg = g.createRadialGradient(32, 32, 20, 32, 32, 32); rg.addColorStop(0, 'rgba(120,110,150,0)'); rg.addColorStop(1, 'rgba(150,140,180,0.55)');
+    g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+    const hl = g.createRadialGradient(21, 19, 1, 21, 19, 10); hl.addColorStop(0, 'rgba(255,255,255,1)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = hl; g.fillRect(0, 0, 64, 64);
+  });
+  const weave = canvas(128, 128, (g) => { g.fillStyle = '#f4f2ee'; g.fillRect(0, 0, 128, 128); weaveOver(g, 128, 128, rnd, 700); });
+  weave.wrapS = weave.wrapT = THREE.RepeatWrapping; weave.repeat.set(5, 3);
+  const felt = (hex, map) => new THREE.MeshMatcapMaterial({ color: hex, matcap: cap, map: map || weave, fog: false });
+  const button = new THREE.MeshMatcapMaterial({ color: 0xffffff, matcap: gloss, fog: false });
+  const wire = new THREE.MeshBasicMaterial({ color: 0x2a2622, fog: false });
+  // heads and bodies get the round ball; everything sewn onto them, and
+  // the jury across the room, a coarse one (the lot is seen out of focus)
+  const ball = new THREE.SphereGeometry(1, 26, 18), bead = new THREE.SphereGeometry(1, 14, 10);
+  const UP = new THREE.Vector3(0, 1, 0), FWD = new THREE.Vector3(0, 0, 1);
+  const blob = (mat, x, y, z, sx, sy = sx, sz = sx, geo = bead) => { const m = mesh(geo, mat, x, y, z); m.scale.set(sx, sy, sz); return m; };
+  // a stuffed limb between two points
+  const limb = (a, b, r, mat) => {
+    const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+    const m = mesh(new THREE.CapsuleGeometry(r, len, 4, 12), mat, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+    m.quaternion.setFromUnitVectors(UP, d.normalize());
+    return m;
+  };
+  // a head and shoulders, facing the camera (-z), origin at the waist.
+  // o: { scale, suit, shirt, tie, robe, skin, hair, style: 'short' | 'wig' | 'bun', glasses, ... }
+  const person = (o, R) => {
+    const s = (o.scale || 1) * R, g = new THREE.Group();
+    const cloth = felt(o.suit), skin = felt(o.skin), hairMat = felt(o.hair);
+    g.add(blob(felt(0xffffff, canvas(512, 256, (c) => paintTorso(c, 512, 256, o, rnd))), 0, 5.2 * s, 0, 6.0 * s, 5.6 * s, 3.6 * s, ball));
+    for (const sx of [-1, 1]) g.add(blob(cloth, sx * 5.0 * s, 8.2 * s, 0, 2.3 * s));
+    const head = new THREE.Group(), hr = 3.3 * s, hx = hr * 1.06, hz = hr * 0.96;
+    head.position.set(0, 13.4 * s, -0.5 * s);
+    head.add(blob(felt(0xffffff, canvas(512, 256, (c) => paintFace(c, 512, 256, o, rnd))), 0, 0, 0, hx, hr, hz, ball));
+    for (const sx of [-1, 1]) head.add(blob(skin, sx * hx * 0.99, 0.1 * s, 0.3 * s, 0.5 * s, 0.85 * s, 0.7 * s));
+    head.add(blob(skin, 0, -0.13 * hr, -hz * 0.98, 0.5 * s, 0.44 * s, 0.52 * s)); // the nose
+    const on = (a, b, lift) => new THREE.Vector3(Math.sin(a) * Math.cos(b) * hx, Math.sin(b) * hr, -Math.cos(a) * Math.cos(b) * hz).multiplyScalar(lift);
+    const rims = [];
+    for (const sx of [-1, 1]) {
+      const p = on(sx * 0.37, 0.06, 0.975), n = p.clone().normalize();
+      const eye = blob(button, p.x, p.y, p.z, 0.5 * s, 0.5 * s, 0.22 * s); eye.quaternion.setFromUnitVectors(FWD, n); head.add(eye);
+      if (o.glasses) {
+        const q = on(sx * 0.37, 0.06, 1.1);
+        const rim = mesh(new THREE.TorusGeometry(0.92 * s, 0.1 * s, 6, 20), wire, q.x, q.y, q.z); rim.quaternion.setFromUnitVectors(FWD, n); head.add(rim); rims.push(q);
+      }
+    }
+    if (rims.length) head.add(limb(rims[0].clone().setX(rims[0].x * 0.34), rims[1].clone().setX(rims[1].x * 0.34), 0.08 * s, wire));
+    // hair stands off the head: a felt cap, and whatever the style adds
+    const capGeo = new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, o.style === 'bun' ? 1.5 : 1.3);
+    const hc = mesh(capGeo, hairMat); hc.scale.set(hx * 1.06, hr * 1.07, hz * 1.08); hc.rotation.x = o.style === 'bun' ? 0.62 : 0.5; head.add(hc);
+    if (o.style === 'wig') for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) head.add(blob(hairMat, sx * hx * (1.02 - 0.04 * i), hr * (0.42 - 0.44 * i), hz * 0.2, 0.95 * s, 0.8 * s, 0.95 * s));
+    if (o.style === 'bun') {
+      head.add(blob(hairMat, 0, hr * 1.12, hz * 0.5, 1.5 * s));
+      for (const sx of [-1, 1]) head.add(blob(hairMat, sx * hx * 0.98, -0.5 * s, hz * 0.3, 1.0 * s, 2.5 * s, 1.7 * s));
+    }
+    g.add(head);
+    return { group: g, head, s, cloth, skin };
+  };
+  return { felt, button, wire, bead, blob, limb, person };
 }
 
 function paintWall(g, w, h, rnd) {
@@ -345,33 +443,74 @@ export function build(k, geo, opts = {}) {
   const benchTop = 11 * R, benchH = benchTop - yFloor, zBench = hz + 34 * R;
   const benchTex = canvas(512, 256, (g) => paintBench(g, 512, 256));
   far.add(mesh(new THREE.BoxGeometry(52 * R, benchH, 9 * R), basic(benchTex), 0, yFloor + benchH / 2, zBench));
+  const P = plushKit(k, rnd), V = (x, y, z) => new THREE.Vector3(x, y, z);
   const people = [];
-  const addPerson = (o, w, h, x, y, z, lean, roll) => {
-    const tex = canvas(256, 320, (g) => paintPerson(g, 256, 320, o));
-    const pivot = new THREE.Group();
-    const c = card(tex, w, h, { cut: true }); c.position.y = h / 2; pivot.add(c);
-    pivot.position.set(x, y, z); pivot.rotation.x = -lean; pivot.rotation.z = roll;
-    far.add(pivot);
-    people.push({ pivot, lean, roll, ph: people.length * 2.1 });
+  // seat a person: where the waist is, how far they lean in over the table
+  // (toward the camera) and roll, and which way the head turns
+  const seat = (o, x, y, z, lean, roll, turn = 0) => {
+    const p = P.person(o, R);
+    p.group.position.set(x, y, z); p.group.rotation.set(-lean, 0, roll); p.group.updateMatrix();
+    p.head.rotation.set(-0.12, turn, 0);
+    p.at = (lx, ly, lz) => V(lx * p.s, ly * p.s, lz * p.s).applyMatrix4(p.group.matrix); // a point on them, in the room
+    far.add(p.group);
+    people.push({ ...p, lean, roll, turn, ph: people.length * 2.1 });
+    return p;
   };
-  addPerson({ robe: true, suit: '#1c1a22', skin: '#e2b08c', skin2: '#c4906c', hair: '#d8d6d2', glasses: true }, 17 * R, 21 * R, 0, benchTop - 2.5 * R, zBench + 4 * R, 0.12, 0);
-  // the gavel, held up and now and then brought down
-  const gavelTex = canvas(160, 160, (g) => {
-    g.clearRect(0, 0, 160, 160);
-    g.fillStyle = '#1c1a22'; g.beginPath(); g.moveTo(96, 160); g.lineTo(150, 160); g.lineTo(118, 96); g.lineTo(88, 108); g.closePath(); g.fill();
-    g.strokeStyle = '#6b4026'; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(104, 104); g.lineTo(52, 44); g.stroke();
-    g.fillStyle = '#e2b08c'; g.beginPath(); g.ellipse(101, 101, 17, 14, -0.6, 0, 7); g.fill();
-    g.save(); g.translate(50, 42); g.rotate(-0.86);
-    g.fillStyle = '#5c3620'; g.fillRect(-36, -16, 72, 32); g.fillStyle = '#c9a24a'; g.fillRect(-24, -16, 6, 32); g.fillRect(18, -16, 6, 32);
-    g.restore();
-  });
+  const mitt = (mat, at, s) => P.blob(mat, at.x, at.y, at.z, 1.5 * s, 1.2 * s, 1.9 * s);
+
+  // the judge, behind the bench
+  const judge = seat({ scale: 1.12, robe: true, suit: '#23202b', skin: '#e2b08c', hair: '#dedcd8', brow: '#b9b6b0', style: 'wig', glasses: true, smile: -0.012, browIn: -0.05 },
+    0, benchTop - 2.5 * R, zBench + 4 * R, 0.12, 0);
+  // one hand flat on the bench
+  { const sh = judge.at(-5.0, 8.2, -0.3), el = V(-8.4 * R, benchTop + 1.6 * R, zBench + 0.4 * R), hd = V(-5.2 * R, benchTop + 1.0 * R, zBench - 2.6 * R);
+    far.add(P.limb(sh, el, 1.5 * R, judge.cloth), P.limb(el, hd, 1.35 * R, judge.cloth), mitt(judge.skin, hd, R)); }
+  // the other holds the gavel up, and now and then brings it down on its
+  // block at the front of the bench: the whole arm, from the shoulder,
+  // toward the camera
   const gavelArm = new THREE.Group();
-  const gavelCard = card(gavelTex, 12 * R, 12 * R, { cut: true }); gavelCard.position.set(sr(-4.4 * R), 4.4 * R, 0); gavelArm.add(gavelCard);
-  gavelArm.position.set(sr(-6.5 * R), benchTop - 1 * R, zBench + 3 * R);
+  { const sh = judge.at(5.0, 8.2, -0.3), L = 7.6 * R, out = 0.3;
+    gavelArm.position.copy(sh);
+    const dir = V(Math.sin(out), Math.cos(out), 0), tip = (f) => dir.clone().multiplyScalar(f * L);
+    gavelArm.add(P.limb(V(0, 0, 0), tip(0.6), 1.4 * R, judge.cloth), P.blob(judge.skin, tip(0.66).x, tip(0.66).y, 0, 1.45 * R));
+    const walnutFelt = P.felt(0x7a4a2c), brass = P.felt(0xd9b45a);
+    gavelArm.add(P.limb(tip(0.58), tip(1.0), 0.3 * R, walnutFelt));
+    const gh = mesh(new THREE.CylinderGeometry(1.15 * R, 1.15 * R, 3.6 * R, 18), walnutFelt, tip(1).x, tip(1).y, 0); gh.rotation.z = Math.PI / 2 + out; gavelArm.add(gh);
+    for (const e of [-1.1, 1.1]) { const band = mesh(new THREE.CylinderGeometry(1.2 * R, 1.2 * R, 0.32 * R, 18), brass, tip(1).x + Math.cos(out) * e * R, tip(1).y - Math.sin(out) * e * R, 0); band.rotation.z = Math.PI / 2 + out; gavelArm.add(band); }
+    // where it lands: the swing that brings the head down to block height, and the block under it
+    const strike = -Math.acos(Math.max(-1, Math.min(1, (benchTop + 2.15 * R - sh.y) / (Math.cos(out) * L))));
+    far.add(mesh(new THREE.CylinderGeometry(1.3 * R, 1.4 * R, 1.0 * R, 20), walnutFelt, sh.x + Math.sin(out) * L, benchTop + 0.5 * R, sh.z + Math.cos(out) * L * Math.sin(strike)));
+    gavelArm.userData.strike = strike;
+  }
   far.add(gavelArm);
-  // counsel, leaning in from either side of the table
-  addPerson({ suit: '#27344f', shirt: '#eef0f4', tie: '#a8323a', skin: '#8d5a3c', skin2: '#734630', hair: '#1c1512' }, 15 * R, 19 * R, sr(-7.4 * R), yT - 3 * R, hz + 16 * R, 0.44, -0.10);
-  addPerson({ suit: '#6b5a66', shirt: '#f2ede2', skin: '#f0c7a4', skin2: '#d3a585', hair: '#7a3b22', long: true, bun: true, glasses: true }, 15 * R, 19 * R, sr(9.4 * R), yT - 3 * R, hz + 18 * R, 0.40, 0.09);
+
+  // counsel, leaning in from either side of the table. Screen-left makes
+  // his point: the arm comes forward over the model's back wall, so the
+  // hand is nearly in focus and the face behind it is not.
+  const c1 = seat({ suit: '#2c3b5c', shirt: '#eef0f4', tie: '#b23740', square: '#e8e2d2', skin: '#96603f', hair: '#211814', style: 'short', smile: 0.05, browIn: -0.03 },
+    sr(-7.4 * R), yT - 3 * R, hz + 16 * R, 0.44, -0.10, 0.22);
+  const pointArm = new THREE.Group();
+  { const sh = c1.at(-5.0, 8.2, -0.3), el = V(sr(-5.2 * R), top + 2.0 * R, hz + 8.6 * R), hd = V(sr(-2.3 * R), top + 2.4 * R, hz + 2.8 * R);
+    far.add(P.limb(sh, el, 1.5 * R, c1.cloth));
+    pointArm.position.copy(el);
+    // down at the exhibit card on the back wall, and a little toward the room
+    const h = hd.clone().sub(el), aim = V(-0.3, -0.78, -0.55).normalize();
+    // (a capsule's cap runs a radius past its end: the sleeve stops short of the hand)
+    pointArm.add(P.limb(V(0, 0, 0), h.clone().multiplyScalar(0.62), 1.3 * R, c1.cloth));
+    const cuff = h.clone().multiplyScalar(0.84); pointArm.add(P.blob(P.felt(0xeef0f4), cuff.x, cuff.y, cuff.z, 1.36 * R));
+    const hand = P.blob(c1.skin, h.x, h.y, h.z, 1.2 * R, 1.0 * R, 1.5 * R); hand.quaternion.setFromUnitVectors(V(0, 0, -1), aim); pointArm.add(hand);
+    pointArm.add(P.limb(h.clone().addScaledVector(aim, 1.1 * R), h.clone().addScaledVector(aim, 2.6 * R), 0.44 * R, c1.skin));
+    pointArm.add(P.blob(c1.skin, h.x - 1.0 * R, h.y - 0.1 * R, h.z - 0.5 * R, 0.55 * R)); // the thumb
+  }
+  far.add(pointArm);
+  { const sh = c1.at(5.0, 8.2, -0.3), hd = V(sr(-13.5 * R), yT + 1.0 * R, hz + 9.5 * R);
+    far.add(P.limb(sh, hd, 1.45 * R, c1.cloth), mitt(c1.skin, hd, R)); }
+  // screen-right is thinking about it: chin in hand, elbow on the table
+  const c2 = seat({ suit: '#76627a', shirt: '#f2ede2', skin: '#f0c7a4', hair: '#8a4225', style: 'bun', glasses: true, smile: 0.0, mouthW: 0.15, browOut: 0.04 },
+    sr(9.4 * R), yT - 3 * R, hz + 18 * R, 0.40, 0.09, -0.24);
+  { const s = c2.s, sh = V(5.0 * s, 8.2 * s, -0.3 * s), el = V(5.4 * s, 4.6 * s, -3.8 * s), hd = V(1.5 * s, 10.0 * s, -3.9 * s);
+    c2.group.add(P.limb(sh, el, 1.45 * s, c2.cloth), P.limb(el, hd, 1.3 * s, c2.cloth), P.blob(c2.skin, hd.x, hd.y + 0.5 * s, hd.z, 1.5 * s, 1.3 * s, 1.4 * s));
+    const sh2 = c2.at(-5.0, 8.2, -0.3), hd2 = V(sr(15.5 * R), yT + 1.0 * R, hz + 10 * R);
+    far.add(P.limb(sh2, hd2, 1.45 * R, c2.cloth), mitt(c2.skin, hd2, R)); }
   // the flag by the bench
   far.add(mesh(new THREE.BoxGeometry(0.5 * R, 46 * R, 0.5 * R), basic(0xb89a50), sr(-33 * R), yFloor + 23 * R + 20 * R, zBench + 6 * R));
   const flagTex = canvas(128, 256, (g) => {
@@ -382,20 +521,30 @@ export function build(k, geo, opts = {}) {
     g.fillStyle = sh; g.fillRect(0, 0, 128, 256);
   });
   const flag = card(flagTex, 8 * R, 17 * R); flag.position.set(sr(-29.2 * R), benchTop + 17 * R, zBench + 6 * R); flag.rotation.z = 0.06; far.add(flag);
-  // the jury, a rail and two rows of heads along the screen-right wall
-  const juryTex = canvas(512, 256, (g) => {
-    g.clearRect(0, 0, 512, 256);
-    const skins = ['#e9bf9c', '#8d5a3c', '#c98f66', '#f0cfb0', '#6b4630', '#d9a67c'];
-    const tops = ['#3d5a80', '#7a4a5a', '#4f6b4a', '#8a6a3a', '#5a4a7a', '#a0563c'];
+  // the jury, a rail and two rows along the screen-right wall, turned
+  // toward the bench: twelve of the same stuffing in instanced batches
+  const jury = new THREE.Group();
+  jury.position.set(sr(46 * R), yFloor + 15 * R, hz + 26 * R); jury.rotation.y = -0.5;
+  {
+    const skins = [0xe9bf9c, 0x8d5a3c, 0xc98f66, 0xf0cfb0, 0x6b4630, 0xd9a67c], tops = [0x3d5a80, 0x7a4a5a, 0x4f6b4a, 0x8a6a3a, 0x5a4a7a, 0xa0563c], hairs = [0x2a1c14, 0xd8d2c8, 0x6a3a1c, 0x1a1a1a];
+    const n = 12, plain = P.felt(0xffffff), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), C = new THREE.Color(), one = V(1, 1, 1);
+    const bodies = new THREE.InstancedMesh(P.bead, plain, n), heads = new THREE.InstancedMesh(P.bead, plain, n);
+    const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, 0, 1.35), plain, n), eyes = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), P.button, n * 2);
+    const tilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.5, 0, 0));
     for (let row = 0; row < 2; row++) for (let i = 0; i < 6; i++) {
-      const x = 46 + i * 84 + row * 30, y = 80 + row * 46;
-      g.fillStyle = tops[(i + row * 2) % 6]; g.beginPath(); g.ellipse(x, y + 62, 40, 46, 0, 0, 7); g.fill();
-      g.fillStyle = skins[(i * 2 + row) % 6]; g.beginPath(); g.ellipse(x, y, 22, 27, 0, 0, 7); g.fill();
-      g.fillStyle = ['#2a1c14', '#d8d2c8', '#6a3a1c', '#1a1a1a'][(i + row) % 4]; g.beginPath(); g.ellipse(x, y - 12, 23, 17, 0, Math.PI, 0); g.fill();
+      const q = row * 6 + i, x = (i - 2.5 + row * 0.36) * 7.2 * R, y = (1.2 + row * 3.6) * R, z = (2.4 + row * 4.6) * R;
+      const hy = y + 7.3 * R + (rnd() - 0.5) * 0.7 * R;
+      bodies.setMatrixAt(q, M.compose(V(x, y + 2.6 * R, z), Q.identity(), V(3.4 * R, 3.8 * R, 2.5 * R))); bodies.setColorAt(q, C.setHex(tops[(i + row * 2) % 6]));
+      heads.setMatrixAt(q, M.compose(V(x, hy, z - 0.3 * R), Q.identity(), V(2.3 * R, 2.2 * R, 2.1 * R))); heads.setColorAt(q, C.setHex(skins[(i * 2 + row) % 6]));
+      caps.setMatrixAt(q, M.compose(V(x, hy, z - 0.3 * R), tilt, V(2.45 * R, 2.36 * R, 2.27 * R))); caps.setColorAt(q, C.setHex(hairs[(i + row) % 4]));
+      for (const sx of [-1, 1]) eyes.setMatrixAt(q * 2 + (sx > 0 ? 1 : 0), M.compose(V(x + sx * 0.8 * R, hy + 0.15 * R, z - 2.3 * R), Q.identity(), V(0.34 * R, 0.34 * R, 0.16 * R)));
     }
-    g.fillStyle = '#573722'; g.fillRect(0, 176, 512, 80); g.fillStyle = '#7a5334'; g.fillRect(0, 170, 512, 12);
-  });
-  const jury = card(juryTex, 46 * R, 23 * R, { cut: true }); jury.position.set(sr(46 * R), yFloor + 26 * R + 2 * R, hz + 26 * R); jury.rotation.y = Math.PI - 0.5; far.add(jury);
+    jury.add(bodies, heads, caps, eyes);
+    // the box they sit in: a panelled front and a rail
+    jury.add(mesh(new THREE.BoxGeometry(48 * R, 13 * R, 1.2 * R), basic(0x573722), 0, -5.5 * R, -0.6 * R));
+    jury.add(mesh(new THREE.BoxGeometry(49 * R, 1.1 * R, 2.2 * R), basic(0x7a5334), 0, 1.4 * R, -0.6 * R));
+  }
+  far.add(jury);
   group.add(far);
 
   const dCam = hz + 12 * R; // the camera stands at most about this far in front
@@ -419,11 +568,16 @@ export function build(k, geo, opts = {}) {
     // every so often; the coffee is still hot
     update(t) {
       for (const p of people) {
-        p.pivot.rotation.x = -p.lean + Math.sin(t * 0.33 + p.ph) * 0.018;
-        p.pivot.rotation.z = p.roll + Math.sin(t * 0.21 + p.ph * 1.7) * 0.012;
+        p.group.rotation.x = -p.lean + Math.sin(t * 0.33 + p.ph) * 0.018;
+        p.group.rotation.z = p.roll + Math.sin(t * 0.21 + p.ph * 1.7) * 0.012;
+        // heads are loosely sewn on: they nod and tip a little on their own
+        p.head.rotation.x = -0.12 + Math.sin(t * 0.47 + p.ph * 1.3) * 0.045;
+        p.head.rotation.z = Math.sin(t * 0.29 + p.ph * 0.7) * 0.04;
       }
-      const beat = (t % 11) / 11;
-      gavelArm.rotation.z = 0.06 * Math.sin(t * 0.5) + (beat < 0.06 ? 0.45 * Math.sin((beat / 0.06) * Math.PI) : 0);
+      const beat = (t % 11) / 11, hit = beat < 0.07 ? Math.pow(Math.sin((beat / 0.07) * Math.PI), 2) : 0;
+      gavelArm.rotation.x = 0.1 + 0.05 * Math.sin(t * 0.5) + (gavelArm.userData.strike - 0.1) * hit;
+      // counsel taps the air over the exhibit as he makes the point
+      pointArm.rotation.x = 0.05 * Math.sin(t * 1.3) + 0.1 * Math.max(0, Math.sin(t * 0.37)) * Math.sin(t * 5.1);
       for (let i = 0; i < steam.length; i++) {
         const p = (t * 0.11 + i / steam.length) % 1;
         const s = (1.6 + 2.6 * p) * R;

@@ -611,7 +611,7 @@ export function chime(size, seed, sr) {
 
 // a singing bowl struck with a padded mallet: long and almost pure. Ratios,
 // levels and decays are from five strikes of one real bowl (a public-domain
-// recording, measured late in k65): 1 : 2.78 : 4.94 : 7.39, the second
+// recording, measured late in k66): 1 : 2.78 : 4.94 : 7.39, the second
 // partial 2-9 dB under the first and ringing 6-8 s, the fourth gone in
 // 0.6 s; the fundamental rings 20-45 s there and is faded here. Each
 // partial is a pair a hair apart — no bowl is round — so it beats: the real

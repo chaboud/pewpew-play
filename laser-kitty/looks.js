@@ -23,7 +23,7 @@
 //   - the style itself (classic / courtroom sketch / comic ink) and a grade.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from './vendor/Pass.js';
-import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k65';
+import { Backdrop, BACKDROP_KINDS, exhibitLetter } from './backdrop.js?v=k66';
 
 export { BACKDROP_KINDS };
 export const STYLE_KINDS = [
@@ -124,6 +124,14 @@ const FINAL = `
   uniform vec2 uZ;        // view distance to the model's front lip and its back wall
   uniform vec4 uDot;      // the laser dot on screen: uv.xy, radius, lit
   uniform float uKey;     // how dim the backdrop keeps the scene (night < 1): a drawing is made by adapted eyes
+  // the sheet the drawn styles are made on. It is pinned to the model, not
+  // to the glass: its grain, strokes and hatching slide with the room when
+  // the view pans and grow when it zooms, as a drawing held closer would.
+  // xy: where the room's centre falls, in buffer pixels · z: paper pixels
+  // per buffer pixel · w: buffer pixels per metre at the room's centre
+  uniform vec4 uPage;
+  uniform vec3 uPageBox;  // the room on that sheet: half width, half height, how far past it the pastel runs out (m)
+  vec2 pagePx() { return (gl_FragCoord.xy - uPage.xy) * uPage.z + vec2(3000.0, 2000.0); }
 
   float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
   vec2 rot(vec2 p, float a) { float s = sin(a), c = cos(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
@@ -153,7 +161,7 @@ const FINAL = `
   // hatched strokes, not as darker colour; white chalk on the lights; the
   // subjects worked up and everything behind them barely indicated.
   vec3 sketch(vec3 sharp, vec2 uv, float bg, float sky, float subj, float zr) {
-    vec2 pp = gl_FragCoord.xy / uPx;
+    vec2 pp = pagePx();
     vec2 px1 = uPx / uRes;
     // the contour is redrawn a few times a second (line boil); the paper
     // and the colour stay put
@@ -185,8 +193,10 @@ const FINAL = `
     float chroma = mx - mn;
     vec3 pastel = (0.24 + 0.80 * mix(vec3(L), c, 1.3)) * (0.93 + 0.14 * rb.g);
     vec3 paper = uPaper * (0.93 + 0.10 * nB.b + 0.05 * tooth);
-    vec2 vg = uv - 0.5;
-    float vign = smoothstep(0.30, 0.75, length(vg * vec2(1.0, 1.15)) + (nB.g - 0.5) * 0.25);
+    // the pastel stops short of the edge of the sheet: measured from the
+    // room as drawn on it, so the bare margin travels with the drawing
+    float past = length(max(abs(gl_FragCoord.xy - uPage.xy) / uPage.w - uPageBox.xy, 0.0)) / uPageBox.z;
+    float vign = smoothstep(0.0, 1.0, past + (nB.g - 0.5) * 0.3);
     float bias = 0.34 * subj + chroma * 0.6 - bg * 0.32 - vign * 0.3 + (nB.b - 0.5) * 0.5;
     float cov0 = clamp(0.8 + bias, 0.0, 1.0) * lay * (1.0 - sky);
     float cov = cov0 * smoothstep(0.0, 0.35, tooth + cov0 * 0.8 - 0.25); // thin pigment sits on the tooth
@@ -233,7 +243,7 @@ const FINAL = `
   // breathes, flat colour in three values, shadows spotted solid with a
   // halftone shoulder, off-white stock
   vec3 inked(vec3 sharp, vec2 uv, float bg, float subj, float zr) {
-    vec2 pp = gl_FragCoord.xy / uPx;
+    vec2 pp = pagePx();
     float tooth = texture2D(tNoise, pp / 256.0).r;
     vec4 nA = texture2D(tNoise, pp / 600.0);
     vec2 wob = (nA.gb - 0.5) * 2.0;
@@ -324,7 +334,13 @@ const FINAL = `
     col = clamp(col, 0.0, 1.0);
     col = mix(col, col * col * (3.0 - 2.0 * col), con);
     vec2 vg = uv - 0.5;
-    col *= 1.0 - (0.5 * uPunch + 0.22 * tg) * dot(vg, vg);
+    #if STYLE == 0
+      col *= 1.0 - (0.5 * uPunch + 0.22 * tg) * dot(vg, vg);
+    #else
+      // a lens darkens its corners; a sheet of paper does not, and a
+      // vignette fixed to the glass gives the page away when the view pans
+      col *= 1.0 - 0.5 * uPunch * dot(vg, vg);
+    #endif
     gl_FragColor = vec4(col, c0.a);
   }`;
 
@@ -395,6 +411,7 @@ export class LookPass extends Pass {
       uRes: { value: new THREE.Vector2(1, 1) }, uPx: { value: 1 }, uA: { value: 1 }, uB: { value: 0.1 },
       uTilt: { value: 0 }, uOutline: { value: 0 }, uPunch: { value: 0 }, uTime: { value: 0 },
       uPaper: { value: new THREE.Vector3(0.87, 0.82, 0.72) }, uZ: { value: new THREE.Vector2(2.6, 8.6) }, uDot: { value: new THREE.Vector4(0, 0, 0.01, 0) }, uKey: { value: 1 },
+      uPage: { value: new THREE.Vector4(0, 0, 1, 100) }, uPageBox: { value: new THREE.Vector3(3, 2, 2.5) },
     };
     this.downMat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: VERT, fragmentShader: DOWN, defines: {}, depthTest: false, depthWrite: false });
     this.blurMat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uDir: { value: new THREE.Vector2() } }, vertexShader: VERT, fragmentShader: BLUR, depthTest: false, depthWrite: false });
@@ -637,9 +654,10 @@ export class Presentation {
     u.uKey.value = ((this.backdrop.env && this.backdrop.env.key) || 1) * (this.geo.key || 1);
   }
 
-  // once a frame, before the render: cats = [{x, y, z}], dot = Vector3|null
-  frame(now, { cats = [], dot = null, haze = null } = {}) {
-    const t = now * 0.001;
+  // once a frame, before the render: cats = [{x, y, z}], dot = Vector3|null,
+  // page = how much closer than the room's home framing the view is zoomed
+  frame(now, { cats = [], dot = null, haze = null, page = 1 } = {}) {
+    const t = this.freeze ?? now * 0.001; // (a test may hold the backdrop's clock)
     this.backdrop.update(t);
     if (haze) {
       const m = (this.backdrop.env || STAGE_ENV).hazeSun;
@@ -677,7 +695,13 @@ export class Presentation {
     // the middle third, keeps all of it sharp, and a wide window, where
     // the room overfills the frame, softens only its top and bottom edge
     if (this.geo) {
-      const { hz, top, R } = this.geo;
+      const { hx, hz, top, R } = this.geo;
+      // the sheet: pinned where the room's centre projects, scaled with the zoom
+      v.set(0, top * 0.5, 0);
+      const pd = Math.max(0.5, (v.x - cam.position.x) * this.fwd.x + (v.y - cam.position.y) * this.fwd.y + (v.z - cam.position.z) * this.fwd.z);
+      v.project(cam);
+      u.uPage.value.set((v.x * 0.5 + 0.5) * p.w, (v.y * 0.5 + 0.5) * p.h, 1 / (u.uPx.value * Math.max(0.25, page)), p.h / (2 * pd * tanH));
+      u.uPageBox.value.set(hx * 0.9, top * 0.45, 2.6 * R);
       const yAt = (y, z) => Math.max(0.02, Math.min(0.98, v.set(cam.position.x, y, z).project(cam).y * 0.5 + 0.5));
       const a = yAt(top, hz), b = yAt(-0.2 - (this.backdrop.env ? 0.6 * R : 0), -(hz + 0.5 * R));
       u.uBand.value.x = (a + b) / 2;
