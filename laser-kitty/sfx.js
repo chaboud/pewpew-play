@@ -15,7 +15,7 @@
 // call that can use a recording falls through to the bank when its pool is
 // empty, so with the files missing, refused or undecodable the game sounds
 // exactly as it did before there were any.
-import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog, make, objKey, contactHz, STRIKE_V, MODELLED, SIZES, CAT_KINDS } from './sfxbank.js?v=k68';
+import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog, make, objKey, contactHz, STRIKE_V, MODELLED, SIZES, CAT_KINDS } from './sfxbank.js?v=k69';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const jit = (p) => 1 + (Math.random() * 2 - 1) * p;
@@ -29,18 +29,28 @@ const KNOCK_POOL = { wood: 'wood', metal: 'metal', ceramic: 'clink', glass: 'cli
 //   mix   what it actually says when the game asks for a kind of call
 // A cat is given a character with setCat(k, name): from its kind where the
 // kind has one (Le Chonk is 'chonk'), else from its ordinal.
+// rate: how far the BANK's standard voice is shifted for a character whose
+// own bank voices are not built yet. rec: how far a RECORDING of this
+// character's cat is resampled, and it stays within a few per cent: a real
+// cat played 14% fast is not a kitten, it is some other animal (founder,
+// 2026-11-16: "make sure you don't tune the sounds to sound like monkeys").
+// A character is its cast (which recorded cats), not a pitch shift.
+// mix: what a call of a kind comes out as. A meow is nearly always a meow
+// (founder: "short on classic meows"); the squeak is gone from every mix,
+// and the prey chatter is the recorded chirp at birds, never the designed
+// "ek-ek" (cat('chatter') in the bank, which nothing measured).
 export const CAT_VOICES = {
-  std: { rate: 1, talk: 1, pick: 0.5, mix: { meow: { meow: 0.6, mew: 0.2, chirrup: 0.12, squeak: 0.08 }, trill: { trill: 0.6, chirrup: 0.4 }, chatter: { chatter: 0.6, chirp: 0.4 } } },
-  chonk: { rate: 0.84, talk: 0.7, pick: 0, mix: { meow: { meow: 0.75, mrrow: 0.25 }, trill: { trill: 0.8, chirrup: 0.2 }, chatter: { chatter: 0.8, chirp: 0.2 } } },
-  kitten: { rate: 1.14, talk: 1.3, pick: 1, mix: { meow: { mew: 0.5, squeak: 0.3, meow: 0.2 }, trill: { chirrup: 0.7, trill: 0.3 }, chatter: { chirp: 0.7, chatter: 0.3 } } },
-  talker: { rate: 0.97, talk: 1.8, pick: 0.3, mix: { meow: { meow: 0.7, mrrow: 0.2, chirrup: 0.1 }, trill: { trill: 0.5, chirrup: 0.5 }, chatter: { chatter: 0.5, chirp: 0.5 } } },
-  shy: { rate: 1.06, talk: 0.5, pick: 0.75, mix: { meow: { squeak: 0.5, mew: 0.3, chirrup: 0.2 }, trill: { chirrup: 0.6, trill: 0.4 }, chatter: { chirp: 0.6, chatter: 0.4 } } },
+  std: { rate: 1, rec: 1, talk: 1, pick: 0.5, mix: { meow: { meow: 0.85, mew: 0.15 }, trill: { trill: 0.75, chirrup: 0.25 }, chatter: { chirp: 1 } } },
+  chonk: { rate: 0.84, rec: 0.95, talk: 0.7, pick: 0, mix: { meow: { meow: 0.8, mrrow: 0.2 }, trill: { trill: 0.85, chirrup: 0.15 }, chatter: { chirp: 1 } } },
+  kitten: { rate: 1.14, rec: 1.04, talk: 1.2, pick: 1, mix: { meow: { mew: 0.55, meow: 0.45 }, trill: { trill: 0.5, chirrup: 0.5 }, chatter: { chirp: 1 } } },
+  talker: { rate: 0.97, rec: 0.99, talk: 1.5, pick: 0.3, mix: { meow: { meow: 0.85, mrrow: 0.15 }, trill: { trill: 0.7, chirrup: 0.3 }, chatter: { chirp: 1 } } },
+  shy: { rate: 1.06, rec: 1.02, talk: 0.6, pick: 0.75, mix: { meow: { meow: 0.6, mew: 0.4 }, trill: { trill: 0.6, chirrup: 0.4 }, chatter: { chirp: 1 } } },
 };
 // the characters a standard cat takes, by its ordinal. 'chonk' is not among
 // them: that one belongs to the kind (the viewer's sfx.catChar)
 export const CAT_ORDER = ['std', 'talker', 'kitten', 'shy'];
 // which recordings can stand in for a kind of call, and how long a cut may be
-const CALL_POOL = { meow: ['meow', 0.5, 9], mew: ['meow', 0, 0.56], trill: ['trill', 0, 9], chirrup: ['trill', 0, 0.5], mrrow: ['trill', 0.5, 9], chirp: ['chatter', 0, 9] };
+const CALL_POOL = { meow: ['meow', 0.45, 9], mew: ['meow', 0, 0.56], trill: ['trill', 0, 9], chirrup: ['trill', 0, 0.5], mrrow: ['trill', 0.5, 9], chirp: ['chatter', 0, 9], mrp: ['trill', 0, 0.45] };
 
 // how much of each courtroom sound goes to the courtroom's reverb when the
 // caller does not say: a gavel is in the room, a ka-ching over gameplay is
@@ -59,6 +69,7 @@ export class SfxEngine {
     this.uiVoices = 0;       // the courtroom has its own budget: a mass break
     this.maxUiVoices = 48;   // must not be able to starve a ka-ching
     this.last = {};          // key -> variant last played (no immediate repeats)
+    this.recent = {};        // rec:pool -> the last few recordings played from it
     this.samples = {};       // pool -> [{ buf, voice, f0, i }] recordings, in manifest order
     this.sampleState = 'off'; // off | loading | ready | failed
     this.cats = {};          // cat ordinal -> { char, voices: { pool: voice } }
@@ -405,13 +416,19 @@ export class SfxEngine {
     const level = opts.bus === 'cats' ? 1 : this.recLevel;
     if (level <= 0) return false;
     if (level !== 1) opts = { ...opts, gain: (opts.gain ?? 1) * level };
-    let c = all.filter((e) => (!voice || e.voice === voice) && e.buf.duration >= min && e.buf.duration <= max);
-    if (!c.length) c = all.filter((e) => e.buf.duration >= min && e.buf.duration <= max);
+    const fits = (e) => e.buf.duration >= min && e.buf.duration <= max;
+    const mine = (e) => !voice || (Array.isArray(voice) ? voice.includes(e.voice) : e.voice === voice);
+    let c = all.filter((e) => mine(e) && fits(e));
+    if (!c.length) c = all.filter(fits);
     if (!c.length) return false;
     const key = 'rec:' + pool;
-    let e = c[(Math.random() * c.length) | 0];
-    if (c.length > 1 && e.i === this.last[key]) e = c[(c.indexOf(e) + 1 + ((Math.random() * (c.length - 1)) | 0)) % c.length];
-    this.last[key] = e.i;
+    // not one of the last few it played (as many as leaves half the choices):
+    // a pool of six cuts heard A B A B reads as two
+    const recent = (this.recent[key] ||= []);
+    const fresh = c.filter((e) => !recent.includes(e.i));
+    const e = (fresh.length ? fresh : c)[(Math.random() * (fresh.length || c.length)) | 0];
+    recent.push(e.i);
+    while (recent.length > Math.min(4, Math.floor(c.length / 2))) recent.shift();
     return this.start(e.buf, key, opts);
   }
 
@@ -472,21 +489,29 @@ export class SfxEngine {
   }
   catTalk(k) { return CAT_VOICES[(this.cats[k] || this.setCat(k)).char].talk; }
 
-  // which recorded cat each cat is: the pool's voices sorted low to high,
-  // this cat's `pick` along them, the next free one if another cat has it —
-  // so three cats are three animals. Only voices with two or more cuts
+  // which recorded cats each cat is: the pool's voices sorted low to high,
+  // this cat's `pick` along them, the next free one if another cat has it
   cast(k, pool) {
     const c = this.cats[k] || this.setCat(k);
     c.voices ||= {};
     if (c.voices[pool] !== undefined) return c.voices[pool];
     const by = {};
     for (const e of this.samples[pool] || []) if (e.voice) (by[e.voice] ||= []).push(e.f0 || 0);
-    const names = Object.keys(by).filter((v) => by[v].length >= 2).sort((a, b) => Math.min(...by[a]) - Math.min(...by[b]));
+    const names = Object.keys(by).sort((a, b) => Math.min(...by[a]) - Math.min(...by[b]));
     if (!names.length) return (c.voices[pool] = null);
-    const taken = new Set(Object.values(this.cats).map((o) => o !== c && o.voices && o.voices[pool]).filter(Boolean));
+    const taken = new Set(Object.values(this.cats).flatMap((o) => (o !== c && o.voices && o.voices[pool]) || []));
     let i = Math.round(CAT_VOICES[c.char].pick * (names.length - 1));
     for (let n = 0; n < names.length && taken.has(names[i]); n++) i = (i + 1) % names.length;
-    return (c.voices[pool] = names[i]);
+    // one recorded cat has two to six cuts, and a cat that only ever says
+    // those repeats itself (founder, 2026-11-16: "it gets repetitive"), so
+    // a cat is cast as its own recorded cat and the nearest in pitch that
+    // no other cat has: up to three animals that could pass for one
+    const set = [names[i]];
+    for (const d of [1, -1, 2, -2]) {
+      const v = names[i + d];
+      if (set.length < 3 && v && !taken.has(v)) set.push(v);
+    }
+    return (c.voices[pool] = set);
   }
 
   // cat k says something of this kind. The character decides what exactly
@@ -501,7 +526,7 @@ export class SfxEngine {
     }
     const rec = CALL_POOL[kind];
     if (rec && Math.random() < this.catReal
-      && this.sample(rec[0], { voice: this.cast(k, rec[0]), min: rec[1], max: rec[2], pan, gain: gain * 1.1, rate: V.rate * jit(0.03), wet, when, bus: 'cats' })) {
+      && this.sample(rec[0], { voice: this.cast(k, rec[0]), min: rec[1], max: rec[2], pan, gain: gain * 1.1, rate: (V.rec ?? 1) * jit(0.02), wet, when, bus: 'cats' })) {
       this.stats['cat:' + kind] = (this.stats['cat:' + kind] || 0) + 1;
       return true;
     }

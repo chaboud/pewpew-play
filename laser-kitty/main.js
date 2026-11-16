@@ -6,21 +6,21 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k68';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k68';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k69';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k69';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k68';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k69';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k68';
-import { mountNav } from './nav.js?v=k68';
-import { SfxEngine, } from './sfx.js?v=k68';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k68';
+import { CatRig } from './catrig.js?v=k69';
+import { mountNav } from './nav.js?v=k69';
+import { SfxEngine, } from './sfx.js?v=k69';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k69';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k68';
+import { ROOM_ART } from './rooms/index.js?v=k69';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,11 +34,11 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k68'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k69'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
-const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', chonks: 0, sound: true, catVolume: 1, fxVolume: 1, catReal: 1, recLevel: 1, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
+const DEFAULTS = { cats: 1, weight: 1, strength: 1, gravity: 1, destruct: 0.3, room: 0, quality: 2, shadows: 'auto', shadowStrength: 1, ao: 'on', aoStrength: 4, haze: 'auto', hazeStrength: 1, glowStrength: 1, bounce: 1, laser: 'compact', padScale: 0.5, catver: 'v2', chonks: 0, sound: true, catVolume: 1, fxVolume: 1, catReal: 1, recLevel: 1, catChat: 0.5, pops: false, backdrop: 'stage', style: 'classic', tilt: 0, outline: 0, punch: 0 };
 let cfg = { ...DEFAULTS };
 try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('lk-settings') || '{}') }; } catch {}
 // older saves stored shadows as a boolean; fold into the mode string
@@ -3908,7 +3908,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k68', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k69', import.meta.url));
   // the recordings (sounds/manifest.json): fetched and decoded in the
   // background; until they are in, and if they never arrive, the bank plays
   if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
@@ -4398,11 +4398,23 @@ const sfx = {
     if (throttled('pounce', 150)) return;
     const pan = catPanOf(k);
     engine.play('whoosh', { pan, gain: 0.5, rate: jit(0.1) });
-    if (Math.random() < 0.6) engine.catCall(k, 'mrp', { pan, gain: 0.55 });
+    if (Math.random() < 0.35 * cfg.catChat && !catThrottled('any', k, 3200 / Math.max(0.5, Math.min(2, cfg.catChat)))) engine.catCall(k, 'mrp', { pan, gain: 0.55 });
   },
   // vocals: per cat, panned to where that cat is
-  cat(kind, k = 0, ms = 900) {
+  // p: how likely this moment is to draw a sound at all, before the
+  // settings' chattiness scales it (founder, 2026-11-16: "the density of
+  // cat sounds overall may be a bit high... a 'likelihood of speaking'
+  // slider in settings while we tune"). A chattier setting also shortens
+  // the gap a cat leaves between two calls of a kind.
+  cat(kind, k = 0, ms = 900, p = 1) {
     if (!ac) return;
+    const chat = cfg.catChat;
+    if (!(chat > 0) || Math.random() > p * chat) return;
+    const hurry = Math.max(0.5, Math.min(2, chat));
+    ms /= hurry;
+    // and no cat says two things of any kind inside a few seconds: a dot
+    // jinking through a cat's view is a lock-on every second
+    if (catThrottled('any', k, 3200 / hurry)) return;
     // a cat's character (sfx.js CAT_VOICES): its voice, what it says when
     // asked for a kind of call, and how often it bothers
     if (engine) { const ch = sfx.catChar(k); if (ch) engine.setCat(k, ch); ms /= engine.catTalk(k); }
@@ -4618,6 +4630,7 @@ bindSlider('volcat', 'catVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if 
 bindSlider('volfx', 'fxVolume', (v) => `${Math.round(v * 100)}%`, (v) => { if (engine) engine.setLevel('fx', v); });
 // recordings against the synthesised bank, for an A/B by ear: how often a
 // cat's call is a real cat, and how loud real breaks sit over modelled ones
+bindSlider('catchat', 'catChat', (v) => (v === 0 ? 'silent' : `${Math.round(v * 100)}%`));
 bindSlider('catreal', 'catReal', (v) => (v === 0 ? 'synth only' : `${Math.round(v * 100)}%`), (v) => { if (engine) engine.catReal = v; });
 bindSlider('reclevel', 'recLevel', (v) => (v === 0 ? 'synth only' : `${Math.round(v * 100)}%`), (v) => { if (engine) engine.recLevel = v; });
 bindSlider('glowstr', 'glowStrength', (v) => v.toFixed(1));
@@ -4734,10 +4747,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k68');
+      const { Story } = await import('./story.js?v=k69');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k68');
+      const { Career } = await import('./career.js?v=k69');
       game = new Career(api);
     }
   } else {
@@ -4828,10 +4841,15 @@ function frame(now) {
         // cat vocals ride the brain's state changes
         const to = code & 0xff;
         const ck = (code >> 8) & 0xff;
-        if (to === 1) sfx.cat('trill', ck, 900); // lock-on: "brrrp?"
-        if (to === 3) sfx.cat('chatter', ck, 1600); // windup: the prey chatter
-        if (to === 6) sfx.cat(Math.random() < 0.7 ? 'meow' : 'mew', ck, 4000); // bored: "hey, keep playing"
-        if (to === 7) sfx.cat('trill', ck, 2500); // zoomies kick off with a trill
+        // what a cat says, and how often. A chase is lock-on, windup, pounce
+        // over and over: voiced every time it was a wall of trills and
+        // chatter with a meow only for boredom. Now most moments pass in
+        // silence, half of lock-ons are a plain meow, and the chatter
+        // is the rare one.
+        if (to === 1) sfx.cat(Math.random() < 0.5 ? 'meow' : 'trill', ck, 1500, 0.4); // lock-on: "mew?" or "brrrp?"
+        if (to === 3) sfx.cat('chatter', ck, 3000, 0.15); // windup: now and then the chirp at prey
+        if (to === 6) sfx.cat(Math.random() < 0.85 ? 'meow' : 'mew', ck, 4000, 1); // bored: "hey, keep playing"
+        if (to === 7) sfx.cat('trill', ck, 2500, 0.7); // zoomies kick off with a trill
       }
       if (ev === 2) sfx.pounce(code & 0xfff);
       if (ev === 3) sfx.impact(meshes[(code >>> 12) & 0x1fff]);
@@ -4992,7 +5010,17 @@ function frame(now) {
         view.tumbleT = 0;
         view.starT = 2.0;
         sfx.land(panOf(view.group));
-        if (Math.random() < 0.5) sfx.cat('mrrow', view.k, 2500);
+        sfx.cat('mrrow', view.k, 2500, 0.5);
+      }
+      // an idle cat says something now and then, and what it says is a
+      // meow: the one call everyone knows was the one the game used least.
+      // Rarer per cat the more cats there are, so a full house is not a choir
+      if (st === 0) {
+        view.nextMeow ??= now + 6000 + Math.random() * 14000;
+        if (now > view.nextMeow) {
+          view.nextMeow = now + 10000 + Math.random() * 16000;
+          sfx.cat(Math.random() < 0.8 ? 'meow' : 'trill', view.k, 6000, 0.7 / Math.sqrt(Math.max(1, catViews.size)));
+        }
       }
       if (st === 7 && now - (view.lastPuff ?? 0) > 110) {
         // zoomies kick up dust

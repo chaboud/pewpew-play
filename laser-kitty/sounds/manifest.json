@@ -568,6 +568,32 @@
    },
    {
     "f": "meow-07.mp3",
+    "src": "177614",
+    "t": [
+     0.04,
+     1.384
+    ],
+    "dur": 1.344,
+    "cen": 2065,
+    "rms": -24.1,
+    "f0": 573,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-08.mp3",
+    "src": "177614",
+    "t": [
+     4.014,
+     4.566
+    ],
+    "dur": 0.552,
+    "cen": 2661,
+    "rms": -17.4,
+    "f0": 531,
+    "voice": "aminut"
+   },
+   {
+    "f": "meow-09.mp3",
     "src": "192047",
     "t": [
      0.0,
@@ -580,7 +606,7 @@
     "voice": "Wdfourtee"
    },
    {
-    "f": "meow-08.mp3",
+    "f": "meow-10.mp3",
     "src": "192048",
     "t": [
      0.076,
@@ -593,7 +619,7 @@
     "voice": "Wdfourtee"
    },
    {
-    "f": "meow-09.mp3",
+    "f": "meow-11.mp3",
     "src": "220019",
     "t": [
      0.0,
@@ -606,7 +632,20 @@
     "voice": "Chocktaw"
    },
    {
-    "f": "meow-10.mp3",
+    "f": "meow-12.mp3",
+    "src": "246037",
+    "t": [
+     1.572,
+     2.166
+    ],
+    "dur": 0.594,
+    "cen": 1952,
+    "rms": -34.7,
+    "f0": 658,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-13.mp3",
     "src": "246037",
     "t": [
      5.39,
@@ -619,7 +658,7 @@
     "voice": "UncleSigmund"
    },
    {
-    "f": "meow-11.mp3",
+    "f": "meow-14.mp3",
     "src": "246037",
     "t": [
      7.05,
@@ -632,7 +671,33 @@
     "voice": "UncleSigmund"
    },
    {
-    "f": "meow-12.mp3",
+    "f": "meow-15.mp3",
+    "src": "246037",
+    "t": [
+     11.972,
+     12.64
+    ],
+    "dur": 0.668,
+    "cen": 1190,
+    "rms": -36.1,
+    "f0": 639,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-16.mp3",
+    "src": "246037",
+    "t": [
+     13.756,
+     14.518
+    ],
+    "dur": 0.762,
+    "cen": 1581,
+    "rms": -33.6,
+    "f0": 630,
+    "voice": "UncleSigmund"
+   },
+   {
+    "f": "meow-17.mp3",
     "src": "246037",
     "t": [
      18.958,
@@ -645,7 +710,7 @@
     "voice": "UncleSigmund"
    },
    {
-    "f": "meow-13.mp3",
+    "f": "meow-18.mp3",
     "src": "262312",
     "t": [
      0.024,
@@ -658,7 +723,7 @@
     "voice": "steffcaffrey"
    },
    {
-    "f": "meow-14.mp3",
+    "f": "meow-19.mp3",
     "src": "262314",
     "t": [
      0.052,
@@ -671,7 +736,33 @@
     "voice": "steffcaffrey"
    },
    {
-    "f": "meow-15.mp3",
+    "f": "meow-20.mp3",
+    "src": "386737",
+    "t": [
+     6.014,
+     7.352
+    ],
+    "dur": 1.338,
+    "cen": 588,
+    "rms": -37.9,
+    "f0": 424,
+    "voice": "ken788"
+   },
+   {
+    "f": "meow-21.mp3",
+    "src": "386737",
+    "t": [
+     9.924,
+     11.348
+    ],
+    "dur": 1.424,
+    "cen": 1348,
+    "rms": -39.4,
+    "f0": 450,
+    "voice": "ken788"
+   },
+   {
+    "f": "meow-22.mp3",
     "src": "386737",
     "t": [
      13.806,
@@ -684,7 +775,33 @@
     "voice": "ken788"
    },
    {
-    "f": "meow-16.mp3",
+    "f": "meow-23.mp3",
+    "src": "414042",
+    "t": [
+     0.212,
+     0.642
+    ],
+    "dur": 0.43,
+    "cen": 2268,
+    "rms": -20.6,
+    "f0": 551,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-24.mp3",
+    "src": "414042",
+    "t": [
+     0.846,
+     1.716
+    ],
+    "dur": 0.87,
+    "cen": 2157,
+    "rms": -20.4,
+    "f0": 569,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-25.mp3",
     "src": "414042",
     "t": [
      1.912,
@@ -697,7 +814,7 @@
     "voice": "nekoninja"
    },
    {
-    "f": "meow-17.mp3",
+    "f": "meow-26.mp3",
     "src": "414042",
     "t": [
      3.436,
@@ -710,7 +827,20 @@
     "voice": "nekoninja"
    },
    {
-    "f": "meow-18.mp3",
+    "f": "meow-27.mp3",
+    "src": "414042",
+    "t": [
+     4.39,
+     5.06
+    ],
+    "dur": 0.67,
+    "cen": 2041,
+    "rms": -16.7,
+    "f0": 510,
+    "voice": "nekoninja"
+   },
+   {
+    "f": "meow-28.mp3",
     "src": "414042",
     "t": [
      5.514,
@@ -723,7 +853,20 @@
     "voice": "nekoninja"
    },
    {
-    "f": "meow-19.mp3",
+    "f": "meow-29.mp3",
+    "src": "64005",
+    "t": [
+     0.032,
+     0.526
+    ],
+    "dur": 0.494,
+    "cen": 2678,
+    "rms": -15.4,
+    "f0": 596,
+    "voice": "Department64"
+   },
+   {
+    "f": "meow-30.mp3",
     "src": "64014",
     "t": [
      0.014,
@@ -736,7 +879,7 @@
     "voice": "Department64"
    },
    {
-    "f": "meow-20.mp3",
+    "f": "meow-31.mp3",
     "src": "64017",
     "t": [
      0.07,
@@ -749,7 +892,7 @@
     "voice": "Department64"
    },
    {
-    "f": "meow-21.mp3",
+    "f": "meow-32.mp3",
     "src": "64018",
     "t": [
      0.036,
@@ -1600,6 +1743,15 @@
    "clip": "FSD50K.dev_audio/51161.wav",
    "note": "earthenware plate"
   },
+  "64005": {
+   "title": "kitten10.wav",
+   "author": "Department64",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/64005/",
+   "clip": "FSD50K.dev_audio/64005.wav",
+   "note": "friendly alert"
+  },
   "64014": {
    "title": "kitten19.wav",
    "author": "Department64",
@@ -1895,6 +2047,15 @@
    "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
    "url": "https://freesound.org/s/177613/",
    "clip": "FSD50K.dev_audio/177613.wav",
+   "note": "wants petting"
+  },
+  "177614": {
+   "title": "02 Cat Miauing",
+   "author": "aminut",
+   "licence": "CC0 1.0",
+   "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://freesound.org/s/177614/",
+   "clip": "FSD50K.dev_audio/177614.wav",
    "note": "wants petting"
   },
   "187136": {

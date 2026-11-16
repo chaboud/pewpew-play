@@ -13,9 +13,9 @@
 // setMood / setLineup / setCam / stats().
 
 import * as THREE from 'three';
-import { CatRig, POSES, COAT_NAMES } from './catrig.js?v=k68';
-import { MOOD_NAMES } from './catgen7.js?v=k68';
-import { mountNav } from './nav.js?v=k68';
+import { CatRig, POSES, COAT_NAMES } from './catrig.js?v=k69';
+import { MOOD_NAMES } from './catgen7.js?v=k69';
+import { mountNav } from './nav.js?v=k69';
 mountNav({ right: '10px', top: '10px' });
 
 const params = new URLSearchParams(location.search);
