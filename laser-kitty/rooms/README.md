@@ -71,6 +71,20 @@ A mesh that should glow into the haze and the light volume sets
 and puts its bright parts on `GLOW_LAYER`. Set `m.userData.noShadow = true`
 for things that must not cast.
 
+Breaking needs nothing here either. When a brittle body breaks, `main.js`
+cuts whatever `mesh()` returned for it into the sim's pieces (`shards.js`):
+every mesh under the group, by the cut planes, with its materials. A piece
+is never passed to `mesh()` as a new body. Three things a module can say:
+a child mesh with `userData.shard = false` is left out of the pieces (a
+plaque, a liquid's surface — a material styled by `kit.liquidStyle` is
+left out already, and so are price tags and pools of light); a body the
+module does not recognize at all, if it is brittle, is drawn by `main.js`
+as the solid the sim will break it as (a turned profile, a disc), not as
+a box; and a hero piece turned from a profile should have the same
+profile in its room's Rust file (see `rd_break_plans` in
+`core/src/room_reddot.rs`), so that its shards' colliders lie where its
+drawn wall is.
+
 Sounds mostly need nothing here: the viewer classes every mesh from the
 sim's material bits (brittle + high gloss = glass, brittle = ceramic, soft,
 steel by gloss, else wood). A mesh that should sound like an instrument or

@@ -6,21 +6,23 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k69';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k69';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k70';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k70';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k69';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k70';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k69';
-import { mountNav } from './nav.js?v=k69';
-import { SfxEngine, } from './sfx.js?v=k69';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k69';
+import { CatRig } from './catrig.js?v=k70';
+import { mountNav } from './nav.js?v=k70';
+import { SfxEngine, } from './sfx.js?v=k70';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k70';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k69';
+import { ROOM_ART } from './rooms/index.js?v=k70';
+// a piece of a broken thing is cut out of that thing's own art (shards.js)
+import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k70';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -34,7 +36,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k69'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k70'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -956,6 +958,7 @@ function eachMat(m, fn) {
 // else rides the paint hue wheel (coffee ~0.0265, wine 0.346, liquor
 // bottles pour their glass tint).
 function liquidStyle(mat, tint) {
+  mat.userData.liquid = true; // what a thing holds is not part of it when it breaks (shards.js)
   if (tint >= 0.975) {
     mat.color.set(0xf2efe6);
   } else if (tint >= 0.94) {
@@ -2836,7 +2839,18 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
   }
   let geo;
   const fuzzy = cls === 2 && shape === 1 && gloss <= 0.1;
-  if (shape === 1) geo = new THREE.SphereGeometry(a, fuzzy ? 18 : 14, fuzzy ? 14 : 12);
+  // A brittle prop no art recognized is drawn as the solid the sim will
+  // break it as (its break plan: a turned profile, a disc), not as its
+  // collision box — a vase the solver holds as a box is still a vase, and
+  // its shards are cut from this.
+  const plan = cls === 2 && shape === 0 ? breakShape(i) : null;
+  if (plan && plan.form === 2) geo = turnedGeometry(plan, a, b, c);
+  else if (plan && plan.form === 1 && plan.round) {
+    const [r, h2] = plan.axis === 0 ? [Math.max(b, c), a] : plan.axis === 1 ? [Math.max(a, c), b] : [Math.max(a, b), c];
+    geo = new THREE.CylinderGeometry(r, r, h2 * 2, 20);
+    if (plan.axis === 0) geo.rotateZ(Math.PI / 2);
+    else if (plan.axis === 2) geo.rotateX(Math.PI / 2);
+  } else if (shape === 1) geo = new THREE.SphereGeometry(a, fuzzy ? 18 : 14, fuzzy ? 14 : 12);
   else if (shape === 2) geo = new THREE.CapsuleGeometry(b, a * 2, 4, 10);
   else geo = new THREE.BoxGeometry(a * 2, b * 2, c * 2);
   if (fuzzy) roughen(geo, 0.14); // yarn, plush toys, foliage
@@ -2886,12 +2900,113 @@ function meshFor(i, shape, a, b, c, cls, py, gloss, tint, px, pz = 0) {
   } else {
     mat = toonMat(color);
   }
+  if (plan && plan.form === 2 && plan.hollow && mat.side !== THREE.DoubleSide) {
+    mat = mat.clone(); // open at the lip: the inside shows
+    mat.side = THREE.DoubleSide;
+  }
   m = new THREE.Mesh(geo, mat);
   m.castShadow = cls !== 0;
   // tall thin statics (walls, partitions) neither cast nor receive:
   // VSM at grazing incidence paints variance blobs on big flat walls
   // (founder's bathroom shimmer), and nothing casts onto them anyway
   m.receiveShadow = !(cls === 0 && b >= 0.8 && Math.min(a, c) <= 0.35);
+  scene.add(m);
+  return m;
+}
+
+// --- what the sim says a brittle thing is --------------------------------------
+// lk_break_shape: the body's break plan (core/src/fracture.rs): form 0 a
+// block, 1 a pane (thin along `axis`; `round` a disc), 2 turned about
+// `axis` to `profile` ([radius, height from the centre] in metres, rising).
+function breakShape(i) {
+  if (!lk.lk_break_shape) return null;
+  const len = lk.lk_break_shape_len(sim, i);
+  if (!len) return null;
+  const f = new Float32Array(lk.memory.buffer, lk.lk_break_shape(sim, i), len);
+  const profile = [];
+  for (let k = 0; k < (f[5] | 0); k++) profile.push([f[6 + 2 * k], f[7 + 2 * k]]);
+  return { form: f[0] | 0, axis: f[1] | 0, hollow: !!f[2], round: !!f[3], wall: f[4], profile };
+}
+// the profile turned, inside the body's box: a hollow thing is open at the
+// lip and closed at the foot, a solid one closed at both
+function turnedGeometry(plan, a, b, c) {
+  const pts = plan.profile.map(([r, y]) => new THREE.Vector2(Math.max(r, 0.0004), y));
+  if (plan.profile[0][0] > 0.001) pts.unshift(new THREE.Vector2(0.0004, plan.profile[0][1]));
+  const last = plan.profile[plan.profile.length - 1];
+  if (!plan.hollow && last[0] > 0.001) pts.push(new THREE.Vector2(0.0004, last[1]));
+  const h = [a, b, c];
+  const [u, v] = plan.axis === 0 ? [1, 2] : plan.axis === 1 ? [0, 2] : [0, 1];
+  const r = Math.max(h[u], h[v]);
+  const geo = new THREE.LatheGeometry(pts, r > 0.05 ? 20 : 14);
+  geo.scale(h[u] / r, 1, h[v] / r);
+  if (plan.axis === 0) geo.rotateZ(-Math.PI / 2);
+  else if (plan.axis === 2) geo.rotateX(Math.PI / 2);
+  return geo;
+}
+
+// --- pieces of broken things ---------------------------------------------------
+// The sim says which body a piece came from (its ROOT, however many breaks
+// ago) and the planes that cut it; shards.js cuts the root's own art by
+// them. The root's mesh is still in `meshes` after it breaks (hidden), so
+// it is there to cut from, whichever room drew it and however many ticks
+// the sim ran between two frames.
+const shardRestMat = toonMat(0xffffff, { vertexColors: true, side: THREE.DoubleSide });
+const shardCaps = new Map();
+function shardCapMat(hex) {
+  let m = shardCaps.get(hex);
+  if (!m) {
+    m = toonMat(hex, { side: THREE.DoubleSide });
+    shardCaps.set(hex, m);
+  }
+  return m;
+}
+// what shows where a thing is broken: the green of a glass edge, biscuit
+// under a glaze, the dark inside of a screen, stone's own paler stone
+function shardInterior(root, pd) {
+  const snd = root.userData.snd || {};
+  if (snd.electric && pd.pane) return 0x2b2e33;
+  if (root.userData.voice === 'stone') return 0xd3cec4;
+  if (snd.mat === 'glass') return 0xb9dccf;
+  if (snd.mat === 'ceramic') return 0xe9dfd0;
+  let c = null;
+  root.traverse((n) => {
+    if (!c && n.isMesh && n.material && n.material.color) c = n.material.color;
+  });
+  return (c ? c.clone() : new THREE.Color(0x999999)).lerp(new THREE.Color(0xe8e0d2), 0.45).getHex();
+}
+function pieceMesh(i, data, o) {
+  if (!lk.lk_piece) return null;
+  const len = lk.lk_piece_len(sim, i);
+  if (!len) return null;
+  const pd = parsePiece(new Float32Array(lk.memory.buffer, lk.lk_piece(sim, i), len));
+  const root = meshes[pd.root];
+  let m = null;
+  if (root && root !== clothDummy && root.userData.half) {
+    m = cutPiece(root, pd, {
+      half: root.userData.half, interior: shardInterior(root, pd), dead: !!root.userData.snd?.electric,
+      capMat: shardCapMat, restMat: shardRestMat, extent: 2 * Math.max(data[o + 2], data[o + 3], data[o + 4]), shadowMin: 0.08,
+    })
+      // a cell with none of the art in it is drawn as nothing, not as a crate
+      ?? new THREE.Group();
+    m.userData.cut = true;
+    m.userData.parentColored = true;
+    if (root.userData.voice) m.userData.voice = root.userData.voice;
+  } else {
+    // no art to cut (the root was never drawn): the collider's hull, in
+    // the root's colour — the root's, not the parent's, which may be a
+    // piece that was born and broken between two frames and never drawn
+    let c = null;
+    root?.traverse?.((n) => {
+      if (!c && n.isMesh && n.material && n.material.color && !n.userData.tag) c = n.material.color;
+    });
+    m = new THREE.Mesh(hullGeometry(pd), toonMat(c ?? bodyColor(pd.root, 2, [data[o + 2], data[o + 3], data[o + 4]], data[o + 6])));
+    m.castShadow = m.receiveShadow = true;
+    m.userData.cut = true;
+    m.userData.parentColored = true;
+  }
+  m.userData.bodyIndex = i;
+  m.userData.cls = 2;
+  m.userData.piece = { root: pd.root, gen: pd.gen, hollow: pd.hollow, pane: pd.pane, planes: pd.planes.length / 4 };
   scene.add(m);
   return m;
 }
@@ -3476,7 +3591,16 @@ function clampPan() {
   panXT = Math.max(-panLimX(), Math.min(panLimX(), panXT));
   panYT = Math.max(panYMin, Math.min(panYMax, panYT));
 }
+// a harness's own camera (window.__lk.eye): close-ups the pinch cannot reach;
+// and its own clock (window.__lk.hold): the frame loop stops stepping the sim
+let testEye = null, testHold = false;
 function applyLook(bob = 0) {
+  if (testEye) {
+    camera.position.set(...testEye.from);
+    camera.lookAt(...testEye.to);
+    if (camera.fov !== testEye.fov) { camera.fov = testEye.fov; camera.updateProjectionMatrix(); }
+    return;
+  }
   camera.position.set(
     EYE.x + panX + (Math.random() - 0.5) * shake * 0.06,
     EYE.y + panY + bob + (Math.random() - 0.5) * shake * 0.05,
@@ -3908,7 +4032,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k69', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k70', import.meta.url));
   // the recordings (sounds/manifest.json): fetched and decoded in the
   // background; until they are in, and if they never arrive, the bank plays
   if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
@@ -4747,10 +4871,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k69');
+      const { Story } = await import('./story.js?v=k70');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k69');
+      const { Career } = await import('./career.js?v=k70');
       game = new Career(api);
     }
   } else {
@@ -4818,6 +4942,7 @@ function frame(now) {
   // perception sees continuous dot motion, not a park-then-teleport
   // (matters at ~20fps on a struggling phone, and for the headless
   // playtest driver at software-GL frame rates)
+  if (testHold) acc = 0; // a harness is stepping the sim itself
   const nTicks = Math.floor(acc / DT);
   let tickK = 0;
   while (acc >= DT) {
@@ -5122,13 +5247,16 @@ function frame(now) {
       if (clothSet.has(i)) {
         meshes[i] = clothDummy; // skinned by its patch, not per-particle
       } else {
-        meshes[i] = meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5], data[o + 7]);
+        // a piece of a broken thing (shape 3) is never handed to the art
+        // as a new object: it is cut out of the thing it came from
+        meshes[i] = (data[o + 1] === 3 && pieceMesh(i, data, o)) || meshFor(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 6], data[o + 13], data[o + 14], data[o + 5], data[o + 7]);
+        meshes[i].userData.half = [data[o + 2], data[o + 3], data[o + 4]];
         meshes[i].userData.snd = soundClass(i, data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o], data[o + 13]);
         // a puddle born mid-play is a spill landing: splash
         if (meshes[i].userData.puddle && now - roomBuiltAt > 2000) sfx.splash(-data[o + 5] / 3, data[o + 2] > 0.12 ? 2 : data[o + 2] > 0.06 ? 1 : 0);
         // spawned pieces (flag carries parent rec + 1) inherit the parent
         // mesh's color — TV shards look like the TV, not a fresh rainbow
-        if (data[o] === 2 && !meshes[i].userData.spark) {
+        if (data[o] === 2 && !meshes[i].userData.spark && !meshes[i].userData.cut) {
           const parent = (data[o + 12] | 0) >> 1;
           if (parent > 0 && meshes[parent - 1]) {
             let pc = null;
@@ -5447,6 +5575,22 @@ window.__lk = {
     }));
   },
   fling: (rec, x, y, z) => lk.lk_fling(sim, rec, x, y, z),
+  // break one thing with a chosen blow: a jump in velocity, m/s (a thing
+  // breaks by itself past 1.6 over the Destruction setting). Returns the
+  // number of pieces. piece(i) says what a piece is a piece of; brittle(i)
+  // whether a body can still break.
+  strike: (rec, x, y, z) => lk.lk_strike(sim, rec, x, y, z),
+  // look from a point at a point with a field of view, bypassing the pan
+  // and zoom limits (null hands the camera back); steps(n) runs the sim n
+  // ticks at once with the laser off, dropping their events
+  eye: (from, to, fov = 30) => { testEye = from ? { from, to, fov } : null; if (!testEye) resize(); applyLook(); },
+  steps: (n) => { for (let k = 0; k < n; k++) lk.lk_step(sim, 0, 1.25, -5.35, 0, 0, 1, 0); },
+  hold: (on = true) => { testHold = !!on; },
+  piece: (rec) => meshes[rec]?.userData.piece ?? null,
+  mesh: (rec) => meshes[rec] ?? null,
+  brittle: (rec) => !!lk.lk_body_brittle(sim, rec),
+  material: (rec) => lk.lk_body_material(sim, rec),
+  plan: (rec) => breakShape(rec),
   spin: (rec, x, y, z) => lk.lk_spin(sim, rec, x, y, z),
   row: (rec) => {
     const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), lk.lk_body_count(sim) * FLOATS_PER_BODY);
