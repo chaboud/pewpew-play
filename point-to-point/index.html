@@ -47,9 +47,10 @@
   .pedal.down { background: rgba(242,240,234,.3); color: var(--ink); }
   #gas { right: calc(12px + env(safe-area-inset-right)); height: 132px; }
   #brake { right: calc(108px + env(safe-area-inset-right)); }
+  #seam { position: absolute; right: calc(72px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 60px; text-align: center; font-size: 9px; letter-spacing: .08em; color: var(--dim); pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
   #hand { right: calc(12px + env(safe-area-inset-right)); bottom: calc(158px + env(safe-area-inset-bottom)); height: 46px; width: 180px; }
 </style>
-  <script type="module" crossorigin src="./assets/index-D8Fu0WPX.js"></script>
+  <script type="module" crossorigin src="./assets/index-N8Pwh7E6.js"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -58,6 +59,7 @@
   <div class="pedal" id="hand" data-pedal="hand">HANDBRAKE</div>
   <div class="pedal" id="brake" data-pedal="brake">BRAKE</div>
   <div class="pedal" id="gas" data-pedal="gas">GAS</div>
+  <div id="seam">◂ BOTH ▸</div>
 </div>
 <div id="hud">
   <div id="stamp"></div>
