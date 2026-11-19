@@ -13,6 +13,7 @@ lives here.
 | `strollzilla/` | Strollzilla | its sessions, by hand |
 | `laser-kitty/` | Laser Kitty | its sessions, by hand (also `chaboud/laser-kitty-play`) |
 | `splinecraft/` | Splinecraft | its sessions, by hand |
+| `point-to-point/` | Point-to-point | `scripts/publish-play.sh` in the Point-to-point repo |
 
 The root holds only `index.html` (the list of games), `robots.txt`,
 `.nojekyll` and this file.
