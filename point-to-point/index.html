@@ -25,19 +25,26 @@
   #hurt { font-size: 11px; color: var(--hot); min-height: 14px; margin-top: 3px; }
   #clock { position: absolute; top: calc(8px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.7); text-align: center; }
   #clock small { display: block; font-size: 11px; font-weight: 500; color: var(--dim); }
-  #bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 6px; pointer-events: auto; }
+  #bar { z-index: 3; position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 6px; pointer-events: auto; }
   button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 8px 11px; min-width: 40px; min-height: 40px; -webkit-tap-highlight-color: transparent; }
   button:active, button.on { background: rgba(242,240,234,.2); }
-  #menu { position: absolute; top: calc(56px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); width: min(330px, calc(100vw - 16px)); max-height: calc(100vh - 80px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; pointer-events: auto; display: none; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); touch-action: pan-y; }
+  #menu { z-index: 3; position: absolute; top: calc(56px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); width: min(330px, calc(100vw - 16px)); max-height: calc(100vh - 80px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; pointer-events: auto; display: none; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); touch-action: pan-y; }
   #menu.open { display: block; }
   #menu h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 10px 2px 6px; font-weight: 600; }
   #menu h2:first-child { margin-top: 2px; }
   #menu .row { display: flex; flex-wrap: wrap; gap: 6px; }
   #menu .starts button { display: block; width: 100%; text-align: left; margin-bottom: 6px; }
   #report { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); white-space: pre-wrap; margin: 8px 2px 2px; -webkit-user-select: text; user-select: text; }
-  #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; opacity: 0; transition: opacity .25s; max-width: 80vw; text-align: center; }
+  #toast { z-index: 3; position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; opacity: 0; transition: opacity .25s; max-width: 80vw; text-align: center; }
   #toast.show { opacity: 1; }
   #stamp { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); font-size: 10px; color: var(--dim); text-shadow: 0 1px 3px rgba(0,0,0,.8); max-width: 44vw; }
+  #mini { position: absolute; left: calc(10px + env(safe-area-inset-left)); top: calc(40px + env(safe-area-inset-top)); width: 132px; height: 132px; border-radius: 50%; pointer-events: auto; box-shadow: 0 2px 12px rgba(0,0,0,.55); }
+  /* the big map turns in from the left edge like a page; the pedals stay clear of it, the wheel does not (Q-16) */
+  #map { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(212px + env(safe-area-inset-right)); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #171c23; pointer-events: auto; z-index: 2; transform-origin: left center; transform: perspective(1200px) rotateY(-88deg); opacity: 0; visibility: hidden; transition: transform .32s cubic-bezier(.2,.7,.2,1), opacity .2s, visibility 0s .32s; }
+  #map.open { transform: perspective(1200px) rotateY(0deg); opacity: 1; visibility: visible; transition: transform .32s cubic-bezier(.2,.7,.2,1), opacity .12s; }
+  #map canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #map-bar { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; }
+  #map-note { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--dim); text-shadow: 0 1px 3px rgba(0,0,0,.9); pointer-events: none; }
   #touch { position: fixed; inset: 0; z-index: 4; display: none; }
   @media (pointer: coarse) { #touch { display: block; } }
   #wheel { position: absolute; left: 0; top: 18%; bottom: 0; width: 50%; }
@@ -50,7 +57,7 @@
   #seam { position: absolute; right: calc(72px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 60px; text-align: center; font-size: 9px; letter-spacing: .08em; color: var(--dim); pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
   #hand { right: calc(12px + env(safe-area-inset-right)); bottom: calc(158px + env(safe-area-inset-bottom)); height: 46px; width: 180px; }
 </style>
-  <script type="module" crossorigin src="./assets/index-N8Pwh7E6.js"></script>
+  <script type="module" crossorigin src="./assets/index-aL9dS5_j.js"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -63,6 +70,11 @@
 </div>
 <div id="hud">
   <div id="stamp"></div>
+  <canvas id="mini" title="Map (N)"></canvas>
+  <div id="map"><canvas></canvas>
+    <div id="map-bar"><button id="map-in" title="Closer">+</button><button id="map-out" title="Further">−</button><button id="map-clear">no target</button><button id="map-close" title="Back to the road (N)">✕</button></div>
+    <div id="map-note">tap a street to set a target · the road does not wait</div>
+  </div>
   <div id="clock"><span id="time">0:00.0</span><small id="place"></small></div>
   <div id="dash"><div id="speed">0<small>km/h</small></div><div id="gear">1</div><div id="rpm"><i></i></div><div id="hurt"></div></div>
   <div id="bar">
