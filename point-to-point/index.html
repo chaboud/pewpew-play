@@ -22,6 +22,7 @@
   #rpm { width: 150px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.18); margin: 5px auto 0; overflow: hidden; }
   #rpm i { display: block; height: 100%; width: 0; background: var(--ink); }
   #rpm i.red { background: var(--hot); }
+  #hurt { font-size: 11px; color: var(--hot); min-height: 14px; margin-top: 3px; }
   #clock { position: absolute; top: calc(8px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; text-shadow: 0 1px 6px rgba(0,0,0,.7); text-align: center; }
   #clock small { display: block; font-size: 11px; font-weight: 500; color: var(--dim); }
   #bar { position: absolute; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); display: flex; gap: 6px; pointer-events: auto; }
@@ -48,7 +49,7 @@
   #brake { right: calc(108px + env(safe-area-inset-right)); }
   #hand { right: calc(12px + env(safe-area-inset-right)); bottom: calc(158px + env(safe-area-inset-bottom)); height: 46px; width: 180px; }
 </style>
-  <script type="module" crossorigin src="./assets/index-K5gTCgV1.js"></script>
+  <script type="module" crossorigin src="./assets/index-D8Fu0WPX.js"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -61,7 +62,7 @@
 <div id="hud">
   <div id="stamp"></div>
   <div id="clock"><span id="time">0:00.0</span><small id="place"></small></div>
-  <div id="dash"><div id="speed">0<small>km/h</small></div><div id="gear">1</div><div id="rpm"><i></i></div></div>
+  <div id="dash"><div id="speed">0<small>km/h</small></div><div id="gear">1</div><div id="rpm"><i></i></div><div id="hurt"></div></div>
   <div id="bar">
     <button id="b-restart" title="Restart (R)">↺</button>
     <button id="b-camera" title="Camera (C)">◉</button>
