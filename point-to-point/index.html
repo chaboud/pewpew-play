@@ -41,8 +41,10 @@
   #report { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim); white-space: pre-wrap; margin: 8px 2px 2px; -webkit-user-select: text; user-select: text; }
   #toast { z-index: 3; position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; opacity: 0; transition: opacity .25s; max-width: 80vw; text-align: center; }
   #toast.show { opacity: 1; }
-  #stamp { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); font-size: 10px; color: var(--dim); text-shadow: 0 1px 3px rgba(0,0,0,.8); max-width: 44vw; }
-  #mini { position: absolute; left: calc(10px + env(safe-area-inset-left)); top: calc(40px + env(safe-area-inset-top)); width: 132px; height: 132px; border-radius: 50%; pointer-events: auto; box-shadow: 0 2px 12px rgba(0,0,0,.55); }
+  /* the stamp and the inset map are a column: a made place's credits run to five lines, and the map stood at a fixed top under them, overprinted (seen in a frame of Montmartre, 2026-11-22) */
+  #corner { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 44vw; }
+  #stamp { font-size: 10px; color: var(--dim); text-shadow: 0 1px 3px rgba(0,0,0,.8); min-height: 24px; }
+  #mini { flex: none; margin-left: 2px; width: 132px; height: 132px; border-radius: 50%; pointer-events: auto; box-shadow: 0 2px 12px rgba(0,0,0,.55); }
   /* the big map turns in from the left edge like a page; the pedals stay clear of it, the wheel does not (Q-16) */
   #map { position: absolute; left: calc(8px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); bottom: calc(8px + env(safe-area-inset-bottom)); right: calc(212px + env(safe-area-inset-right)); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #171c23; pointer-events: auto; z-index: 2; transform-origin: left center; transform: perspective(1200px) rotateY(-88deg); opacity: 0; visibility: hidden; transition: transform .32s cubic-bezier(.2,.7,.2,1), opacity .2s, visibility 0s .32s; }
   #map.open { transform: perspective(1200px) rotateY(0deg); opacity: 1; visibility: visible; transition: transform .32s cubic-bezier(.2,.7,.2,1), opacity .12s; }
@@ -61,7 +63,7 @@
   #seam { position: absolute; right: calc(72px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 60px; text-align: center; font-size: 9px; letter-spacing: .08em; color: var(--dim); pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
   #hand { right: calc(12px + env(safe-area-inset-right)); bottom: calc(158px + env(safe-area-inset-bottom)); height: 46px; width: 180px; }
 </style>
-  <script type="module" crossorigin src="./assets/index-DxJhtpNF.js"></script>
+  <script type="module" crossorigin src="./assets/index-COPJpgbs.js"></script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -73,8 +75,7 @@
   <div id="seam">◂ BOTH ▸</div>
 </div>
 <div id="hud">
-  <div id="stamp"></div>
-  <canvas id="mini" title="Map (N)"></canvas>
+  <div id="corner"><div id="stamp"></div><canvas id="mini" title="Map (N)"></canvas></div>
   <div id="map"><canvas></canvas>
     <div id="map-bar"><button id="map-in" title="Closer">+</button><button id="map-out" title="Further">−</button><button id="map-clear">no target</button><button id="map-close" title="Back to the road (N)">✕</button></div>
     <div id="map-note">tap a street to set a target · the road does not wait</div>
