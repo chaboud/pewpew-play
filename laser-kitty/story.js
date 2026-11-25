@@ -26,9 +26,9 @@
 // medal toasts use is where exhibits call themselves out, and the two
 // modes keep separate saves ('lk-story' here, 'lk-career' there).
 
-import { RunShell } from './run.js?v=k72';
-import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k72';
-import { buildCourt, COURT_CSS } from './storycourt.js?v=k72';
+import { RunShell } from './run.js?v=k73';
+import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k73';
+import { buildCourt, COURT_CSS } from './storycourt.js?v=k73';
 
 const SAVE_KEY = 'lk-story';
 // the room the title plays (main.js builds the same one at boot: api.bootRoom)

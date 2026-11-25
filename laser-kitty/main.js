@@ -6,23 +6,23 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k72';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k72';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k73';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k73';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k72';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k73';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k72';
-import { mountNav } from './nav.js?v=k72';
-import { SfxEngine, } from './sfx.js?v=k72';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k72';
+import { CatRig } from './catrig.js?v=k73';
+import { mountNav } from './nav.js?v=k73';
+import { SfxEngine, } from './sfx.js?v=k73';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k73';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k72';
+import { ROOM_ART } from './rooms/index.js?v=k73';
 // a piece of a broken thing is cut out of that thing's own art (shards.js)
-import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k72';
+import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k73';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -42,7 +42,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k72'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k73'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -3619,7 +3619,7 @@ function clampPan() {
 }
 // a harness's own camera (window.__lk.eye): close-ups the pinch cannot reach;
 // and its own clock (window.__lk.hold): the frame loop stops stepping the sim
-let testEye = null, testHold = false;
+let testEye = null, testHold = false, testAim = null;
 function applyLook(bob = 0) {
   if (testEye) {
     camera.position.set(...testEye.from);
@@ -3887,6 +3887,8 @@ function layoutRoom() {
   applyLook();
 }
 // the highest static surface: the wall tops (the rooms have no ceiling)
+let roomTopY = 2.8; // as of the last layoutRoom: the pad aims no higher (padPoint)
+const _padTop = new THREE.Vector3();
 function roomTop() {
   const n = lk.lk_body_count(sim);
   const d = new Float32Array(lk.memory.buffer, lk.lk_render_data(sim), n * FLOATS_PER_BODY);
@@ -3895,6 +3897,7 @@ function roomTop() {
     const o = i * FLOATS_PER_BODY;
     if (d[o] === 0 && d[o + 1] === 0) top = Math.max(top, d[o + 6] + d[o + 3]);
   }
+  roomTopY = top;
   return top;
 }
 
@@ -3944,7 +3947,18 @@ function padPoint(e) {
     const lipY = ((-lip.y + 1) / 2) * h + 24;
     const midY = Math.min(r.top, lipY);
     const nearY = midY + (h - midY) * u * u;
-    aimScreen = [fx * w, h * 0.08 + (nearY - h * 0.08) * fy];
+    // The far end of the pad is the top of the ROOM, not the top of the
+    // screen. On a tall phone the room is a band across the middle and
+    // the old far line (8% down the screen) spent the top two fifths of
+    // the pad aiming over the walls at nothing, which left a kitchen
+    // counter two or three pixels of thumb travel (measured 2026-11-25
+    // after the founder's "can't get in the counter"). The wall tops at
+    // mid-depth, as the camera sees them now, plus a little air; never
+    // above the old line, and never so low that a pitched-down view
+    // loses its reach.
+    const top = _padTop.set(camera.position.x, roomTopY, 0).project(camera);
+    const farY = top.z < 1 ? Math.max(h * 0.08, Math.min(h * 0.5, (1 - top.y) * 0.5 * h - h * 0.03)) : h * 0.08;
+    aimScreen = [fx * w, farY + (nearY - farY) * fy];
   } else if (cfg.laser === 'wand') {
     // wand mode (founder): the tail of the laser is tied to the belly
     // button and the hand steers the head — the belt's screen
@@ -4062,7 +4076,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k72', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k73', import.meta.url));
   // the recordings (sounds/manifest.json): fetched and decoded in the
   // background; until they are in, and if they never arrive, the bank plays
   if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
@@ -4908,10 +4922,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k72');
+      const { Story } = await import('./story.js?v=k73');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k72');
+      const { Career } = await import('./career.js?v=k73');
       game = new Career(api);
     }
   } else {
@@ -5019,7 +5033,14 @@ function frame(now) {
   arrowPan(frameDt);
   const prevRay = { ...laserRay };
   if (attract) attractAim(frameDt);
-  else updateLaserRay();
+  else if (testAim) {
+    // a harness holding the dot on a world point (window.__lk.aimWorld):
+    // the ray leaves where a thumb's would and goes straight at it
+    if (!aimScreen) aimScreen = [0, 0];
+    updateLaserRay();
+    const d = new THREE.Vector3(...testAim).sub(new THREE.Vector3(laserRay.ox, laserRay.oy, laserRay.oz)).normalize();
+    laserRay.dx = d.x; laserRay.dy = d.y; laserRay.dz = d.z;
+  } else updateLaserRay();
   // when a slow frame catches up several ticks at once, sweep the ray
   // from last frame's aim to this frame's across them — the cat's
   // perception sees continuous dot motion, not a park-then-teleport
@@ -5663,6 +5684,9 @@ window.__lk = {
   // number of pieces. piece(i) says what a piece is a piece of; brittle(i)
   // whether a body can still break.
   strike: (rec, x, y, z) => lk.lk_strike(sim, rec, x, y, z),
+  // hold the dot on a world point, frame after frame, with the laser on
+  // (no arguments: let go). Goes in as a ray, as the pad's does.
+  aimWorld: (x, y, z) => { testAim = x === undefined ? null : [x, y, z]; dotActive = !!testAim; if (!testAim) aimScreen = null; },
   // look from a point at a point with a field of view, bypassing the pan
   // and zoom limits (null hands the camera back); steps(n) runs the sim n
   // ticks at once with the laser off, dropping their events
