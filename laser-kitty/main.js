@@ -6,28 +6,34 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k70';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k70';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k71';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k71';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k70';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k71';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k70';
-import { mountNav } from './nav.js?v=k70';
-import { SfxEngine, } from './sfx.js?v=k70';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k70';
+import { CatRig } from './catrig.js?v=k71';
+import { mountNav } from './nav.js?v=k71';
+import { SfxEngine, } from './sfx.js?v=k71';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k71';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k70';
+import { ROOM_ART } from './rooms/index.js?v=k71';
 // a piece of a broken thing is cut out of that thing's own art (shards.js)
-import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k70';
+import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k71';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
 // every hook below is a cheap no-op then.
 let game = null;
+// Two bits of state a mode may touch from its constructor, which runs in
+// the middle of this file: the title screen's self-playing room (see
+// attractAim) and how many times the player has moved the view (a look
+// drag, a pinch, the wheel, the handle: the first-run coach waits on it).
+let attract = null;
+let lookMoves = 0;
 const ckCodes = [];
 
 const STATE_NAMES = ['IDLE', 'ALERT', 'STALK', 'WINDUP', 'POUNCE', 'RECOVER', 'BORED', 'ZOOMIES!', 'SEARCH', 'SWAT!'];
@@ -36,7 +42,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k70'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k71'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -48,7 +54,22 @@ if (typeof cfg.shadows === 'boolean') cfg.shadows = cfg.shadows ? 'auto' : 'off'
 // v2 became the default while v1-era saves already carried catver: only an
 // explicit dropdown pick (catverPick) may keep a cat version pinned
 if (cfg.catver === 'v1' && !cfg.catverPick) cfg.catver = 'v2';
-function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cfg)); } catch {} }
+// what a run fixes (room, cast, tuning) is the run's, not the player's: a
+// game mode changing a graphics setting mid-run must not write those back
+// over the Free Play settings they came from
+const RUN_KEYS = ['room', 'cats', 'chonks', 'weight', 'strength', 'gravity', 'destruct'];
+function saveCfg() {
+  try {
+    let out = cfg;
+    if (PLAY_MODE) {
+      let kept = {};
+      try { kept = JSON.parse(localStorage.getItem('lk-settings') || '{}'); } catch {}
+      out = { ...cfg };
+      for (const k of RUN_KEYS) { if (k in kept) out[k] = kept[k]; else delete out[k]; }
+    }
+    localStorage.setItem('lk-settings', JSON.stringify(out));
+  } catch {}
+}
 // The cast: which kind each cat is (core/src/kinds.rs owns what a kind
 // does; the viewer only says who is in the room and draws them). Free
 // Play's "Le Chonk" count makes the LAST cats chonks, so one cat and one
@@ -56,6 +77,11 @@ function saveCfg() { try { localStorage.setItem('lk-settings', JSON.stringify(cf
 // their star thresholds were measured on those.
 const PLAY_MODE = /[?&](story|play)\b/.test(location.search);
 const KIND_CHONK = 1;
+// A game mode opens on its title screen with a room already playing behind
+// it: build that room first, not whichever one Free Play was left in (the
+// showroom is a long build to throw away). Story's splash reads this.
+const BOOT_ROOM = { room: 0, cats: 2 };
+if (PLAY_MODE) Object.assign(cfg, BOOT_ROOM, { weight: 1, strength: 1, gravity: 1, destruct: 1 });
 function roster() {
   if (PLAY_MODE) return [0, 0];
   const n = Math.min(cfg.cats | 0, 16), c = Math.max(0, Math.min(cfg.chonks | 0, n));
@@ -3645,6 +3671,7 @@ addEventListener(
     if (e.clientY >= pad.getBoundingClientRect().top) return;
     if (e.target.closest && e.target.closest('#panel')) return; // menu scrolls, not zoom
     setZoom(zoomT * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    lookMoves++;
     e.preventDefault();
   },
   { passive: false }
@@ -3665,6 +3692,7 @@ panhand.addEventListener('pointerdown', (e) => {
 });
 panhand.addEventListener('pointermove', (e) => {
   if (!phPrev) return;
+  lookMoves++;
   const { h } = viewSize();
   const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * FOCUS_D) / h;
   panXT += (e.clientX - phPrev[0]) * wpp;
@@ -3751,6 +3779,7 @@ addEventListener('pointermove', (e) => {
     // no modes, no bifurcation: every move decomposes into a zoom term
     // (span ratio) and a pan term (centroid delta). The scene follows the
     // fingers — drag right, the room slides right, so the eye goes left.
+    lookMoves++;
     const span = pinchSpan();
     if (pinchDist > 20) setZoom(zoomT * (span / pinchDist));
     pinchDist = span;
@@ -3769,6 +3798,7 @@ addEventListener('pointermove', (e) => {
     return;
   }
   if (!grabDir) return;
+  lookMoves++;
   const d1 = pixelDir(e.clientX, e.clientY);
   const q = new THREE.Quaternion().setFromUnitVectors(d1, grabDir);
   const f = new THREE.Vector3();
@@ -4032,7 +4062,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k70', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k71', import.meta.url));
   // the recordings (sounds/manifest.json): fetched and decoded in the
   // background; until they are in, and if they never arrive, the bank plays
   if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
@@ -4850,11 +4880,18 @@ const damages = {
         cfg.destruct = 1.0; // a run's tuning is fixed; never saved to lk-settings
         cfg.strength = 1;
         cfg.gravity = 1;
+        cfg.weight = 1;
         rebuildSim();
         retune();
       },
       score: () => lk.lk_score(sim),
       damages,
+      // the title screen: the room plays itself (attractAim below); the
+      // room and cast that were built at boot for it
+      attract: setAttract,
+      bootRoom: BOOT_ROOM,
+      // what the player's hands are doing, for the first-run coach (run.js)
+      input: () => ({ laser: dotActive, looks: lookMoves }),
       // story stages a flashback as a lettered exhibit on the evidence
       // table, in miniature; drawing style and the Classic dials keep
       // following the player's settings. null hands the look back.
@@ -4871,10 +4908,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k70');
+      const { Story } = await import('./story.js?v=k71');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k70');
+      const { Career } = await import('./career.js?v=k71');
       game = new Career(api);
     }
   } else {
@@ -4915,6 +4952,51 @@ const DT = 1000 / 60;
 // real-time sim seconds per wall second
 const ACC_CAP = new URLSearchParams(location.search).has('test') ? 400 : 100;
 let parked = false;
+
+// --- the title screen plays the room by itself --------------------------------
+// Story's splash (story.js) is the game, not a picture of it: the room is
+// live behind the title and a dot wanders it with nobody's thumb on the
+// pad. The wander is the viewer's own (Math.random, wall clock) and goes
+// into the sim as any thumb would, as a ray. Waypoints are floor points,
+// and now and then a spot up the back wall, so the cats run and climb.
+function attractAim(dtMs) {
+  const a = attract, dt = Math.min(dtMs, 100) / 1000;
+  a.t += dt;
+  if (a.dwell > 0) {
+    a.dwell -= dt;
+    if (a.dwell <= 0) {
+      // every few stops the dot goes dark for a breath: the cats look up
+      a.stops += 1;
+      a.dark = a.stops % 5 === 0 ? 1.4 : 0;
+      const up = Math.random() < 0.3;
+      a.w = up
+        ? [(Math.random() * 2 - 1) * roomHX * 0.7, 0.5 + Math.random() * 1.0, roomHZ - 0.06]
+        : [(Math.random() * 2 - 1) * roomHX * 0.75, 0.03, (Math.random() * 1.5 - 0.7) * roomHZ];
+    }
+  } else {
+    const dx = a.w[0] - a.p[0], dy = a.w[1] - a.p[1], dz = a.w[2] - a.p[2];
+    const d = Math.hypot(dx, dy, dz), step = 1.7 * dt;
+    if (d <= step) { a.p = [...a.w]; a.dwell = 0.7 + Math.random() * 1.3; }
+    else { a.p[0] += (dx / d) * step; a.p[1] += (dy / d) * step; a.p[2] += (dz / d) * step; }
+  }
+  if (a.dark > 0) a.dark -= dt;
+  dotActive = !(a.dark > 0);
+  // a dot at rest is not interesting to a cat: it trembles in place
+  const jx = Math.sin(a.t * 19) * 0.05, jz = Math.cos(a.t * 23) * 0.05;
+  const o = beltWorld();
+  const d = new THREE.Vector3(a.p[0] + jx, a.p[1], a.p[2] + jz).sub(o).normalize();
+  laserRay.ox = o.x; laserRay.oy = o.y; laserRay.oz = o.z;
+  laserRay.dx = d.x; laserRay.dy = d.y; laserRay.dz = d.z;
+  // and the vantage drifts a little, so the diorama reads as a thing in a room
+  yawT = Math.sin(a.t * 0.17) * 0.16;
+}
+function setAttract(on) {
+  if (!!on === !!attract) return;
+  attract = on ? { t: 0, p: [0, 0.03, 0], w: [0, 0.03, 0], dwell: 0.01, dark: 0, stops: 0 } : null;
+  dotActive = false;
+  aimScreen = null;
+  if (!on) { yawT = HOME_YAW; }
+}
 function frame(now) {
   // a mode holding an opaque screen (story's courtroom) parks the sim and
   // the renderer behind it: nothing to see, and a phone's battery to spare
@@ -4936,7 +5018,8 @@ function frame(now) {
   last = now;
   arrowPan(frameDt);
   const prevRay = { ...laserRay };
-  updateLaserRay();
+  if (attract) attractAim(frameDt);
+  else updateLaserRay();
   // when a slow frame catches up several ticks at once, sweep the ray
   // from last frame's aim to this frame's across them — the cat's
   // perception sees continuous dot motion, not a park-then-teleport

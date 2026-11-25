@@ -13,6 +13,13 @@
 // dot. Testimony teaches the room without being a tutorial — each witness
 // says, in passing, the one thing a first-time player needs to know about
 // the place.
+//
+// LENGTH (founder, 2026-11-25: "The court readings are too long. Too many
+// taps."). A hearing is THREE lines and no more: counsel's question, the
+// witness's answer, the bench. story.js shows the question and answer as
+// one beat and the bench as a second, so a hearing is two taps. Keep the
+// answer under about 130 characters: it has to fit a phone's dialogue box
+// under the question without scrolling.
 
 // THE PROCEEDING. The game ships as "Laser v. Kitty" (founder,
 // 2026-11-11): the title is a case caption, so the trial is the title.
@@ -81,9 +88,7 @@ export const CASES = [
     witness: { skin: '#e9b98f', hair: '#7a4a2a', style: 'bob', top: '#5b8f8a', acc: 'glasses' },
     testimony: [
       ['counsel', 'Ms. Halvorsen. On the evening of March 14th, where was the red dot?'],
-      ['witness', 'On the bookcase. Then the television. Then, briefly, the lamp.'],
-      ['counsel', 'And the cat?'],
-      ['witness', 'Wherever the dot was. He doesn’t go around things. He goes through them.'],
+      ['witness', 'On the bookcase. Then the television. The cat doesn’t go around things. He goes through them.'],
       ['court', 'Let the record show the defendant is asleep on Exhibit {X}. Proceed.'],
     ],
     ruling: [
@@ -101,10 +106,8 @@ export const CASES = [
     stars: [1500, 3700, 5000],
     witness: { skin: '#f0c7a4', hair: '#b9b4c4', style: 'bald', top: '#6f6a86', acc: 'tie' },
     testimony: [
-      ['counsel', 'Mr. Pemberton, you manage the unit. Describe the bathroom as you last inspected it.'],
-      ['witness', 'Dry.'],
-      ['counsel', 'And on the morning of the 3rd?'],
-      ['witness', 'The sink had left the wall. I didn’t know a sink could be talked into that. The plumber charged emergency rates and took a photograph for himself.'],
+      ['counsel', 'Mr. Pemberton. Describe the bathroom as you last inspected it.'],
+      ['witness', 'Dry. By the 3rd the sink had left the wall. I didn’t know a sink could be talked into that.'],
       ['court', 'The plumber’s invoice is admitted. The Court has seen worse invoices. Not many.'],
     ],
     ruling: [
@@ -122,10 +125,8 @@ export const CASES = [
     stars: [300, 800, 1500],
     witness: { skin: '#c98f66', hair: '#2b2230', style: 'bun', top: '#efe6d2', acc: 'apron' },
     testimony: [
-      ['counsel', 'Ms. Abernathy, directing you to Exhibit {X}, the kitchen. What was on the stove at a quarter past six?'],
-      ['witness', 'Stock. Eight quarts. Day two of three.'],
-      ['counsel', 'Where is the stock now?'],
-      ['witness', 'It’s the floor now. The plates I’d put on the high shelf, where they’d be safe. I’d like that last part struck.'],
+      ['counsel', 'Ms. Abernathy. What was on the stove at a quarter past six?'],
+      ['witness', 'Stock. Eight quarts. It’s the floor now. The plates were on the high shelf, where they’d be safe. I’d like that struck.'],
       ['court', 'It stays in.'],
     ],
     ruling: [
@@ -143,10 +144,8 @@ export const CASES = [
     stars: [2000, 5700, 8600],
     witness: { skin: '#f1d0b5', hair: '#d8d4e0', style: 'side', top: '#7a3f4a', acc: 'bowtie' },
     testimony: [
-      ['counsel', 'Mr. Ashby. Exhibit {X}, the great room. How long has the grandfather clock been in your family?'],
-      ['witness', 'A hundred and forty years. It survived two wars and a move to Cleveland.'],
-      ['counsel', 'And the evening of the 22nd?'],
-      ['witness', 'It did not survive that. It’s a tall clock. Tall turns out to be the whole problem. One good shove near the top, and it took the lamp with it.'],
+      ['counsel', 'Mr. Ashby. How long has the grandfather clock been in your family?'],
+      ['witness', 'A hundred and forty years. Two wars and a move to Cleveland. Then one good shove near the top.'],
       ['court', 'Counsel, there is a cat on my bench. No — leave it. Proceed.'],
     ],
     ruling: [
@@ -165,9 +164,7 @@ export const CASES = [
     witness: { skin: '#e2ab80', hair: '#3a2a25', style: 'curly', top: '#2f6f5e', acc: 'scarf' },
     testimony: [
       ['counsel', 'Ms. Marchetti, what does a two-group espresso machine cost?'],
-      ['witness', 'Seven thousand four hundred dollars. She has a name. I’m not saying it in here.'],
-      ['counsel', 'Were there customers present?'],
-      ['witness', 'Two, with laptops, on the window ledge. And every table in the place stands on one leg. I’d never thought of that as a decision.'],
+      ['witness', 'Seven thousand four hundred dollars. She has a name. And every table in the place stands on one leg.'],
       ['court', 'The customers have filed separately. One catastrophe at a time.'],
     ],
     ruling: [
@@ -185,10 +182,8 @@ export const CASES = [
     stars: [1500, 3500, 6200],
     witness: { skin: '#e6b48c', hair: '#8a8798', style: 'cap', top: '#4a6a8f', acc: 'mustache' },
     testimony: [
-      ['counsel', 'Mr. Kowalczyk, the 1967 coupe. Describe its condition before the incident.'],
-      ['witness', 'Mid-restoration.'],
-      ['counsel', 'Since when?'],
-      ['witness', '2009. I don’t see how that’s relevant. The boxes were stacked six high. You bat the bottom one, you get all six. I’ve had time to think about it.'],
+      ['counsel', 'Mr. Kowalczyk. The 1967 coupe has been mid-restoration since when?'],
+      ['witness', '2009. I don’t see how that’s relevant. The boxes were six high. You bat the bottom one, you get all six.'],
       ['court', 'The Court will not be valuing the coupe “as finished.” Proceed.'],
     ],
     ruling: [
@@ -207,10 +202,8 @@ export const CASES = [
     witness: { skin: '#d9a273', hair: '#1f1a24', style: 'pony', top: '#8f3b3b', acc: null },
     testimony: [
       ['counsel', 'Ms. Tran, how many bottles were on the back bar at closing?'],
-      ['witness', 'A hundred and forty-eight. I do inventory.'],
-      ['counsel', 'And at opening?'],
-      ['witness', 'I do less inventory now. They went up it like stairs. Stool, bar top, shelf, shelf, shelf.'],
-      ['court', 'The defense points to the neon in the window. It says LIVE CATS. The Court has read the sign. Proceed.'],
+      ['witness', 'A hundred and forty-eight. I do inventory. They went up it like stairs. Stool, bar top, shelf, shelf.'],
+      ['court', 'The neon in the window says LIVE CATS. The Court has read the sign. Proceed.'],
     ],
     ruling: [
       'Damages established. The Court will not hear argument about the jukebox selections.',
@@ -227,10 +220,8 @@ export const CASES = [
     stars: [5300, 11800, 15300],
     witness: { skin: '#f0c9a8', hair: '#c9a15a', style: 'long', top: '#b48fc9', acc: 'headband' },
     testimony: [
-      ['counsel', 'Ms. Lindqvist, what is the purpose of your studio?'],
-      ['witness', 'Stillness.'],
-      ['counsel', 'Was there stillness on the evening of the 9th?'],
-      ['witness', 'For about forty seconds. Then somebody rang the gong, and it wasn’t one of us. Everything in that room is either balanced or hanging. That is the practice.'],
+      ['counsel', 'Ms. Lindqvist. Was there stillness on the evening of the 9th?'],
+      ['witness', 'For forty seconds. Then somebody rang the gong, and it wasn’t one of us. Everything in that room is balanced or hanging.'],
       ['court', 'The witness will stop breathing at the Court like that.'],
     ],
     ruling: [
@@ -249,9 +240,7 @@ export const CASES = [
     witness: { skin: '#b9825a', hair: '#231c1c', style: 'short', top: '#c9742a', acc: 'stubble' },
     testimony: [
       ['counsel', 'Mr. Reyes, how many floors does the house have?'],
-      ['witness', 'Two. I used to think of that as a feature.'],
-      ['counsel', 'Go on.'],
-      ['witness', 'The dot went up the stairs, so they went up the stairs. Then it came back down, and they brought the upstairs with them.'],
+      ['witness', 'Two. The dot went up the stairs, so they went up the stairs. Then they brought the upstairs down with them.'],
       ['court', 'The Court is told the children were cheering. That will not appear in the order.'],
     ],
     ruling: [
@@ -269,11 +258,9 @@ export const CASES = [
     stars: [5000, 12000, 17000],
     witness: { skin: '#f3d6be', hair: '#56505f', style: 'side', top: '#22202b', acc: 'wingcollar' },
     testimony: [
-      ['counsel', 'Mr. Pym, you have managed the Harcourt residence for thirty-one years. Exhibit {X} is the entry hall. What stood in it?'],
-      ['witness', 'Vases, on pillars. Busts, on pedestals. Two suits of armor, at attention. Everything in that hall was on top of something else.'],
-      ['counsel', 'And afterwards?'],
-      ['witness', 'On the floor, sir. All of it, without distinction.'],
-      ['court', 'The Court will not ask how a cat reaches a chandelier. The Court notes only that it is on the list.'],
+      ['counsel', 'Mr. Pym. Exhibit {X} is the entry hall. What stood in it?'],
+      ['witness', 'Vases, on pillars. Busts, on pedestals. Armor, at attention. All of it is on the floor now, sir, without distinction.'],
+      ['court', 'The Court will not ask how a cat reaches a chandelier. It notes only that it is on the list.'],
     ],
     ruling: [
       'Damages established. The Trust is reminded that “attributed” is not a valuation.',
@@ -291,11 +278,9 @@ export const CASES = [
     stars: [49000, 82000, 94000],
     witness: { skin: '#e8c3a0', hair: '#1c1a22', style: 'short', top: '#17151d', acc: 'roundglasses' },
     testimony: [
-      ['counsel', 'Mr. Vanterpool, you are the creative director of Design Within Scratch. What does the store sell?'],
-      ['witness', 'We don’t sell. We place.'],
-      ['counsel', 'The lamp, then. What does it do?'],
-      ['witness', 'It leans. On purpose. The lamps, Your Honor, were arranged. Nothing in that room was merely standing.'],
-      ['court', 'The store is called Design Within Scratch. The Court is told the name was chosen before the incident. The cats were not told.'],
+      ['counsel', 'Mr. Vanterpool. What does Design Within Scratch sell?'],
+      ['witness', 'We don’t sell. We place. The lamps, Your Honor, were arranged. Nothing in that room was merely standing.'],
+      ['court', 'The Court is told the name was chosen before the incident. The cats were not told.'],
     ],
     ruling: [
       'Damages established. The Court declines to rule on whether the vase was “in dialogue” with the floor.',
@@ -313,10 +298,8 @@ export const CASES = [
     stars: [600, 1700, 2600],
     witness: { skin: '#8a5a3c', hair: '#e6e2f0', style: 'bun', top: '#3f6fb0', acc: 'pearls' },
     testimony: [
-      ['counsel', 'Mrs. Fontaine, you represent thirty-six households. How was the class certified?'],
-      ['witness', 'We all heard the same noise. It started on nine and worked its way down.'],
-      ['counsel', 'Whose cats were they?'],
-      ['witness', 'Everyone’s. There’s a cat on every floor of that building and one dot between them. From across the street you could watch it go window to window.'],
+      ['counsel', 'Mrs. Fontaine. Thirty-six households. How was the class certified?'],
+      ['witness', 'We all heard the same noise. It started on nine and worked down. A cat on every floor, and one dot between them.'],
       ['court', 'The bailiff will count the cats again. The Court had six a minute ago.'],
     ],
     ruling: [
@@ -334,10 +317,8 @@ export const CASES = [
     stars: [500000, 1300000, 6800000],
     witness: { skin: '#edc4a2', hair: '#a8a3b5', style: 'bob', top: '#3a3350', acc: 'chain' },
     testimony: [
-      ['counsel', 'Dr. Achterberg, as director, how do you value the collection?'],
-      ['witness', 'We don’t. It is priceless.'],
-      ['counsel', 'For the purposes of the form.'],
-      ['witness', '…I brought a list. It is a long list; it runs to six rooms. Everything on it stood on a plinth or hung from a hook, which I now understand to be an invitation.'],
+      ['counsel', 'Dr. Achterberg, how do you value the collection?'],
+      ['witness', 'We don’t. It is priceless. …I brought a list. Six rooms, all of it on a plinth or a hook, which I now see was an invitation.'],
       ['court', 'This Court has heard twelve of these. It will hear the thirteenth standing up. Proceed.'],
     ],
     ruling: [

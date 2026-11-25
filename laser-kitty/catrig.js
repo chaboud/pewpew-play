@@ -325,10 +325,10 @@ export class CatRig {
   // source hands the constructor one build per cat.
   static source(variant) {
     if (variant === 7) {
-      return import('./catgen7.js?v=k70').then((m) => m.buildCat7Source());
+      return import('./catgen7.js?v=k71').then((m) => m.buildCat7Source());
     }
     if (variant >= 3) {
-      return import('./catgen.js?v=k70').then((m) => m.buildCatSource(variant));
+      return import('./catgen.js?v=k71').then((m) => m.buildCatSource(variant));
     }
     return CatRig.load();
   }

@@ -7,8 +7,10 @@
 // The game is called "Laser v. Kitty": the title is the caption of the
 // consolidated proceeding, and each location's claim is heard under it.
 // The trial is the menu and every level is testimony:
-//   docket -> testimony (the courtroom) -> flashback (the run)
-//          -> statement of damages -> stars -> the next case
+//   title -> docket -> testimony (the courtroom) -> flashback (the run)
+//         -> statement of damages -> stars -> the next case
+// The title screen is the game itself: a room on the evidence table with a
+// dot wandering it and nobody's thumb on the pad (main.js: attractAim).
 //
 // What lives where:
 //   * the cases — who sues, where, what is said — are data: storycases.js
@@ -24,11 +26,14 @@
 // medal toasts use is where exhibits call themselves out, and the two
 // modes keep separate saves ('lk-story' here, 'lk-career' there).
 
-import { RunShell } from './run.js?v=k70';
-import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k70';
-import { buildCourt, COURT_CSS } from './storycourt.js?v=k70';
+import { RunShell } from './run.js?v=k71';
+import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k71';
+import { buildCourt, COURT_CSS } from './storycourt.js?v=k71';
 
 const SAVE_KEY = 'lk-story';
+// the room the title plays (main.js builds the same one at boot: api.bootRoom)
+const SPLASH_ROOM = { room: 0, cats: 2 };
+const COUNT_WORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen'];
 
 // --- how an unnamed claim is filed --------------------------------------------
 // Presentation only: the sim says what the body is made of and why the
@@ -129,7 +134,32 @@ const css = `
 .st-btn.dim { border-color: #3a3644; color: #a9a4b8; background: #1e1b26; }
 .st-btn.sm { padding: 8px 14px; font-size: 13px; }
 
+/* the title: the room plays itself behind it, so the page is glass with a
+   scrim at the top for the caption and at the foot for the buttons. A
+   curtain (::before) covers the first frames while the room is built. */
+#st-ov.splash { background: linear-gradient(to bottom, rgba(13,11,18,0.94) 0%, rgba(13,11,18,0.7) 20%, rgba(13,11,18,0) 38%, rgba(13,11,18,0) 60%, rgba(13,11,18,0.8) 80%, rgba(13,11,18,0.96) 100%);
+  overflow: hidden; justify-content: space-between; }
+#st-ov.splash::before { content: ''; position: absolute; inset: 0; background: #14121a; opacity: 0; transition: opacity 0.9s ease; pointer-events: none; }
+#st-ov.splash.curtain::before { opacity: 1; transition: none; }
+.st-sp { position: relative; width: min(560px, 100vw); padding: 0 16px; box-sizing: border-box; text-align: center; }
+.st-sp-top { padding-top: min(4vh, 26px); }
+.st-sp .st-h1 { font-size: clamp(46px, 15vw, 76px); margin: 8px 0 6px; text-shadow: 0 3px 18px rgba(0,0,0,0.75); }
+.st-sp-tag { font: italic 400 16px/1.4 Georgia, 'Times New Roman', serif; color: #e6e2f0; text-shadow: 0 2px 8px #000; }
+.st-sp-go { display: block; width: 100%; margin: 0 0 9px; padding: 14px 16px 13px; border-radius: 14px; border: 1px solid #ffe86b;
+  background: rgba(60,52,20,0.72); color: #ffe86b; font-weight: 700; font-size: 19px; letter-spacing: 0.01em;
+  animation: st-glow 1.6s ease-in-out infinite alternate; }
+.st-sp-go small { display: block; margin-top: 3px; font: 600 11px ui-monospace, monospace; letter-spacing: 0.1em; color: #cfc9dc; }
+.st-sp .st-sum { margin: 0 0 9px; color: #b9b4c6; text-shadow: 0 1px 4px #000; }
+.st-sp .st-foot { margin: 0; }
+@keyframes st-glow { from { box-shadow: 0 0 0 rgba(255,232,107,0); } to { box-shadow: 0 0 18px rgba(255,232,107,0.35); } }
+body.st-splash-on #hud, body.st-splash-on #pad, body.st-splash-on #panhand, body.st-splash-on .wing,
+body.st-splash-on #pops, body.st-splash-on #tags, body.st-splash-on .ctl { visibility: hidden; }
+.st-back { display: block; margin: 0 auto 6px; padding: 5px 12px; border-radius: 9px; border: 1px solid #3a3644; background: none; color: #8a8798;
+  font: 700 10.5px ui-monospace, monospace; letter-spacing: 0.14em; }
+
 /* testimony */
+.st-q { font: italic 400 14.5px/1.35 Georgia, 'Times New Roman', serif; color: #a9a4b8; margin-bottom: 8px; }
+.st-q b { font: 700 10px ui-monospace, monospace; font-style: normal; letter-spacing: 0.08em; color: #9ad; margin-right: 4px; }
 .st-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
 .st-bar .st-no { display: block; font-size: 10.5px; line-height: 1.5; }
 .st-bar b { color: #cfc9dc; font: 400 13px Georgia, 'Times New Roman', serif; letter-spacing: 0; }
@@ -176,6 +206,9 @@ const css = `
 .st-call .k { font: 800 8.5px ui-monospace, monospace; letter-spacing: 0.16em; color: #ffe86b; display: flex; justify-content: space-between; }
 .st-call .k b { color: #7dffd0; font: 700 11px ui-monospace, monospace; letter-spacing: 0; }
 .st-call .n { margin-top: 1px; }
+.st-call .n small { color: #a9a4b8; font-size: 9.5px; white-space: nowrap; }
+.st-call.total { border-left-color: #ff5a5a; }
+.st-call.total .n small { color: #ff8a8a; font-weight: 800; letter-spacing: 0.1em; }
 
 /* the statement of damages */
 #st-ov.pinned { overflow: hidden; }
@@ -228,7 +261,7 @@ const css = `
   .st-verdict { width: 380px; align-self: center; }
   .st-v-stars { font-size: 44px; }
 }
-@media (prefers-reduced-motion: reduce) { .st-row, .st-total, .st-stamp, .st-v-stars i.on, .st-v-judge { animation: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .st-row, .st-total, .st-stamp, .st-v-stars i.on, .st-v-judge { animation: none; opacity: 1; } .st-sp-go { animation: none; } }
 `;
 
 function loadSave() {
@@ -242,7 +275,7 @@ export class Story {
     this.api = api;
     this.cases = CASES; // (test hook: a driver may move a case's thresholds)
     this.save = loadSave();
-    this.screen = 'docket'; // docket | testimony | flashback | run | statement
+    this.screen = 'splash'; // splash | docket | testimony | flashback | run | statement
     this.frozen = true; // main.js parks sim and renderer behind an opaque screen
     this.ci = 0;
     this.dollars = 0;
@@ -266,12 +299,14 @@ export class Story {
     this.timers = [];
     // a keyboard advances testimony too (desktop)
     addEventListener('keydown', (e) => {
-      if (this.screen !== 'testimony' || (e.key !== ' ' && e.key !== 'Enter')) return;
+      if (e.key !== ' ' && e.key !== 'Enter') return;
+      if (this.screen === 'splash') { e.preventDefault(); this.ov.querySelector('#st-go')?.click(); return; }
+      if (this.screen !== 'testimony') return;
       e.preventDefault();
       this.advance();
     });
     document.title = PROCEEDING.title;
-    this.showDocket();
+    this.showSplash();
     window.__story = this; // test hook (skip(), screen, cases)
   }
 
@@ -310,6 +345,10 @@ export class Story {
   show(html, pinned = false) {
     for (const t of this.timers) clearTimeout(t);
     this.timers.length = 0;
+    // any screen but the title is opaque: the room stops playing itself
+    this.api.attract?.(false);
+    this.ov.classList.remove('splash', 'curtain');
+    document.body.classList.remove('st-splash-on');
     this.ov.innerHTML = html;
     this.ov.classList.toggle('pinned', pinned);
     this.ov.style.display = 'flex';
@@ -320,11 +359,76 @@ export class Story {
   // a timed beat (a sound cue) that is dropped if the screen changes first
   later(ms, fn) { this.timers.push(setTimeout(fn, ms)); }
 
+  // the case the docket would send a player to next (-1: every case heard)
+  nextCase() { return this.cases.findIndex((c, i) => this.unlocked(i) && !(this.save.stars[c.id] >= 1)); }
+
+  // -- the title ------------------------------------------------------------------
+  // Founder, 2026-11-25: "We need a splash screen for the main screen.
+  // Something that isn't just a list of the docket." The title is the
+  // caption and the picture is the game: the first room, as an exhibit on
+  // the evidence table, with cats after a dot nobody is holding. One
+  // button goes straight to the next hearing; the docket is a second one.
+  showSplash() {
+    const next = this.nextCase();
+    let total = 0, stars = 0;
+    for (const c of this.cases) { total += this.save.best[c.id] || 0; stars += this.save.stars[c.id] || 0; }
+    const begun = Object.keys(this.save.tries).length > 0;
+    const nc = next >= 0 ? this.cases[next] : null;
+    const go = !begun ? ['Call the first case &#9656;', `NO. ${this.cases[0].no} &middot; ${esc(this.claimOf(this.cases[0]).toUpperCase())}`]
+      : nc ? ['Call the next case &#9656;', `NO. ${nc.no} &middot; ${esc(this.claimOf(nc).toUpperCase())}`]
+        : ['Open the docket &#9656;', 'EVERY CLAIM HAS BEEN HEARD'];
+    this.show(`<div class="st-sp st-sp-top">
+        <div class="st-court">${COURT.name.toUpperCase()} &middot; ${COURT.division.toUpperCase()} &middot; ${COURT.dept.toUpperCase()}</div>
+        <div class="st-h1">${TITLE_HTML}</div>
+        <div class="st-sp-tag">${COUNT_WORD[this.cases.length] || this.cases.length} claims. One red dot.<br>The defendant is asleep.</div>
+      </div>
+      <div class="st-sp st-sp-bot">
+        ${begun ? `<div class="st-sum">${usd(total)} established &middot; ★ ${stars} of ${this.cases.length * 3}</div>` : ''}
+        <button class="st-sp-go" id="st-go">${go[0]}<small>${go[1]}</small></button>
+        <div class="st-foot">${nc || !begun ? '<button class="st-btn dim sm" id="st-dk">The docket</button>' : ''}
+          <button class="st-btn dim sm" id="st-career">Career</button><button class="st-btn dim sm" id="st-free">Free Play</button><button class="st-btn dim sm" id="st-lab">Cat Lab</button></div>
+      </div>`);
+    this.screen = 'splash';
+    cueLoop('murmur', false);
+    this.ov.classList.add('splash', 'curtain');
+    document.body.classList.add('st-splash-on');
+    // the room is (re)built on the next frame: main.js is still starting
+    // up when the first title is shown, and frame() is only ever called
+    // once it has finished
+    this.splashAt = 0;
+    this.frozen = false;
+    this.ov.querySelector('#st-go').onclick = () => { if (nc || !begun) this.showTestimony(Math.max(0, next)); else this.showDocket(); };
+    const dk = this.ov.querySelector('#st-dk');
+    if (dk) dk.onclick = () => this.showDocket();
+    this.ov.querySelector('#st-career').onclick = () => { location.href = 'career.html'; };
+    this.ov.querySelector('#st-free').onclick = () => { location.href = 'index.html'; };
+    this.ov.querySelector('#st-lab').onclick = () => { location.href = 'catlab.html'; };
+  }
+
+  // per frame on the title: stage the room once, then lift the curtain
+  // when it has had frames to build its meshes
+  splashFrame() {
+    if (!this.splashAt) {
+      const boot = this.api.bootRoom;
+      // the first title finds its room already built (main.js builds it at
+      // boot); a return to the title after a run does not
+      if (this.splashBuilt || !boot) this.shell.load(SPLASH_ROOM.room, SPLASH_ROOM.cats);
+      this.splashBuilt = true;
+      this.api.presentation?.({ backdrop: 'court', exhibit: this.cases[0].exhibit });
+      this.api.attract?.(true);
+      this.splashAt = performance.now();
+      this.framesUp = 0;
+      return;
+    }
+    this.framesUp += 1;
+    if (this.framesUp >= 3 && performance.now() - this.splashAt > 350) this.ov.classList.remove('curtain');
+  }
+
   // -- the docket ---------------------------------------------------------------
   showDocket() {
     this.screen = 'docket';
     cueLoop('murmur', false);
-    const next = this.cases.findIndex((c, i) => this.unlocked(i) && !(this.save.stars[c.id] >= 1));
+    const next = this.nextCase();
     let total = 0, stars = 0;
     for (const c of this.cases) { total += this.save.best[c.id] || 0; stars += this.save.stars[c.id] || 0; }
     const cards = this.cases.map((c, i) => {
@@ -342,6 +446,7 @@ export class Story {
       </button>`;
     }).join('');
     this.show(`<div class="st-col">
+      <button class="st-back" id="st-title">&#9666; TITLE</button>
       <div class="st-court">${COURT.name.toUpperCase()} &middot; ${COURT.division.toUpperCase()} &middot; ${COURT.dept.toUpperCase()}</div>
       <div class="st-h1">${TITLE_HTML}</div>
       <div class="st-sub">THE DOCKET &middot; ${PROCEEDING.kind.toUpperCase()}</div>
@@ -353,6 +458,7 @@ export class Story {
     this.ov.querySelectorAll('.st-case').forEach((el) => {
       el.onclick = () => { const i = +el.dataset.i; if (this.unlocked(i)) this.showTestimony(i); };
     });
+    this.ov.querySelector('#st-title').onclick = () => this.showSplash();
     this.ov.querySelector('#st-career').onclick = () => { location.href = 'career.html'; };
     this.ov.querySelector('#st-free').onclick = () => { location.href = 'index.html'; };
     this.ov.querySelector('#st-lab').onclick = () => { location.href = 'catlab.html'; };
@@ -361,63 +467,83 @@ export class Story {
   }
 
   // -- testimony ----------------------------------------------------------------
+  // Founder, 2026-11-25: "The court readings are too long. Too many taps."
+  // A hearing is two beats now, so two taps: counsel's question with the
+  // witness's answer under it, then the bench. The question is simply
+  // there; only the answer types, and fast. (It was five lines, each typed
+  // and each wanting a tap to finish and a tap to move on.)
   showTestimony(i) {
     this.ci = i;
     this.screen = 'testimony';
     const c = this.cases[i];
-    const lines = c.testimony;
+    // a question and the answer to it are one beat; anything else stands alone
+    const beats = [];
+    for (let k = 0; k < c.testimony.length; k++) {
+      const [who, text] = c.testimony[k], nx = c.testimony[k + 1];
+      if (who === 'counsel' && nx && nx[0] === 'witness') { beats.push({ q: text, who: 'witness', text: nx[1] }); k++; }
+      else beats.push({ who, text });
+    }
     this.show(`<div class="st-wide" id="st-tap">
       <div class="st-bar"><div class="st-no">${PROCEEDING.parties[0].toUpperCase()} v. ${PROCEEDING.parties[1].toUpperCase()} &middot; No. ${c.no}<br><b>${esc(this.claimOf(c))}</b></div>
         <button class="st-btn dim sm" id="st-skip">Skip &#9656;&#9656;</button></div>
       <div class="st-stage"></div>
-      <div class="st-dlg"><div class="st-who"></div><div class="st-line"></div>
-        <div class="st-pips">${lines.map(() => '<i></i>').join('')}</div><div class="st-more">TAP</div></div>
+      <div class="st-dlg"><div class="st-q"></div><div class="st-who"></div><div class="st-line"></div>
+        <div class="st-pips">${beats.map(() => '<i></i>').join('')}</div><div class="st-more">TAP</div></div>
       <div class="st-log"></div>
     </div>`);
     cue('gavel'); // court is in session
     cueLoop('murmur', true);
     const court = buildCourt({ witness: c.witness, cats: c.cats, exhibit: c.exhibit });
     this.ov.querySelector('.st-stage').appendChild(court.el);
-    const who = this.ov.querySelector('.st-who'), line = this.ov.querySelector('.st-line');
+    const qEl = this.ov.querySelector('.st-q'), who = this.ov.querySelector('.st-who'), line = this.ov.querySelector('.st-line');
     const more = this.ov.querySelector('.st-more'), pips = this.ov.querySelectorAll('.st-pips i');
     const log = this.ov.querySelector('.st-log');
+    const record = (speaker, text) => {
+      const p = document.createElement('p');
+      p.innerHTML = `<b>${RECORD[speaker]}</b> ${esc(text)}`;
+      log.appendChild(p);
+    };
     let k = -1, typing = null, full = '';
     const finish = () => {
       clearInterval(typing);
       typing = null;
       line.textContent = full;
       more.classList.add('ready');
-      court.speak(lines[k][0], false);
+      court.speak(beats[k].who, false);
     };
     const advance = () => {
       if (this.screen !== 'testimony') return;
       if (typing) return finish();
       // what was just said goes into the record, the way a transcript reads
       if (k >= 0) {
-        const p = document.createElement('p');
-        p.innerHTML = `<b>${RECORD[lines[k][0]]}</b> ${esc(lettered(lines[k][1], c))}`;
-        log.appendChild(p);
+        if (beats[k].q) record('counsel', lettered(beats[k].q, c));
+        record(beats[k].who, lettered(beats[k].text, c));
       }
       k += 1;
-      if (k >= lines.length) return this.flashback();
-      const [speaker, text] = lines[k];
-      who.className = `st-who ${speaker}`;
-      who.textContent = speaker === 'witness' ? c.witnessName : SPEAKERS[speaker];
+      if (k >= beats.length) return this.flashback();
+      const beat = beats[k];
+      qEl.innerHTML = beat.q ? `<b>${RECORD.counsel}</b>${esc(lettered(beat.q, c))}` : '';
+      qEl.style.display = beat.q ? '' : 'none';
+      who.className = `st-who ${beat.who}`;
+      who.textContent = beat.who === 'witness' ? c.witnessName : SPEAKERS[beat.who];
       pips.forEach((p, j) => p.classList.toggle('on', j <= k));
       more.classList.remove('ready');
-      more.textContent = k === lines.length - 1 ? 'TAP · THE EVENING IN QUESTION ▸' : 'TAP ▸';
-      court.speak(speaker);
-      court.nudge(k, lines.length);
-      // a line types itself out; a tap finishes it, the next tap moves on
-      full = lettered(text, c);
-      let n = 0;
+      more.textContent = k === beats.length - 1 ? 'TAP · THE EVENING IN QUESTION ▸' : 'TAP ▸';
+      // counsel is seen to ask before the witness is seen to answer
+      court.speak(beat.q ? 'counsel' : beat.who);
+      court.nudge(k, beats.length);
+      // the answer types itself out; a tap finishes it, the next tap moves on
+      full = lettered(beat.text, c);
+      let n = beat.q ? -30 : 0, answering = !beat.q;
       line.textContent = '';
       typing = setInterval(() => {
-        n += 2;
+        n += 3;
+        if (n <= 0) return;
+        if (!answering) { answering = true; court.speak(beat.who); }
         if (n % 12 === 0) cue('steno'); // the reporter keeps up
         line.textContent = full.slice(0, n);
         if (n >= full.length) finish();
-      }, 26);
+      }, 20);
     };
     this.advance = advance;
     this.ov.querySelector('#st-tap').onclick = advance;
@@ -519,6 +645,7 @@ export class Story {
   }
 
   frame(dtMs) {
+    if (this.screen === 'splash') return this.splashFrame();
     if (this.screen === 'flashback' && !this.frozen) {
       // hold the card until the room has had frames to build its meshes
       this.framesUp += 1;
@@ -573,15 +700,24 @@ export class Story {
       }
       const el = document.createElement('div');
       el.className = 'st-call';
-      el.innerHTML = `<div class="k"><span>EXHIBIT ${ex.letter}</span><b></b></div><div class="n">${esc(ex.name)}</div>`;
+      el.innerHTML = `<div class="k"><span>EXHIBIT ${ex.letter}</span><b></b></div><div class="n">${esc(ex.name)} <small></small></div>`;
       this.callsEl.appendChild(el);
       void el.offsetWidth;
       el.classList.add('in');
-      chip = { el, amt: el.querySelector('b'), timer: 0 };
+      chip = { el, amt: el.querySelector('b'), list: el.querySelector('small'), timer: 0 };
       cue('register');
       this.calls.set(ex.id, chip);
     }
     chip.amt.textContent = usd(ex.dollars);
+    // a nudged television claims a sliver of its price, and "$18" beside
+    // "Television" reads as an $18 television (founder: "values of things
+    // are sometimes low"): the chip says what the thing lists at, and says
+    // so when the whole of it has been claimed
+    // (several of the same thing share an exhibit: three perfume bottles)
+    const qty = ex.price > 0 ? Math.max(1, Math.ceil(ex.dollars / ex.price - 0.02)) : 1;
+    const total = ex.price > 0 && ex.dollars >= ex.price * qty - 0.5;
+    chip.el.classList.toggle('total', total);
+    chip.list.textContent = total ? `TOTAL LOSS${qty > 1 ? ` ×${qty}` : ''}` : ex.price > 0 ? `list ${usd(ex.price)}${qty > 1 ? ' each' : ''}` : '';
     clearTimeout(chip.timer);
     chip.timer = setTimeout(() => {
       chip.el.classList.remove('in');
