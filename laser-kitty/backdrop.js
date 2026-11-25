@@ -14,9 +14,9 @@
 // Builders are authored at living-room size and get R, the model's scale
 // against that room, so the tower and the bathroom frame alike.
 import * as THREE from 'three';
-import * as court from './backdrops/court.js?v=k71';
-import * as yard from './backdrops/yard.js?v=k71';
-import * as night from './backdrops/night.js?v=k71';
+import * as court from './backdrops/court.js?v=k72';
+import * as yard from './backdrops/yard.js?v=k72';
+import * as night from './backdrops/night.js?v=k72';
 
 export const BACKDROP_KINDS = [
   ['stage', 'Soundstage'],

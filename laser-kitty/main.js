@@ -6,23 +6,23 @@ import * as THREE from './vendor/three.module.min.js';
 // specifiers to local vendor files — everything stays self-hosted)
 import { EffectComposer } from './vendor/EffectComposer.js';
 import { N8AOPass } from './vendor/N8AO.js';
-import { HazePass, GLOW_LAYER } from './haze.js?v=k71';
-import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k71';
+import { HazePass, GLOW_LAYER } from './haze.js?v=k72';
+import { LightVolume, installLightVolumeShading } from './lightvol.js?v=k72';
 // presentation: the backdrop the room sits in, the drawing style, the
 // tilt-shift (looks.js). Story mode drives it through setPresentation.
-import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k71';
+import { installPresentation, setPresentation, BACKDROP_KINDS, STYLE_KINDS } from './looks.js?v=k72';
 // cat v2: the rigged/skinned cat (CC-BY toon cat + procedural pose layer,
 // tuned in catlab.html). The glb only loads when the version is selected.
-import { CatRig } from './catrig.js?v=k71';
-import { mountNav } from './nav.js?v=k71';
-import { SfxEngine, } from './sfx.js?v=k71';
-import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k71';
+import { CatRig } from './catrig.js?v=k72';
+import { mountNav } from './nav.js?v=k72';
+import { SfxEngine, } from './sfx.js?v=k72';
+import { SIZES as SND_SIZES, SHATTER_SIZES, VOICE_SIZES } from './sfxbank.js?v=k72';
 // the newer rooms keep their look in their own module (rooms/*.js): this
 // file only asks "does this room's art want this body?" before its own
 // recognizer chain, so a room can be authored without touching meshFor
-import { ROOM_ART } from './rooms/index.js?v=k71';
+import { ROOM_ART } from './rooms/index.js?v=k72';
 // a piece of a broken thing is cut out of that thing's own art (shards.js)
-import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k71';
+import { parsePiece, cutPiece, hullGeometry } from './shards.js?v=k72';
 
 // the game modes (?story=1 the civil trial, ?play=1 Career): the
 // locked-down "actual game" over the same engine. null in Free Play —
@@ -42,7 +42,7 @@ const STATE_TINT = [0x9aa0b0, 0xffe86b, 0xffb347, 0xc792ea, 0xff5a5a, 0x8fd18f, 
 const FLOATS_PER_BODY = 15; // [.., flag, gloss, tint_r] — sim optics drive materials
 const SEED = 42;
 
-const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k71'), {});
+const wasm = await WebAssembly.instantiateStreaming(fetch('lk_core.wasm?v=k72'), {});
 const lk = wasm.instance.exports;
 
 // settings: build knobs (cats, weight) rebuild the sim; live knobs stream in
@@ -4062,7 +4062,7 @@ function sfxInit() {
   engine = new SfxEngine(ac);
   engine.master.gain.value = cfg.sound ? 0.7 : 0;
   engine.setRoom(cfg.room | 0);
-  engine.loadWorker(new URL('./sfxbank.worker.js?v=k71', import.meta.url));
+  engine.loadWorker(new URL('./sfxbank.worker.js?v=k72', import.meta.url));
   // the recordings (sounds/manifest.json): fetched and decoded in the
   // background; until they are in, and if they never arrive, the bank plays
   if (!/[?&]samples=0/.test(location.search)) engine.loadSamples(new URL('./sounds/', import.meta.url).href);
@@ -4908,10 +4908,10 @@ const damages = {
     // loaded on demand: Free Play fetches neither mode, Career never
     // fetches the courtroom
     if (qs.has('story')) {
-      const { Story } = await import('./story.js?v=k71');
+      const { Story } = await import('./story.js?v=k72');
       game = new Story(api);
     } else {
-      const { Career } = await import('./career.js?v=k71');
+      const { Career } = await import('./career.js?v=k72');
       game = new Career(api);
     }
   } else {

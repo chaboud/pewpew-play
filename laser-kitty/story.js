@@ -26,13 +26,23 @@
 // medal toasts use is where exhibits call themselves out, and the two
 // modes keep separate saves ('lk-story' here, 'lk-career' there).
 
-import { RunShell } from './run.js?v=k71';
-import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k71';
-import { buildCourt, COURT_CSS } from './storycourt.js?v=k71';
+import { RunShell } from './run.js?v=k72';
+import { CASES, PROCEEDING, COURT, SPEAKERS, NO_STARS, EMPTY_ROOM } from './storycases.js?v=k72';
+import { buildCourt, COURT_CSS } from './storycourt.js?v=k72';
 
 const SAVE_KEY = 'lk-story';
 // the room the title plays (main.js builds the same one at boot: api.bootRoom)
 const SPLASH_ROOM = { room: 0, cats: 2 };
+// THE TITLE'S PICTURE. The founder's key art (a cat mid-leap at the dot,
+// punk-comic inks; shared 2026-11-11, asked for on the title 2026-11-25).
+// It is a 5:4 landscape and a phone is a tall portrait, so the picture is
+// laid out by hand (layoutArt): a wide screen is covered; a tall one is
+// fitted to the part that matters (`roi`, the leap and the dot) and the
+// picture sits on the bottom edge under the caption. `dot` is where the
+// laser lands in it, for the one thing on the page that moves.
+// `?title=live` shows the other title instead: the room playing itself.
+const TITLE_ART = { src: 'assets/title-key-art.jpg', w: 1402, h: 1122, roi: [545, 1195], focus: [0.62, 0.5], dot: [1142, 707] };
+const TITLE_LIVE = /[?&]title=live\b/.test(location.search);
 const COUNT_WORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen'];
 
 // --- how an unnamed claim is filed --------------------------------------------
@@ -139,6 +149,29 @@ const css = `
    curtain (::before) covers the first frames while the room is built. */
 #st-ov.splash { background: linear-gradient(to bottom, rgba(13,11,18,0.94) 0%, rgba(13,11,18,0.7) 20%, rgba(13,11,18,0) 38%, rgba(13,11,18,0) 60%, rgba(13,11,18,0.8) 80%, rgba(13,11,18,0.96) 100%);
   overflow: hidden; justify-content: space-between; }
+#st-ov.splash.art { background: #0d0b12; }
+.st-art { position: absolute; left: 0; top: 0; overflow: hidden; opacity: 0; transition: opacity 0.7s ease;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 7%, #000 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 7%, #000 100%); }
+.st-art.in { opacity: 1; }
+.st-art img { display: block; width: 100%; height: 100%; animation: st-drift 11s ease-in-out infinite alternate; }
+.st-art-dot { position: absolute; width: 22%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,90,170,0.75) 9%, rgba(255,40,130,0.28) 26%, rgba(255,40,130,0) 62%);
+  animation: st-dot 1.1s ease-in-out infinite alternate; }
+.st-art-scrim { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(13,11,18,0.9) 0%, rgba(13,11,18,0.55) 16%, rgba(13,11,18,0) 30%, rgba(13,11,18,0) 62%, rgba(13,11,18,0.82) 80%, rgba(13,11,18,0.97) 100%); }
+/* a wide screen: the caption and the buttons take the left, over the wrecked
+   room, and the cat and the dot have the right to themselves */
+#st-ov.splash.art.wide { align-items: flex-start; }
+#st-ov.splash.art.wide .st-sp { margin-left: max(22px, 4vw); width: min(600px, 48vw); text-align: left; }
+#st-ov.splash.art.wide .st-sp .st-h1, #st-ov.splash.art.wide .st-sp .st-court, #st-ov.splash.art.wide .st-sp .st-sum { text-align: left; }
+#st-ov.splash.art.wide .st-sp .st-h1 { font-size: min(72px, 5.6vw); }
+#st-ov.splash.art.wide .st-sp .st-foot { justify-content: flex-start; }
+#st-ov.splash.art.wide .st-art-scrim { background:
+  linear-gradient(to right, rgba(13,11,18,0.9) 0%, rgba(13,11,18,0.62) 30%, rgba(13,11,18,0) 58%),
+  linear-gradient(to bottom, rgba(13,11,18,0.5) 0%, rgba(13,11,18,0) 22%, rgba(13,11,18,0) 78%, rgba(13,11,18,0.7) 100%); }
+#st-ov.splash .st-sp .st-court { white-space: nowrap; font-size: min(10px, 2.5vw); }
+@keyframes st-drift { from { transform: scale(1); } to { transform: scale(1.035); } }
+@keyframes st-dot { from { opacity: 0.55; transform: translate(-50%, -50%) scale(0.8); } to { opacity: 1; transform: translate(-50%, -50%) scale(1.15); } }
 #st-ov.splash::before { content: ''; position: absolute; inset: 0; background: #14121a; opacity: 0; transition: opacity 0.9s ease; pointer-events: none; }
 #st-ov.splash.curtain::before { opacity: 1; transition: none; }
 .st-sp { position: relative; width: min(560px, 100vw); padding: 0 16px; box-sizing: border-box; text-align: center; }
@@ -261,7 +294,7 @@ body.st-splash-on #pops, body.st-splash-on #tags, body.st-splash-on .ctl { visib
   .st-verdict { width: 380px; align-self: center; }
   .st-v-stars { font-size: 44px; }
 }
-@media (prefers-reduced-motion: reduce) { .st-row, .st-total, .st-stamp, .st-v-stars i.on, .st-v-judge { animation: none; opacity: 1; } .st-sp-go { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .st-row, .st-total, .st-stamp, .st-v-stars i.on, .st-v-judge { animation: none; opacity: 1; } .st-sp-go, .st-art img, .st-art-dot { animation: none; } }
 `;
 
 function loadSave() {
@@ -305,6 +338,7 @@ export class Story {
       e.preventDefault();
       this.advance();
     });
+    addEventListener('resize', () => { if (this.screen === 'splash' && this.ov.classList.contains('art')) this.layoutArt?.(); });
     document.title = PROCEEDING.title;
     this.showSplash();
     window.__story = this; // test hook (skip(), screen, cases)
@@ -347,7 +381,7 @@ export class Story {
     this.timers.length = 0;
     // any screen but the title is opaque: the room stops playing itself
     this.api.attract?.(false);
-    this.ov.classList.remove('splash', 'curtain');
+    this.ov.classList.remove('splash', 'curtain', 'art', 'wide');
     document.body.classList.remove('st-splash-on');
     this.ov.innerHTML = html;
     this.ov.classList.toggle('pinned', pinned);
@@ -377,10 +411,14 @@ export class Story {
     const go = !begun ? ['Call the first case &#9656;', `NO. ${this.cases[0].no} &middot; ${esc(this.claimOf(this.cases[0]).toUpperCase())}`]
       : nc ? ['Call the next case &#9656;', `NO. ${nc.no} &middot; ${esc(this.claimOf(nc).toUpperCase())}`]
         : ['Open the docket &#9656;', 'EVERY CLAIM HAS BEEN HEARD'];
-    this.show(`<div class="st-sp st-sp-top">
+    // the picture, unless it has failed to load once (then, and under
+    // ?title=live, the room plays itself behind the caption instead)
+    const art = !TITLE_LIVE && !this.artFailed;
+    this.show(`${art ? `<div class="st-art"><img alt="" src="${TITLE_ART.src}"><div class="st-art-dot" style="left:${(TITLE_ART.dot[0] / TITLE_ART.w) * 100}%;top:${(TITLE_ART.dot[1] / TITLE_ART.h) * 100}%"></div></div><div class="st-art-scrim"></div>` : ''}
+      <div class="st-sp st-sp-top">
         <div class="st-court">${COURT.name.toUpperCase()} &middot; ${COURT.division.toUpperCase()} &middot; ${COURT.dept.toUpperCase()}</div>
         <div class="st-h1">${TITLE_HTML}</div>
-        <div class="st-sp-tag">${COUNT_WORD[this.cases.length] || this.cases.length} claims. One red dot.<br>The defendant is asleep.</div>
+        <div class="st-sp-tag">${COUNT_WORD[this.cases.length] || this.cases.length} claims. One red dot.<br>The defendant has no comment.</div>
       </div>
       <div class="st-sp st-sp-bot">
         ${begun ? `<div class="st-sum">${usd(total)} established &middot; ★ ${stars} of ${this.cases.length * 3}</div>` : ''}
@@ -390,13 +428,37 @@ export class Story {
       </div>`);
     this.screen = 'splash';
     cueLoop('murmur', false);
-    this.ov.classList.add('splash', 'curtain');
     document.body.classList.add('st-splash-on');
-    // the room is (re)built on the next frame: main.js is still starting
-    // up when the first title is shown, and frame() is only ever called
-    // once it has finished
-    this.splashAt = 0;
-    this.frozen = false;
+    if (art) {
+      // a picture: the page is opaque, so the sim and renderer stay parked
+      this.ov.classList.add('splash', 'art');
+      const box = this.ov.querySelector('.st-art'), img = box.querySelector('img');
+      this.layoutArt = () => {
+        const W = this.ov.clientWidth, H = this.ov.clientHeight, A = TITLE_ART;
+        this.ov.classList.toggle('wide', W > H * 1.15);
+        // cover a wide screen; on a tall one stop at the width that shows
+        // the leap and the dot whole, and let the caption have the rest
+        const sc = Math.max(W / A.w, Math.min(H / A.h, W / (A.roi[1] - A.roi[0])));
+        const w = A.w * sc, h = A.h * sc;
+        const mid = h < H ? (A.roi[0] + A.roi[1]) / 2 / A.w : A.focus[0];
+        box.style.width = `${w}px`;
+        box.style.height = `${h}px`;
+        box.style.left = `${Math.min(0, Math.max(W - w, W / 2 - mid * w))}px`;
+        box.style.top = `${h < H ? H - h : Math.min(0, Math.max(H - h, H / 2 - A.focus[1] * h))}px`;
+        img.style.transformOrigin = `${(A.dot[0] / A.w) * 100}% ${(A.dot[1] / A.h) * 100}%`;
+      };
+      this.layoutArt();
+      const up = () => box.classList.add('in');
+      if (img.complete && img.naturalWidth) up(); else img.onload = up;
+      img.onerror = () => { this.artFailed = true; if (this.screen === 'splash') this.showSplash(); };
+    } else {
+      this.ov.classList.add('splash', 'curtain');
+      // the room is (re)built on the next frame: main.js is still starting
+      // up when the first title is shown, and frame() is only ever called
+      // once it has finished
+      this.splashAt = 0;
+      this.frozen = false;
+    }
     this.ov.querySelector('#st-go').onclick = () => { if (nc || !begun) this.showTestimony(Math.max(0, next)); else this.showDocket(); };
     const dk = this.ov.querySelector('#st-dk');
     if (dk) dk.onclick = () => this.showDocket();
@@ -564,6 +626,7 @@ export class Story {
     cue('page');
     this.screen = 'flashback';
     const c = this.cases[this.ci];
+    this.splashBuilt = true; // a live title after this must build its own room again
     this.resetRun();
     if (this.flash) this.flash.remove();
     const card = document.createElement('div');

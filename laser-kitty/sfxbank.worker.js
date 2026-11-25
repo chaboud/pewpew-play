@@ -7,7 +7,7 @@
 // characters ({ want: [keys] }, built by make()). Work is done one buffer
 // per turn of the event loop so a request is not stuck behind the whole
 // catalog: the core set first, then requests, then the rest.
-import { catalog, make } from './sfxbank.js?v=k71';
+import { catalog, make } from './sfxbank.js?v=k72';
 
 let sr = 44100, list = [], next = 0, running = false;
 const wants = [], seen = new Set();
