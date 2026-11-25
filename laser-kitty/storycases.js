@@ -84,7 +84,7 @@ export const CASES = [
     place: 'The living room', address: '12 Alder Court',
     claim: 'One television, assorted shelving, and a lamp she liked.',
     when: 'Tuesday, March 14', time: '9:47 p.m.',
-    stars: [2000, 3600, 4700],
+    stars: [2000, 3700, 4900],
     witness: { skin: '#e9b98f', hair: '#7a4a2a', style: 'bob', top: '#5b8f8a', acc: 'glasses' },
     testimony: [
       ['counsel', 'Ms. Halvorsen. On the evening of March 14th, where was the red dot?'],
@@ -103,7 +103,7 @@ export const CASES = [
     place: 'The bathroom', address: 'Unit 2B, 31 Quill Street',
     claim: 'Water damage. All of it.',
     when: 'Friday, April 3', time: '7:20 a.m.',
-    stars: [3100, 5400, 6800],
+    stars: [2300, 6000, 7100],
     witness: { skin: '#f0c7a4', hair: '#b9b4c4', style: 'bald', top: '#6f6a86', acc: 'tie' },
     testimony: [
       ['counsel', 'Mr. Pemberton. Describe the bathroom as you last inspected it.'],
@@ -122,11 +122,11 @@ export const CASES = [
     place: 'The kitchen', address: '8 Marrow Lane',
     claim: 'Eight quarts of stock and the good plates.',
     when: 'Sunday, April 19', time: '6:15 p.m.',
-    stars: [540, 1400, 2200],
+    stars: [1200, 2500, 3800],
     witness: { skin: '#c98f66', hair: '#2b2230', style: 'bun', top: '#efe6d2', acc: 'apron' },
     testimony: [
       ['counsel', 'Ms. Abernathy. What was on the stove at a quarter past six?'],
-      ['witness', 'Stock. Eight quarts. We’d built him a ramp to the window. It turns out the ramp also goes to the counter.'],
+      ['witness', 'Stock. Eight quarts. The counter is three feet high. I had always taken that to be the point of a counter.'],
       ['court', 'And the plates were on the high shelf, “where they’d be safe.” The Court is leaving that in.'],
     ],
     ruling: [
@@ -141,7 +141,7 @@ export const CASES = [
     place: 'The great room', address: 'Ashby House, Larkspur Road',
     claim: 'A clock that survived two wars.',
     when: 'Friday, May 22', time: '8:05 p.m.',
-    stars: [3300, 5900, 7500],
+    stars: [3700, 9000, 15000],
     witness: { skin: '#f1d0b5', hair: '#d8d4e0', style: 'side', top: '#7a3f4a', acc: 'bowtie' },
     testimony: [
       ['counsel', 'Mr. Ashby. How long has the grandfather clock been in your family?'],
@@ -160,7 +160,7 @@ export const CASES = [
     place: 'The café', address: 'Café Lune, 5 Passage Street',
     claim: 'An espresso machine with a name.',
     when: 'Saturday, June 6', time: '3:40 p.m.',
-    stars: [5000, 7900, 10000],
+    stars: [5500, 11000, 15000],
     witness: { skin: '#e2ab80', hair: '#3a2a25', style: 'curly', top: '#2f6f5e', acc: 'scarf' },
     testimony: [
       ['counsel', 'Ms. Marchetti, what does a two-group espresso machine cost?'],
@@ -179,7 +179,7 @@ export const CASES = [
     place: 'The garage', address: '77 Ferndale Avenue',
     claim: 'A 1967 coupe, mid-restoration since 2009.',
     when: 'Sunday, June 28', time: '2:10 p.m.',
-    stars: [1900, 3700, 6000],
+    stars: [2500, 5500, 8000],
     witness: { skin: '#e6b48c', hair: '#8a8798', style: 'cap', top: '#4a6a8f', acc: 'mustache' },
     testimony: [
       ['counsel', 'Mr. Kowalczyk. The 1967 coupe has been mid-restoration since when?'],
@@ -198,7 +198,7 @@ export const CASES = [
     place: 'The bar', address: 'Lou’s Tap Room, Route 9',
     claim: 'A hundred and forty-eight bottles, counted.',
     when: 'Thursday, July 16', time: '1:55 a.m.',
-    stars: [3400, 6300, 10000],
+    stars: [5300, 9200, 10000],
     witness: { skin: '#d9a273', hair: '#1f1a24', style: 'pony', top: '#8f3b3b', acc: null },
     testimony: [
       ['counsel', 'Ms. Tran, how many bottles were on the back bar at closing?'],
@@ -217,7 +217,7 @@ export const CASES = [
     place: 'The yoga studio', address: 'Inner Stillness, 2nd floor, 40 Juniper Row',
     claim: 'Loss of stillness.',
     when: 'Sunday, August 9', time: '7:00 p.m.',
-    stars: [5900, 12000, 15000],
+    stars: [6800, 14000, 17000],
     witness: { skin: '#f0c9a8', hair: '#c9a15a', style: 'long', top: '#b48fc9', acc: 'headband' },
     testimony: [
       ['counsel', 'Ms. Lindqvist. Was there stillness on the evening of the 9th?'],
@@ -236,7 +236,7 @@ export const CASES = [
     place: 'The family home', address: '204 Sycamore Drive',
     claim: 'Both floors.',
     when: 'Saturday, September 5', time: '8:30 p.m.',
-    stars: [1400, 2400, 2700],
+    stars: [1500, 2900, 4600],
     witness: { skin: '#b9825a', hair: '#231c1c', style: 'short', top: '#c9742a', acc: 'stubble' },
     testimony: [
       ['counsel', 'Mr. Reyes, how many floors does the house have?'],
@@ -255,7 +255,7 @@ export const CASES = [
     place: 'The mansion', address: 'Harcourt Hall, the entry',
     claim: 'Everything that was on top of something else.',
     when: 'Saturday, October 3', time: '11:15 p.m.',
-    stars: [6300, 14000, 17000],
+    stars: [8600, 19000, 25000],
     witness: { skin: '#f3d6be', hair: '#56505f', style: 'side', top: '#22202b', acc: 'wingcollar' },
     testimony: [
       ['counsel', 'Mr. Pym. Exhibit {X} is the entry hall. What stood in it?'],
@@ -275,7 +275,7 @@ export const CASES = [
     place: 'The furniture showroom', address: 'Design Within Scratch, the showroom floor',
     claim: 'The lamps were arranged.',
     when: 'Tuesday, October 27', time: '6:02 p.m.',
-    stars: [48000, 90000, 110000],
+    stars: [57000, 100000, 160000],
     witness: { skin: '#e8c3a0', hair: '#1c1a22', style: 'short', top: '#17151d', acc: 'roundglasses' },
     testimony: [
       ['counsel', 'Mr. Vanterpool. What does Design Within Scratch sell?'],
@@ -295,7 +295,7 @@ export const CASES = [
     place: 'The apartment tower', address: '400 Wexler Street, all nine floors',
     claim: 'Thirty-six households, one noise.',
     when: 'Wednesday, November 18', time: '10:40 p.m.',
-    stars: [600, 2600, 3900],
+    stars: [950, 2400, 3800],
     witness: { skin: '#8a5a3c', hair: '#e6e2f0', style: 'bun', top: '#3f6fb0', acc: 'pearls' },
     testimony: [
       ['counsel', 'Mrs. Fontaine. Thirty-six households. How was the class certified?'],
@@ -314,7 +314,7 @@ export const CASES = [
     place: 'The museum', address: 'The Museum, all six rooms',
     claim: 'Priceless, itemized.',
     when: 'Monday, December 7', time: '9:00 p.m.',
-    stars: [500000, 870000, 6800000],
+    stars: [650000, 7800000, 16000000],
     witness: { skin: '#edc4a2', hair: '#a8a3b5', style: 'bob', top: '#3a3350', acc: 'chain' },
     testimony: [
       ['counsel', 'Dr. Achterberg, how do you value the collection?'],

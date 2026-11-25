@@ -15,7 +15,7 @@
 // call that can use a recording falls through to the bank when its pool is
 // empty, so with the files missing, refused or undecodable the game sounds
 // exactly as it did before there were any.
-import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog, make, objKey, contactHz, STRIKE_V, MODELLED, SIZES, CAT_KINDS } from './sfxbank.js?v=k73';
+import { roomIR, ROOM_ACOUSTICS, COURT_ACOUSTICS, catalog, make, objKey, contactHz, STRIKE_V, MODELLED, SIZES, CAT_KINDS } from './sfxbank.js?v=k74';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const jit = (p) => 1 + (Math.random() * 2 - 1) * p;
